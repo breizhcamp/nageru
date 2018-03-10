@@ -9,11 +9,25 @@ CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthr
 # Override CEF_DIR on the command line to build with CEF.
 # E.g.: make CEF_DIR=/home/sesse/cef_binary_3.3282.1734.g8f26fe0_linux64
 CEF_DIR=
+
+# Release or Debug, depending on what CEF version you want to link to.
+# Optionally, the special value CEF_BUILD_TYPE=system assumes you can build and link
+# to CEF without any special flags except -L$(CEF_DIR), and get resources from
+# $(CEF_RESOURCE_DIR).
 CEF_BUILD_TYPE=Release
 ifneq ($(CEF_DIR),)
-  CEF_LIBS = $(CEF_DIR)/libcef_dll_wrapper/libcef_dll_wrapper.a
-  CPPFLAGS += -DHAVE_CEF=1 -I$(CEF_DIR) -I$(CEF_DIR)/include
-  LDFLAGS += -L$(CEF_DIR)/$(CEF_BUILD_TYPE) -Wl,-rpath,\$$ORIGIN
+  CPPFLAGS += -DHAVE_CEF=1
+  ifeq ($(CEF_BUILD_TYPE),system)
+    LDFLAGS += -L$(CEF_DIR) -Wl,-rpath,\$$ORIGIN
+    CEF_LIB_DIR = $(CEF_DIR)
+    CEF_RESOURCE_DIR = /usr/share/cef/Resources
+  else
+    CEF_LIBS = $(CEF_DIR)/libcef_dll_wrapper/libcef_dll_wrapper.a
+    CPPFLAGS += -I$(CEF_DIR) -I$(CEF_DIR)/include
+    LDFLAGS += -L$(CEF_DIR)/$(CEF_BUILD_TYPE) -Wl,-rpath,\$$ORIGIN
+    CEF_LIB_DIR = $(CEF_DIR)/$(CEF_BUILD_TYPE)
+    CEF_RESOURCE_DIR = $(CEF_DIR)/Resources
+  endif
 endif
 
 ifeq ($(EMBEDDED_BMUSB),yes)
@@ -24,6 +38,10 @@ endif
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl -lqcustomplot
 ifneq ($(CEF_DIR),)
   LDLIBS += -lcef
+  ifeq ($(CEF_BUILD_TYPE),system)
+    # Don't build this ourselves; just link to the system version.
+    LDLIBS += -lcef_dll_wrapper
+  endif
 endif
 
 # Qt objects
@@ -76,10 +94,13 @@ BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o metrics.o
 	moc $< -o $@
 
 ifneq ($(CEF_DIR),)
-CEF_RESOURCES=libcef.so icudtl.dat natives_blob.bin snapshot_blob.bin v8_context_snapshot.bin
+CEF_RESOURCES=libcef.so natives_blob.bin snapshot_blob.bin v8_context_snapshot.bin
 CEF_RESOURCES += cef.pak cef_100_percent.pak cef_200_percent.pak cef_extensions.pak devtools_resources.pak
 CEF_RESOURCES += libEGL.so libGLESv2.so swiftshader/libEGL.so swiftshader/libGLESv2.so
 CEF_RESOURCES += locales/en-US.pak locales/en-US.pak.info
+ifneq ($(CEF_NO_ICUDTL),yes)
+CEF_RESOURCES += icudtl.dat
+endif
 endif
 
 all: nageru kaeru benchmark_audio_mixer $(CEF_RESOURCES)
@@ -94,29 +115,29 @@ benchmark_audio_mixer: $(BM_OBJS)
 ifneq ($(CEF_DIR),)
 # A lot of these unfortunately have to be in the same directory as the binary;
 # some can be given paths, but not all.
-libcef.so: $(CEF_DIR)/$(CEF_BUILD_TYPE)/libcef.so
+libcef.so: $(CEF_LIB_DIR)/libcef.so
 	cp -a $< $@
-libEGL.so: $(CEF_DIR)/$(CEF_BUILD_TYPE)/libEGL.so
+libEGL.so: $(CEF_LIB_DIR)/libEGL.so
 	cp -a $< $@
-libGLESv2.so: $(CEF_DIR)/$(CEF_BUILD_TYPE)/libGLESv2.so
+libGLESv2.so: $(CEF_LIB_DIR)/libGLESv2.so
 	cp -a $< $@
 swiftshader/:
 	mkdir swiftshader/
-swiftshader/libEGL.so: | swiftshader/ $(CEF_DIR)/$(CEF_BUILD_TYPE)/swiftshader/libEGL.so
-	cp -a $(CEF_DIR)/$(CEF_BUILD_TYPE)/swiftshader/libEGL.so $@
-swiftshader/libGLESv2.so: | swiftshader/ $(CEF_DIR)/$(CEF_BUILD_TYPE)/swiftshader/libGLESv2.so
-	cp -a $(CEF_DIR)/$(CEF_BUILD_TYPE)/swiftshader/libGLESv2.so $@
+swiftshader/libEGL.so: | swiftshader/ $(CEF_LIB_DIR)/swiftshader/libEGL.so
+	cp -a $(CEF_LIB_DIR)/swiftshader/libEGL.so $@
+swiftshader/libGLESv2.so: | swiftshader/ $(CEF_LIB_DIR)/swiftshader/libGLESv2.so
+	cp -a $(CEF_LIB_DIR)/swiftshader/libGLESv2.so $@
 locales/:
 	mkdir locales/
-locales/en-US.pak: | locales/ $(CEF_DIR)/Resources/locales/en-US.pak
-	cp -a $(CEF_DIR)/Resources/locales/en-US.pak $@
-locales/en-US.pak.info: | locales/ $(CEF_DIR)/Resources/locales/en-US.pak.info
-	cp -a $(CEF_DIR)/Resources/locales/en-US.pak.info $@
-icudtl.dat: $(CEF_DIR)/Resources/icudtl.dat
+locales/en-US.pak: | locales/ $(CEF_RESOURCE_DIR)/locales/en-US.pak
+	cp -a $(CEF_RESOURCE_DIR)/locales/en-US.pak $@
+locales/en-US.pak.info: | locales/ $(CEF_RESOURCE_DIR)/locales/en-US.pak.info
+	cp -a $(CEF_RESOURCE_DIR)/locales/en-US.pak.info $@
+icudtl.dat: $(CEF_RESOURCE_DIR)/icudtl.dat
 	cp -a $< $@
-%.bin: $(CEF_DIR)/$(CEF_BUILD_TYPE)/%.bin
+%.bin: $(CEF_LIB_DIR)/%.bin
 	cp -a $< $@
-%.pak: $(CEF_DIR)/Resources/%.pak
+%.pak: $(CEF_RESOURCE_DIR)/%.pak
 	cp -a $< $@
 endif
 
