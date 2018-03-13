@@ -78,8 +78,6 @@ public:
 
 	void OnBeforeCommandLineProcessing(const CefString& process_type, CefRefPtr<CefCommandLine> command_line);
 
-	void OnBrowserDestroyed(CefRefPtr<CefBrowser> browser) override;
-
 private:
 	void cef_thread_func();
 
@@ -88,8 +86,6 @@ private:
 	int cef_thread_refcount = 0;  // Under <cef_mutex>.
 	bool cef_initialized = false;  // Under <cef_mutex>.
 	std::condition_variable cef_initialized_cond;
-	std::unordered_set<CefBrowser *> pending_browsers;  // Under <cef_mutex>.
-	std::condition_variable browser_closed_cond;
 
 	IMPLEMENT_REFCOUNTING(NageruCefApp);
 };

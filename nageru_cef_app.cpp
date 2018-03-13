@@ -18,13 +18,6 @@ void NageruCefApp::OnBeforeCommandLineProcessing(
 	command_line->AppendSwitch("enable-begin-frame-scheduling");
 }
 
-void NageruCefApp::OnBrowserDestroyed(CefRefPtr<CefBrowser> browser)
-{
-	lock_guard<mutex> lock(cef_mutex);
-	pending_browsers.erase(browser.get());
-	browser_closed_cond.notify_all();
-}
-
 void NageruCefApp::initialize_cef()
 {
 	unique_lock<mutex> lock(cef_mutex);
@@ -37,11 +30,7 @@ void NageruCefApp::initialize_cef()
 void NageruCefApp::close_browser(CefRefPtr<CefBrowser> browser)
 {
 	unique_lock<mutex> lock(cef_mutex);
-	CefBrowser *raw_ptr = browser.get();
-	pending_browsers.insert(raw_ptr);
 	browser->GetHost()->CloseBrowser(/*force_close=*/true);
-	browser = nullptr;
-	browser_closed_cond.wait(lock, [this, raw_ptr]{ return pending_browsers.count(raw_ptr) != 0; });
 }
 
 void NageruCefApp::unref_cef()
