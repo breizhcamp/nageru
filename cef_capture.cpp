@@ -41,7 +41,7 @@ CEFCapture::~CEFCapture()
 
 void CEFCapture::post_to_cef_ui_thread(std::function<void()> &&func)
 {
-	lock_guard<mutex> lock(browser_mutex);
+	lock_guard<recursive_mutex> lock(browser_mutex);
 	if (browser != nullptr) {
 		CefPostTask(TID_UI, new CEFTaskAdapter(std::move(func)));
 	} else {
@@ -113,7 +113,10 @@ void CEFCapture::OnPaint(const void *buffer, int width, int height)
 		// so we need to do this explicitly, or we could be stuck on an
 		// old frame forever if the image doesn't change.)
 		post_to_cef_ui_thread([this] {
-			browser->GetHost()->Invalidate(PET_VIEW);
+			lock_guard<recursive_mutex> lock(browser_mutex);
+			if (browser != nullptr) {  // Could happen if we are shutting down.
+				browser->GetHost()->Invalidate(PET_VIEW);
+			}
 		});
 		++timecode;
 	} else {
@@ -156,7 +159,7 @@ void CEFCapture::start_bm_capture()
 	cef_app->initialize_cef();
 
 	CefPostTask(TID_UI, new CEFTaskAdapter([this]{
-		lock_guard<mutex> lock(browser_mutex);
+		lock_guard<recursive_mutex> lock(browser_mutex);
 
 		CefBrowserSettings browser_settings;
 		browser_settings.web_security = cef_state_t::STATE_DISABLED;
@@ -175,9 +178,11 @@ void CEFCapture::start_bm_capture()
 
 void CEFCapture::stop_dequeue_thread()
 {
-	lock_guard<mutex> lock(browser_mutex);
-	cef_app->close_browser(browser);
-	browser = nullptr;  // Or unref_cef() will be sad.
+	{
+		lock_guard<recursive_mutex> lock(browser_mutex);
+		cef_app->close_browser(browser);
+		browser = nullptr;  // Or unref_cef() will be sad.
+	}
 	cef_app->unref_cef();
 }
 

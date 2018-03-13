@@ -189,7 +189,9 @@ private:
 	std::string description, start_url;
 	std::atomic<int> max_fps{60};
 
-	std::mutex browser_mutex;
+	// Needs to be recursive because the lambda in OnPaint could cause
+	// OnPaint itself to be called.
+	std::recursive_mutex browser_mutex;
 	CefRefPtr<CefBrowser> browser;  // Under <browser_mutex>.
 
 	// Tasks waiting for <browser> to get ready. Under <browser_mutex>.

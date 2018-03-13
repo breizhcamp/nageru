@@ -38,6 +38,7 @@ void NageruCefApp::unref_cef()
 	unique_lock<mutex> lock(cef_mutex);
 	if (--cef_thread_refcount == 0) {
 		CefPostTask(TID_UI, new CEFTaskAdapter(&CefQuitMessageLoop));
+		lock.unlock();
 		cef_thread.join();
 	}
 }
