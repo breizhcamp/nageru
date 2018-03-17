@@ -381,8 +381,9 @@ bool FFmpegCapture::play_video(const string &pathname)
 		video_codec_ctx.get(), avcodec_close);
 
 	// Open audio decoder, if we have audio.
-	AVCodecContextWithDeleter audio_codec_ctx = avcodec_alloc_context3_unique(nullptr);
+	AVCodecContextWithDeleter audio_codec_ctx;
 	if (audio_stream_index != -1) {
+		audio_codec_ctx = avcodec_alloc_context3_unique(nullptr);
 		const AVCodecParameters *audio_codecpar = format_ctx->streams[audio_stream_index]->codecpar;
 		audio_timebase = format_ctx->streams[audio_stream_index]->time_base;
 		if (avcodec_parameters_to_context(audio_codec_ctx.get(), audio_codecpar) < 0) {
