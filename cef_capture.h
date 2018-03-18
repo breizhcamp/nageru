@@ -166,7 +166,7 @@ public:
 	uint32_t get_current_audio_input() const override { return 0; }
 
 private:
-	void post_to_cef_ui_thread(std::function<void()> &&func);
+	void post_to_cef_ui_thread(std::function<void()> &&func, int64_t delay_ms = 0);
 
 	CefRefPtr<NageruCEFClient> cef_client;
 

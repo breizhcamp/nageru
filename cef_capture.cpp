@@ -39,11 +39,15 @@ CEFCapture::~CEFCapture()
 	}
 }
 
-void CEFCapture::post_to_cef_ui_thread(std::function<void()> &&func)
+void CEFCapture::post_to_cef_ui_thread(std::function<void()> &&func, int64_t delay_ms)
 {
 	lock_guard<recursive_mutex> lock(browser_mutex);
 	if (browser != nullptr) {
-		CefPostTask(TID_UI, new CEFTaskAdapter(std::move(func)));
+		if (delay_ms <= 0) {
+			CefPostTask(TID_UI, new CEFTaskAdapter(std::move(func)));
+		} else {
+			CefPostDelayedTask(TID_UI, new CEFTaskAdapter(std::move(func)), delay_ms);
+		}
 	} else {
 		deferred_tasks.push_back(std::move(func));
 	}
@@ -112,12 +116,16 @@ void CEFCapture::OnPaint(const void *buffer, int width, int height)
 		// (CEF only sends OnPaint when there are actual changes,
 		// so we need to do this explicitly, or we could be stuck on an
 		// old frame forever if the image doesn't change.)
+		//
+		// By adding a delay, we make sure we don't get a new frame
+		// delivered immediately (we probably already are on the UI thread),
+		// where we couldn't really deal with it.
 		post_to_cef_ui_thread([this] {
 			lock_guard<recursive_mutex> lock(browser_mutex);
 			if (browser != nullptr) {  // Could happen if we are shutting down.
 				browser->GetHost()->Invalidate(PET_VIEW);
 			}
-		});
+		}, 16);
 		++timecode;
 	} else {
 		assert(video_frame.size >= unsigned(width * height * 4));
