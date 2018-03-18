@@ -523,6 +523,8 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 	}
 	card->capture.reset(capture);
 	card->is_fake_capture = (card_type == CardType::FAKE_CAPTURE);
+	card->is_cef_capture = (card_type == CardType::CEF_INPUT);
+	card->may_have_dropped_last_frame = false;
 	card->type = card_type;
 	if (card->output.get() != output) {
 		card->output.reset(output);
@@ -940,6 +942,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			new_frame.received_timestamp = video_frame.received_timestamp;  // Ignore the audio timestamp.
 			card->new_frames.push_back(move(new_frame));
 			card->jitter_history.frame_arrived(video_frame.received_timestamp, frame_length, dropped_frames);
+			card->may_have_dropped_last_frame = false;
 		}
 		card->new_frames_changed.notify_all();
 	}
@@ -1116,6 +1119,10 @@ void Mixer::trim_queue(CaptureCard *card, size_t safe_queue_length)
 		card->new_frames_changed.notify_all();
 		--queue_length;
 		++dropped_frames;
+
+		if (queue_length == 0 && card->is_cef_capture) {
+			card->may_have_dropped_last_frame = true;
+		}
 	}
 
 	card->metric_input_dropped_frames_jitter += dropped_frames;
@@ -1180,6 +1187,14 @@ start:
 		CaptureCard *card = &cards[card_index];
 		if (card->new_frames.empty()) {  // Starvation.
 			++card->metric_input_duped_frames;
+			if (card->is_cef_capture && card->may_have_dropped_last_frame) {
+				// Unlike other sources, CEF is not guaranteed to send us a steady
+				// stream of frames, so we'll have to ask it to repaint the frame
+				// we dropped. (may_have_dropped_last_frame is set whenever we
+				// trim the queue completely away, and cleared when we actually
+				// get a new frame.)
+				((CEFCapture *)card->capture.get())->request_new_frame();
+			}
 		} else {
 			new_frames[card_index] = move(card->new_frames.front());
 			has_new_frame[card_index] = true;

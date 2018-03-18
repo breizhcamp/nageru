@@ -86,6 +86,7 @@ public:
 	void set_max_fps(int max_fps);
 	void execute_javascript_async(const std::string &js);
 	void resize(unsigned width, unsigned height);
+	void request_new_frame();
 
 	// Callbacks from NageruCEFClient.
 	void OnPaint(const void *buffer, int width, int height);

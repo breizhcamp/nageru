@@ -97,6 +97,19 @@ void CEFCapture::resize(unsigned width, unsigned height)
 	this->height = height;
 }
 
+void CEFCapture::request_new_frame()
+{
+	// By adding a delay, we make sure we don't get a new frame
+	// delivered immediately (we probably already are on the UI thread),
+	// where we couldn't really deal with it.
+	post_to_cef_ui_thread([this] {
+		lock_guard<recursive_mutex> lock(browser_mutex);
+		if (browser != nullptr) {  // Could happen if we are shutting down.
+			browser->GetHost()->Invalidate(PET_VIEW);
+		}
+	}, 16);
+}
+
 void CEFCapture::OnPaint(const void *buffer, int width, int height)
 {
 	steady_clock::time_point timestamp = steady_clock::now();
@@ -116,16 +129,7 @@ void CEFCapture::OnPaint(const void *buffer, int width, int height)
 		// (CEF only sends OnPaint when there are actual changes,
 		// so we need to do this explicitly, or we could be stuck on an
 		// old frame forever if the image doesn't change.)
-		//
-		// By adding a delay, we make sure we don't get a new frame
-		// delivered immediately (we probably already are on the UI thread),
-		// where we couldn't really deal with it.
-		post_to_cef_ui_thread([this] {
-			lock_guard<recursive_mutex> lock(browser_mutex);
-			if (browser != nullptr) {  // Could happen if we are shutting down.
-				browser->GetHost()->Invalidate(PET_VIEW);
-			}
-		}, 16);
+		request_new_frame();
 		++timecode;
 	} else {
 		assert(video_frame.size >= unsigned(width * height * 4));

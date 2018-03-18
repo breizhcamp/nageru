@@ -487,6 +487,15 @@ private:
 		CardType type;
 		std::unique_ptr<DeckLinkOutput> output;
 
+		// CEF only delivers frames when it actually has a change.
+		// If we trim the queue for latency reasons, we could thus
+		// end up in a situation trimming a frame that was meant to
+		// be displayed for a long time, which is really suboptimal.
+		// Thus, if we drop the last frame we have, may_have_dropped_last_frame
+		// is set to true, and the next starvation event will trigger
+		// us requestin a CEF repaint.
+		bool is_cef_capture, may_have_dropped_last_frame = false;
+
 		// If this card is used for output (ie., output_card_index points to it),
 		// it cannot simultaneously be uesd for capture, so <capture> gets replaced
 		// by a FakeCapture. However, since reconstructing the real capture object
