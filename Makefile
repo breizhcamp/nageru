@@ -19,14 +19,14 @@ CEF_BUILD_TYPE=Release
 ifneq ($(CEF_DIR),)
   CPPFLAGS += -DHAVE_CEF=1
   ifeq ($(CEF_BUILD_TYPE),system)
-    LDFLAGS += -L$(CEF_DIR) -Wl,-rpath,$(CEF_DIR)
+    EXTRA_CEF_LDFLAGS = -L$(CEF_DIR) -Wl,-rpath,$(CEF_DIR)
     CEF_LIB_DIR = $(CEF_DIR)
     CEF_RESOURCE_DIR = /usr/share/cef/Resources
     CEF_CP = ln -s
   else
     CEF_LIBS = $(CEF_DIR)/libcef_dll_wrapper/libcef_dll_wrapper.a
     CPPFLAGS += -I$(CEF_DIR) -I$(CEF_DIR)/include
-    LDFLAGS += -L$(CEF_DIR)/$(CEF_BUILD_TYPE) -Wl,-rpath,\$$ORIGIN
+    EXTRA_CEF_LDFLAGS = -L$(CEF_DIR)/$(CEF_BUILD_TYPE) -Wl,-rpath,\$$ORIGIN
     CEF_LIB_DIR = $(CEF_DIR)/$(CEF_BUILD_TYPE)
     CEF_RESOURCE_DIR = $(CEF_DIR)/Resources
     CEF_CP = cp -a
@@ -40,10 +40,10 @@ else
 endif
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lva -lva-drm -lva-x11 -lX11 -lavformat -lavcodec -lavutil -lswscale -lavresample -lzita-resampler -lasound -ldl -lqcustomplot
 ifneq ($(CEF_DIR),)
-  LDLIBS += -lcef
+  EXTRA_CEF_LDLIBS = -lcef
   ifeq ($(CEF_BUILD_TYPE),system)
     # Don't build this ourselves; just link to the system version.
-    LDLIBS += -lcef_dll_wrapper
+    EXTRA_CEF_LDLIBS += -lcef_dll_wrapper
   endif
 endif
 
@@ -110,7 +110,7 @@ endif
 all: nageru kaeru benchmark_audio_mixer $(CEF_PREBUILT_LIBS) $(CEF_RESOURCES)
 
 nageru: $(OBJS) $(CEF_PREBUILT_LIBS)
-	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS) $(CEF_LIBS)
+	$(CXX) -o $@ $^ $(LDFLAGS) $(EXTRA_CEF_LDFLAGS) $(LDLIBS) $(EXTRA_CEF_LDLIBS) $(CEF_LIBS)
 kaeru: $(KAERU_OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 benchmark_audio_mixer: $(BM_OBJS)
