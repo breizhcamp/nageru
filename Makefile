@@ -12,14 +12,14 @@ CEF_DIR=
 
 # Release or Debug, depending on what CEF version you want to link to.
 # Optionally, the special value CEF_BUILD_TYPE=system assumes you can build and link
-# to CEF without any special flags except getting libraries from $(CEF_DIR),
-# get resources from $(CEF_RESOURCE_DIR), and symlink resources instead of
-# copying them in.
+# to CEF without any special flags, get the remaining libraries (libEGL.so,
+# natives_blob.bin, etc.) from $(CEF_LIB), get resources from $(CEF_RESOURCE_DIR),
+# and symlink resources instead of copying them in.
 CEF_BUILD_TYPE=Release
 ifneq ($(CEF_DIR),)
   CPPFLAGS += -DHAVE_CEF=1
   ifeq ($(CEF_BUILD_TYPE),system)
-    EXTRA_CEF_LDFLAGS = -L$(CEF_DIR) -Wl,-rpath,$(CEF_DIR)
+    EXTRA_CEF_LDFLAGS =
     CEF_LIB_DIR = $(CEF_DIR)
     CEF_RESOURCE_DIR = /usr/share/cef/Resources
     CEF_CP = ln -s
@@ -97,7 +97,6 @@ BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o metrics.o
 	moc $< -o $@
 
 ifneq ($(CEF_DIR),)
-CEF_PREBUILT_LIBS=libcef.so
 CEF_RESOURCES = natives_blob.bin snapshot_blob.bin v8_context_snapshot.bin
 CEF_RESOURCES += cef.pak cef_100_percent.pak cef_200_percent.pak cef_extensions.pak devtools_resources.pak
 CEF_RESOURCES += libEGL.so libGLESv2.so swiftshader/libEGL.so swiftshader/libGLESv2.so
@@ -105,11 +104,14 @@ CEF_RESOURCES += locales/en-US.pak locales/en-US.pak.info
 ifneq ($(CEF_NO_ICUDTL),yes)
 CEF_RESOURCES += icudtl.dat
 endif
+ifneq ($(CEF_BUILD_TYPE),system)
+CEF_RESOURCES += libcef.so
+endif
 endif
 
-all: nageru kaeru benchmark_audio_mixer $(CEF_PREBUILT_LIBS) $(CEF_RESOURCES)
+all: nageru kaeru benchmark_audio_mixer $(CEF_RESOURCES)
 
-nageru: $(OBJS) $(CEF_PREBUILT_LIBS)
+nageru: $(OBJS) $(CEF_LIBS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(EXTRA_CEF_LDFLAGS) $(LDLIBS) $(EXTRA_CEF_LDLIBS) $(CEF_LIBS)
 kaeru: $(KAERU_OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
@@ -169,7 +171,7 @@ DEPS=$(OBJS:.o=.d) $(BM_OBJS:.o=.d) $(KAERU_OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(BM_OBJS) $(KAERU_OBJS) $(DEPS) nageru kaeru benchmark_audio_mixer ui_aboutdialog.h ui_analyzer.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp $(CEF_LIBS) $(CEF_PREBUILT_LIBS) $(CEF_RESOURCES)
+	$(RM) $(OBJS) $(BM_OBJS) $(KAERU_OBJS) $(DEPS) nageru kaeru benchmark_audio_mixer ui_aboutdialog.h ui_analyzer.h ui_mainwindow.h ui_display.h ui_about.h ui_audio_miniview.h ui_audio_expanded_view.h ui_input_mapping.h ui_midi_mapping.h chain-*.frag *.dot *.pb.cc *.pb.h $(OBJS_WITH_MOC:.o=.moc.cpp) ellipsis_label.moc.cpp clickable_label.moc.cpp $(CEF_LIBS) $(CEF_RESOURCES)
 
 PREFIX=/usr/local
 install: install-cef
