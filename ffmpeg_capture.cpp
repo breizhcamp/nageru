@@ -313,12 +313,20 @@ void FFmpegCapture::send_disconnected_frame()
 		VideoFormat video_format;
 		video_format.width = width;
 		video_format.height = height;
-		video_format.stride = width * 4;
 		video_format.frame_rate_nom = 60;
 		video_format.frame_rate_den = 1;
 		video_format.is_connected = false;
-
-		video_frame.len = width * height * 4;
+		if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
+			video_format.stride = width * 4;
+			video_frame.len = width * height * 4;
+		} else {
+			video_format.stride = width;
+			current_frame_ycbcr_format.full_range = true;
+			current_frame_ycbcr_format.num_levels = 256;
+			current_frame_ycbcr_format.chroma_subsampling_x = 2;
+			current_frame_ycbcr_format.chroma_subsampling_y = 2;
+			video_frame.len = width * height * 2;
+		}
 		memset(video_frame.data, 0, video_frame.len);
 
 		frame_callback(-1, AVRational{1, TIMEBASE}, -1, AVRational{1, TIMEBASE}, timecode++,
