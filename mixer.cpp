@@ -1187,6 +1187,7 @@ start:
 		CaptureCard *card = &cards[card_index];
 		if (card->new_frames.empty()) {  // Starvation.
 			++card->metric_input_duped_frames;
+#ifdef HAVE_CEF
 			if (card->is_cef_capture && card->may_have_dropped_last_frame) {
 				// Unlike other sources, CEF is not guaranteed to send us a steady
 				// stream of frames, so we'll have to ask it to repaint the frame
@@ -1195,6 +1196,7 @@ start:
 				// get a new frame.)
 				((CEFCapture *)card->capture.get())->request_new_frame();
 			}
+#endif
 		} else {
 			new_frames[card_index] = move(card->new_frames.front());
 			has_new_frame[card_index] = true;
