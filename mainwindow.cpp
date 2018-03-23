@@ -129,7 +129,6 @@ void slave_fader(NonLinearFader *master, NonLinearFader *slave)
 	});
 }
 
-constexpr unsigned DB_NO_FLAGS = 0x0;
 constexpr unsigned DB_WITH_SIGN = 0x1;
 constexpr unsigned DB_BARE = 0x2;
 
@@ -370,13 +369,13 @@ void MainWindow::mixer_created(Mixer *mixer)
 	});
 	connect(ui->gainstaging_knob, &QAbstractSlider::valueChanged,
 		bind(&MainWindow::gain_staging_knob_changed, this, simple_bus_index, _1));
-	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this, simple_bus_index](int state){
+	connect(ui->gainstaging_auto_checkbox, &QCheckBox::stateChanged, [this](int state){
 		global_audio_mixer->set_gain_staging_auto(simple_bus_index, state == Qt::Checked);
 		midi_mapper.refresh_lights();
 	});
 	connect(ui->compressor_threshold_knob, &QDial::valueChanged,
 		bind(&MainWindow::compressor_threshold_knob_changed, this, simple_bus_index, _1));
-	connect(ui->compressor_enabled, &QCheckBox::stateChanged, [this, simple_bus_index](int state){
+	connect(ui->compressor_enabled, &QCheckBox::stateChanged, [this](int state){
 		global_audio_mixer->set_compressor_enabled(simple_bus_index, state == Qt::Checked);
 		midi_mapper.refresh_lights();
 	});
