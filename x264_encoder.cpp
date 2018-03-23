@@ -343,7 +343,12 @@ void X264Encoder::encode_frame(X264Encoder::QueuedFrame qf)
 	}
 
 	if (speed_control) {
-		speed_control->before_frame(float(free_frames.size()) / X264_QUEUE_LENGTH, X264_QUEUE_LENGTH, 1e6 * qf.duration / TIMEBASE);
+		float queue_fill_ratio;
+		{
+			lock_guard<mutex> lock(mu);
+			queue_fill_ratio = float(free_frames.size()) / X264_QUEUE_LENGTH;
+		}
+		speed_control->before_frame(queue_fill_ratio, X264_QUEUE_LENGTH, 1e6 * qf.duration / TIMEBASE);
 	}
 	dyn.x264_encoder_encode(x264, &nal, &num_nal, input_pic, &pic);
 	if (speed_control) {
