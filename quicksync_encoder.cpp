@@ -1875,8 +1875,11 @@ void QuickSyncEncoderImpl::encode_thread_func()
 
 			if (frame_type == FRAME_IDR) {
 				// Release any reference frames from the previous GOP.
-				for (const ReferenceFrame &frame : reference_frames) {
-					release_gl_surface(frame.display_number);
+				{
+					unique_lock<mutex> lock(storage_task_queue_mutex);
+					for (const ReferenceFrame &frame : reference_frames) {
+						release_gl_surface(frame.display_number);
+					}
 				}
 				reference_frames.clear();
 				current_ref_frame_num = 0;
