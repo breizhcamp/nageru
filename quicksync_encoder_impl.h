@@ -214,7 +214,6 @@ private:
 	int h264_entropy_mode = 1; /* cabac */
 	int ip_period = 3;
 
-	int rc_mode = -1;
 	unsigned int current_ref_frame_num = 0;  // Encoding frame order within this GOP, sans B-frames.
 
 	int frame_width;
