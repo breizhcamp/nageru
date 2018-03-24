@@ -148,7 +148,8 @@ Mux::~Mux()
 void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational timebase)
 {
 	AVPacket pkt_copy;
-	if (av_copy_packet(&pkt_copy, &pkt) < 0) {
+	av_init_packet(&pkt_copy);
+	if (av_packet_ref(&pkt_copy, &pkt) < 0) {
 		fprintf(stderr, "av_copy_packet() failed\n");
 		exit(1);
 	}
