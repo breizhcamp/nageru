@@ -442,7 +442,7 @@ private:
 	std::pair<std::string, std::string> get_channel_color_http(unsigned channel_idx);
 
 	HTTPD httpd;
-	unsigned num_cards, num_video_inputs, num_html_inputs;
+	unsigned num_cards, num_video_inputs, num_html_inputs = 0;
 
 	QSurface *mixer_surface, *h264_encoder_surface, *decklink_output_surface;
 	std::unique_ptr<movit::ResourcePool> resource_pool;
