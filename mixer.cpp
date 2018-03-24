@@ -157,6 +157,8 @@ void ensure_texture_resolution(PBOFrameAllocator::Userdata *userdata, unsigned f
 			}
 			check_error();
 			break;
+		default:
+			assert(false);
 		}
 		userdata->last_width[field] = width;
 		userdata->last_height[field] = height;

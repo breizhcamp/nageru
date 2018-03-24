@@ -82,6 +82,7 @@ std::atomic<int64_t> metric_quick_sync_stalled_frames{0};
         exit(1);                                                        \
     }
 
+#undef BUFFER_OFFSET
 #define BUFFER_OFFSET(i) ((char *)NULL + (i))
 
 //#include "loadsurface.h"
@@ -763,7 +764,7 @@ void QuickSyncEncoderImpl::va_close_display(VADisplay va_dpy)
 
 int QuickSyncEncoderImpl::init_va(const string &va_display)
 {
-    VAProfile profile_list[]={VAProfileH264High, VAProfileH264Main, VAProfileH264Baseline, VAProfileH264ConstrainedBaseline};
+    VAProfile profile_list[]={VAProfileH264High, VAProfileH264Main, VAProfileH264ConstrainedBaseline};
     VAEntrypoint *entrypoints;
     int num_entrypoints, slice_entrypoint;
     int support_encode = 0;    
@@ -806,11 +807,6 @@ int QuickSyncEncoderImpl::init_va(const string &va_display)
         exit(1);
     } else {
         switch (h264_profile) {
-            case VAProfileH264Baseline:
-                ip_period = 1;
-                constraint_set_flag |= (1 << 0); /* Annex A.2.1 */
-                h264_entropy_mode = 0;
-                break;
             case VAProfileH264ConstrainedBaseline:
                 constraint_set_flag |= (1 << 0 | 1 << 1); /* Annex A.2.2 */
                 ip_period = 1;
@@ -824,7 +820,7 @@ int QuickSyncEncoderImpl::init_va(const string &va_display)
                 constraint_set_flag |= (1 << 3); /* Annex A.2.4 */
                 break;
             default:
-                h264_profile = VAProfileH264Baseline;
+                h264_profile = VAProfileH264ConstrainedBaseline;
                 ip_period = 1;
                 constraint_set_flag |= (1 << 0); /* Annex A.2.1 */
                 break;
