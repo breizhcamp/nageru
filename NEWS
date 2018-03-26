@@ -1,3 +1,8 @@
+Nageru 1.7.1, March 26th, 2018
+
+  - Various bugfixes, mostly related to HTML and video inputs.
+
+
 Nageru 1.7.0, March 8th, 2018
 
   - Support for HTML5 graphics directly in Nageru, through CEF
