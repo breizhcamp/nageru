@@ -50,7 +50,7 @@ int write_packet(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType ty
 		stream_mux_header.append((char *)buf, buf_size);
 		httpd->set_header(stream_mux_header);
 	} else {
-		httpd->add_data((char *)buf, buf_size, type == AVIO_DATA_MARKER_SYNC_POINT);
+		httpd->add_data((char *)buf, buf_size, type == AVIO_DATA_MARKER_SYNC_POINT, time, AVRational{ AV_TIME_BASE, 1 });
 	}
 	return buf_size;
 }

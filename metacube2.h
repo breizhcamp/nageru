@@ -35,9 +35,8 @@ struct metacube2_block_header {
 uint16_t metacube2_compute_crc(const struct metacube2_block_header *hdr);
 
 /*
- * The only currently defined metadata type. Set by the encoder,
- * and can be measured for latency purposes (e.g., if the network
- * can't keep up, the latency will tend to increase.
+ * Set by the encoder, and can be measured for latency purposes (e.g., if the
+ * network can't keep up, the latency will tend to increase.
  */
 #define METACUBE_METADATA_TYPE_ENCODER_TIMESTAMP 0x1
 
@@ -50,6 +49,23 @@ struct metacube2_timestamp_packet {
 	 */
 	uint64_t tv_sec;
 	uint64_t tv_nsec;
+};
+
+/*
+ * Sent before a block to mark its presentation timestamp (ie., counts
+ * only for the next Metacube block). Used so that the reflector can know
+ * the length (in seconds) of fragments.
+ */
+#define METACUBE_METADATA_TYPE_NEXT_BLOCK_PTS 0x2
+
+struct metacube2_pts_packet {
+	uint64_t type;  /* METACUBE_METADATA_TYPE_NEXT_BLOCK_PTS, in network byte order. */
+
+	/* The timestamp of the first packet in the next block, in network byte order. */
+	int64_t pts;
+
+	/* Timebase "pts" is expressed in, as a fraction. Network byte order. */
+	uint64_t timebase_num, timebase_den;
 };
 
 #endif  /* !defined(_METACUBE_H) */

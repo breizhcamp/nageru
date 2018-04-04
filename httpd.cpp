@@ -10,6 +10,9 @@
 #include <sys/time.h>
 #include <time.h>
 #include <memory>
+extern "C" {
+#include <libavutil/avutil.h>
+}
 
 #include "defs.h"
 #include "metacube2.h"
@@ -49,11 +52,11 @@ void HTTPD::start(int port)
 	}
 }
 
-void HTTPD::add_data(const char *buf, size_t size, bool keyframe)
+void HTTPD::add_data(const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase)
 {
 	unique_lock<mutex> lock(streams_mutex);
 	for (Stream *stream : streams) {
-		stream->add_data(buf, size, keyframe ? Stream::DATA_TYPE_KEYFRAME : Stream::DATA_TYPE_OTHER);
+		stream->add_data(buf, size, keyframe ? Stream::DATA_TYPE_KEYFRAME : Stream::DATA_TYPE_OTHER, time, timebase);
 	}
 }
 
@@ -113,7 +116,7 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 	}
 
 	HTTPD::Stream *stream = new HTTPD::Stream(this, framing);
-	stream->add_data(header.data(), header.size(), Stream::DATA_TYPE_HEADER);
+	stream->add_data(header.data(), header.size(), Stream::DATA_TYPE_HEADER, AV_NOPTS_VALUE, AVRational{ 1, 0 });
 	{
 		unique_lock<mutex> lock(streams_mutex);
 		streams.insert(stream);
@@ -187,7 +190,7 @@ ssize_t HTTPD::Stream::reader_callback(uint64_t pos, char *buf, size_t max)
 	return ret;
 }
 
-void HTTPD::Stream::add_data(const char *buf, size_t buf_size, HTTPD::Stream::DataType data_type)
+void HTTPD::Stream::add_data(const char *buf, size_t buf_size, HTTPD::Stream::DataType data_type, int64_t time, AVRational timebase)
 {
 	if (buf_size == 0) {
 		return;
@@ -202,15 +205,34 @@ void HTTPD::Stream::add_data(const char *buf, size_t buf_size, HTTPD::Stream::Da
 	unique_lock<mutex> lock(buffer_mutex);
 
 	if (framing == FRAMING_METACUBE) {
-		metacube2_block_header hdr;
-		memcpy(hdr.sync, METACUBE2_SYNC, sizeof(hdr.sync));
-		hdr.size = htonl(buf_size);
 		int flags = 0;
 		if (data_type == DATA_TYPE_HEADER) {
 			flags |= METACUBE_FLAGS_HEADER;
 		} else if (data_type == DATA_TYPE_OTHER) {
 			flags |= METACUBE_FLAGS_NOT_SUITABLE_FOR_STREAM_START;
 		}
+
+		// If we're about to send a keyframe, send a pts metadata block
+		// to mark its time.
+		if ((flags & METACUBE_FLAGS_NOT_SUITABLE_FOR_STREAM_START) == 0 && time != AV_NOPTS_VALUE) {
+			metacube2_pts_packet packet;
+			packet.type = htobe64(METACUBE_METADATA_TYPE_NEXT_BLOCK_PTS);
+			packet.pts = htobe64(time);
+			packet.timebase_num = htobe64(timebase.num);
+			packet.timebase_den = htobe64(timebase.den);
+
+			metacube2_block_header hdr;
+			memcpy(hdr.sync, METACUBE2_SYNC, sizeof(hdr.sync));
+			hdr.size = htonl(sizeof(packet));
+			hdr.flags = htons(METACUBE_FLAGS_METADATA);
+			hdr.csum = htons(metacube2_compute_crc(&hdr));
+			buffered_data.emplace_back((char *)&hdr, sizeof(hdr));
+			buffered_data.emplace_back((char *)&packet, sizeof(packet));
+		}
+
+		metacube2_block_header hdr;
+		memcpy(hdr.sync, METACUBE2_SYNC, sizeof(hdr.sync));
+		hdr.size = htonl(buf_size);
 		hdr.flags = htons(flags);
 		hdr.csum = htons(metacube2_compute_crc(&hdr));
 		buffered_data.emplace_back((char *)&hdr, sizeof(hdr));

@@ -16,6 +16,10 @@
 #include <unordered_map>
 #include <utility>
 
+extern "C" {
+#include <libavutil/rational.h>
+}
+
 struct MHD_Connection;
 struct MHD_Daemon;
 
@@ -42,7 +46,7 @@ public:
 	}
 
 	void start(int port);
-	void add_data(const char *buf, size_t size, bool keyframe);
+	void add_data(const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase);
 	int64_t get_num_connected_clients() const {
 		return metric_num_connected_clients.load();
 	}
@@ -77,7 +81,7 @@ private:
 			DATA_TYPE_KEYFRAME,
 			DATA_TYPE_OTHER
 		};
-		void add_data(const char *buf, size_t size, DataType data_type);
+		void add_data(const char *buf, size_t size, DataType data_type, int64_t time, AVRational timebase);
 		void stop();
 		HTTPD *get_parent() const { return parent; }
 
