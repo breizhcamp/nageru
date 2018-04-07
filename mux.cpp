@@ -154,9 +154,13 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational t
 		exit(1);
 	}
 	if (pkt.stream_index == 0) {
-		av_packet_rescale_ts(&pkt_copy, timebase, avstream_video->time_base);
+		pkt_copy.pts = av_rescale_q(pts, timebase, avstream_video->time_base);
+		pkt_copy.dts = av_rescale_q(dts, timebase, avstream_video->time_base);
+		pkt_copy.duration = av_rescale_q(pkt.duration, timebase, avstream_video->time_base);
 	} else if (pkt.stream_index == 1) {
-		av_packet_rescale_ts(&pkt_copy, timebase, avstream_audio->time_base);
+		pkt_copy.pts = av_rescale_q(pts, timebase, avstream_audio->time_base);
+		pkt_copy.dts = av_rescale_q(dts, timebase, avstream_audio->time_base);
+		pkt_copy.duration = av_rescale_q(pkt.duration, timebase, avstream_audio->time_base);
 	} else {
 		assert(false);
 	}
