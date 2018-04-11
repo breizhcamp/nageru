@@ -349,7 +349,10 @@ bool FFmpegCapture::play_video(const string &pathname)
 		last_modified = buf.st_mtim;
 	}
 
-	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, nullptr);
+	AVDictionary *opts = nullptr;
+	av_dict_set(&opts, "fflags", "nobuffer", 0);
+
+	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, &opts);
 	if (format_ctx == nullptr) {
 		fprintf(stderr, "%s: Error opening file\n", pathname.c_str());
 		return false;
