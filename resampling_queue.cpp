@@ -49,6 +49,8 @@ void ResamplingQueue::add_input_samples(steady_clock::time_point ts, const float
 		return;
 	}
 
+	assert(duration<double>(ts.time_since_epoch()).count() >= 0.0);
+
 	bool good_sample = (rate_adjustment_policy == ADJUST_RATE);
 	if (good_sample && a1.good_sample) {
 		a0 = a1;
@@ -88,8 +90,10 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
 		// good point. Note that we could be extrapolating backward or
 		// forward, depending on the timing of the calls.
 		const InputPoint &base_point = a1.good_sample ? a1 : a0;
+		assert(duration<double>(base_point.ts.time_since_epoch()).count() >= 0.0);
 		const double input_samples_received = base_point.input_samples_received +
 			current_estimated_freq_in * duration<double>(ts - base_point.ts).count();
+		assert(input_samples_received >= 0.0);
 
 		// Estimate the number of input samples _consumed_ after we've run the resampler.
 		const double input_samples_consumed = total_consumed_samples +
