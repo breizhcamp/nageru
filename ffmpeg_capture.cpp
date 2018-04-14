@@ -288,6 +288,7 @@ void FFmpegCapture::producer_thread_func()
 			producer_thread_should_quit.sleep_for(seconds(1));
 			continue;
 		}
+		should_interrupt = false;
 		if (!play_video(pathname)) {
 			// Error.
 			fprintf(stderr, "Error when playing %s, sleeping one second and trying again...\n", pathname.c_str());
@@ -352,7 +353,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 	AVDictionary *opts = nullptr;
 	av_dict_set(&opts, "fflags", "nobuffer", 0);
 
-	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, &opts);
+	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, &opts, AVIOInterruptCB{ &FFmpegCapture::interrupt_cb_thunk, this });
 	if (format_ctx == nullptr) {
 		fprintf(stderr, "%s: Error opening file\n", pathname.c_str());
 		return false;
@@ -800,4 +801,14 @@ UniqueFrame FFmpegCapture::make_video_frame(const AVFrame *frame, const string &
 	sws_scale(sws_ctx.get(), frame->data, frame->linesize, 0, frame->height, pic_data, linesizes);
 
 	return video_frame;
+}
+
+int FFmpegCapture::interrupt_cb_thunk(void *unique)
+{
+	return reinterpret_cast<FFmpegCapture *>(unique)->interrupt_cb();
+}
+
+int FFmpegCapture::interrupt_cb()
+{
+	return should_interrupt.load();
 }

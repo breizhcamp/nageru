@@ -463,6 +463,14 @@ int VideoInput_rewind(lua_State* L)
 	return 0;
 }
 
+int VideoInput_disconnect(lua_State* L)
+{
+	assert(lua_gettop(L) == 1);
+	FFmpegCapture **video_input = (FFmpegCapture **)luaL_checkudata(L, 1, "VideoInput");
+	(*video_input)->disconnect();
+	return 0;
+}
+
 int VideoInput_change_rate(lua_State* L)
 {
 	assert(lua_gettop(L) == 2);
@@ -759,6 +767,7 @@ const luaL_Reg ImageInput_funcs[] = {
 const luaL_Reg VideoInput_funcs[] = {
 	{ "new", VideoInput_new },
 	{ "rewind", VideoInput_rewind },
+	{ "disconnect", VideoInput_disconnect },
 	{ "change_rate", VideoInput_change_rate },
 	{ "get_signal_num", VideoInput_get_signal_num },
 	{ NULL, NULL }

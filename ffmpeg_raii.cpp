@@ -18,15 +18,24 @@ void avformat_close_input_unique::operator() (AVFormatContext *format_ctx) const
 }
 
 AVFormatContextWithCloser avformat_open_input_unique(
-	const char *pathname, AVInputFormat *fmt, AVDictionary **options)
+	const char *pathname, AVInputFormat *fmt,
+	AVDictionary **options)
 {
-	AVFormatContext *format_ctx = nullptr;
+	return avformat_open_input_unique(pathname, fmt, options, AVIOInterruptCB{ nullptr, nullptr });
+}
+
+AVFormatContextWithCloser avformat_open_input_unique(
+	const char *pathname, AVInputFormat *fmt,
+	AVDictionary **options,
+	const AVIOInterruptCB &interrupt_cb)
+{
+	AVFormatContext *format_ctx = avformat_alloc_context();
+	format_ctx->interrupt_callback = interrupt_cb;
 	if (avformat_open_input(&format_ctx, pathname, fmt, options) != 0) {
 		format_ctx = nullptr;
 	}
 	return AVFormatContextWithCloser(format_ctx);
 }
-
 
 // AVCodecContext
 

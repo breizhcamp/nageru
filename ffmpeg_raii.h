@@ -19,6 +19,7 @@ struct AVFormatContext;
 struct AVFrame;
 struct AVInputFormat;
 struct SwsContext;
+typedef struct AVIOInterruptCB AVIOInterruptCB;
 
 // AVFormatContext
 struct avformat_close_input_unique {
@@ -29,7 +30,13 @@ typedef std::unique_ptr<AVFormatContext, avformat_close_input_unique>
 	AVFormatContextWithCloser;
 
 AVFormatContextWithCloser avformat_open_input_unique(
-	const char *pathname, AVInputFormat *fmt, AVDictionary **options);
+	const char *pathname, AVInputFormat *fmt,
+	AVDictionary **options);
+
+AVFormatContextWithCloser avformat_open_input_unique(
+	const char *pathname, AVInputFormat *fmt,
+	AVDictionary **options,
+	const AVIOInterruptCB &interrupt_cb);
 
 
 // AVCodecContext

@@ -78,6 +78,12 @@ public:
 		producer_thread_should_quit.wakeup();
 	}
 
+	// Will stop the stream even if it's hung on blocking I/O.
+	void disconnect()
+	{
+		should_interrupt = true;
+	}
+
 	// CaptureInterface.
 	void set_video_frame_allocator(bmusb::FrameAllocator *allocator) override
 	{
@@ -207,6 +213,9 @@ private:
 	bmusb::VideoFormat construct_video_format(const AVFrame *frame, AVRational video_timebase);
 	UniqueFrame make_video_frame(const AVFrame *frame, const std::string &pathname, bool *error);
 
+	static int interrupt_cb_thunk(void *unique);
+	int interrupt_cb();
+
 	std::string description, filename;
 	uint16_t timecode = 0;
 	unsigned width, height;
@@ -215,6 +224,7 @@ private:
 	bool running = false;
 	int card_index = -1;
 	double rate = 1.0;
+	std::atomic<bool> should_interrupt{false};
 
 	bool has_dequeue_callbacks = false;
 	std::function<void()> dequeue_init_callback = nullptr;
