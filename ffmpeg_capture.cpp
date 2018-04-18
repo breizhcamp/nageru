@@ -484,7 +484,13 @@ bool FFmpegCapture::play_video(const string &pathname)
 				}
 			}
 			video_frame->received_timestamp = next_frame_start;
-			audio_frame->received_timestamp = next_frame_start;
+
+			// The easiest way to get all the rate conversions etc. right is to move the
+			// audio PTS into the video PTS timebase and go from there. (We'll get some
+			// rounding issues, but they should not be a big problem.)
+			int64_t audio_pts_as_video_pts = av_rescale_q(audio_pts, audio_timebase, video_timebase);
+			audio_frame->received_timestamp = compute_frame_start(audio_pts_as_video_pts, pts_origin, video_timebase, start, rate);
+
 			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
 			if (finished_wakeup) {
 				if (audio_frame->len > 0) {
