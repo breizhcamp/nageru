@@ -47,6 +47,10 @@ struct InputMapping {
 	std::vector<Bus> buses;
 };
 
+// This is perhaps not the most user-friendly output, but it's at least better
+// than the raw index.
+std::string spec_to_string(DeviceSpec device_spec);
+
 bool save_input_mapping_to_file(const std::map<DeviceSpec, DeviceInfo> &devices,
                                 const InputMapping &mapping,
                                 const std::string &filename);

@@ -14,6 +14,24 @@
 using namespace std;
 using namespace google::protobuf;
 
+string spec_to_string(DeviceSpec device_spec)
+{
+	char buf[256];
+
+	switch (device_spec.type) {
+	case InputSourceType::SILENCE:
+		return "<silence>";
+	case InputSourceType::CAPTURE_CARD:
+		snprintf(buf, sizeof(buf), "Capture card %u", device_spec.index);
+		return buf;
+	case InputSourceType::ALSA_INPUT:
+		snprintf(buf, sizeof(buf), "ALSA input %u", device_spec.index);
+		return buf;
+	default:
+		assert(false);
+	}
+}
+
 bool save_input_mapping_to_file(const map<DeviceSpec, DeviceInfo> &devices, const InputMapping &input_mapping, const string &filename)
 {
 	InputMappingProto mapping_proto;

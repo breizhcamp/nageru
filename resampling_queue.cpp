@@ -30,8 +30,8 @@
 using namespace std;
 using namespace std::chrono;
 
-ResamplingQueue::ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels, double expected_delay_seconds)
-	: card_num(card_num), freq_in(freq_in), freq_out(freq_out), num_channels(num_channels),
+ResamplingQueue::ResamplingQueue(DeviceSpec device_spec, unsigned freq_in, unsigned freq_out, unsigned num_channels, double expected_delay_seconds)
+	: device_spec(device_spec), freq_in(freq_in), freq_out(freq_out), num_channels(num_channels),
 	  current_estimated_freq_in(freq_in),
 	  ratio(double(freq_out) / double(freq_in)), expected_delay(expected_delay_seconds * OUTPUT_FREQUENCY)
 {
@@ -165,8 +165,8 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
 		if (buffer.empty()) {
 			// This should never happen unless delay is set way too low,
 			// or we're dropping a lot of data.
-			fprintf(stderr, "Card %u: PANIC: Out of input samples to resample, still need %d output samples! (correction factor is %f)\n",
-				card_num, int(vresampler.out_count), rcorr);
+			fprintf(stderr, "%s: PANIC: Out of input samples to resample, still need %d output samples! (correction factor is %f)\n",
+				spec_to_string(device_spec).c_str(), int(vresampler.out_count), rcorr);
 			memset(vresampler.out_data, 0, vresampler.out_count * num_channels * sizeof(float));
 
 			// Reset the loop filter.

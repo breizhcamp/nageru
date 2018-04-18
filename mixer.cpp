@@ -724,8 +724,8 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 	size_t num_samples = (audio_frame.len > audio_offset) ? (audio_frame.len - audio_offset) / audio_format.num_channels / (audio_format.bits_per_sample / 8) : 0;
 	if (num_samples > OUTPUT_FREQUENCY / 10) {
-		printf("Card %d: Dropping frame with implausible audio length (len=%d, offset=%d) [timecode=0x%04x video_len=%d video_offset=%d video_format=%x)\n",
-			card_index, int(audio_frame.len), int(audio_offset),
+		printf("%s: Dropping frame with implausible audio length (len=%d, offset=%d) [timecode=0x%04x video_len=%d video_offset=%d video_format=%x)\n",
+			spec_to_string(device).c_str(), int(audio_frame.len), int(audio_offset),
 			timecode, int(video_frame.len), int(video_offset), video_format.id);
 		if (video_frame.owner) {
 			video_frame.owner->release_frame(video_frame);
@@ -746,15 +746,15 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	const int silence_samples = OUTPUT_FREQUENCY * video_format.frame_rate_den / video_format.frame_rate_nom;
 
 	if (dropped_frames > MAX_FPS * 2) {
-		fprintf(stderr, "Card %d lost more than two seconds (or time code jumping around; from 0x%04x to 0x%04x), resetting resampler\n",
-			card_index, card->last_timecode, timecode);
+		fprintf(stderr, "%s lost more than two seconds (or time code jumping around; from 0x%04x to 0x%04x), resetting resampler\n",
+			spec_to_string(device).c_str(), card->last_timecode, timecode);
 		audio_mixer.reset_resampler(device);
 		dropped_frames = 0;
 		++card->metric_input_resets;
 	} else if (dropped_frames > 0) {
 		// Insert silence as needed.
-		fprintf(stderr, "Card %d dropped %d frame(s) (before timecode 0x%04x), inserting silence.\n",
-			card_index, dropped_frames, timecode);
+		fprintf(stderr, "%s dropped %d frame(s) (before timecode 0x%04x), inserting silence.\n",
+			spec_to_string(device).c_str(), dropped_frames, timecode);
 		card->metric_input_dropped_frames_error += dropped_frames;
 
 		bool success;
@@ -799,8 +799,8 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	if (video_frame.len - video_offset == 0 ||
 	    video_frame.len - video_offset != expected_length) {
 		if (video_frame.len != 0) {
-			printf("Card %d: Dropping video frame with wrong length (%ld; expected %ld)\n",
-				card_index, video_frame.len - video_offset, expected_length);
+			printf("%s: Dropping video frame with wrong length (%ld; expected %ld)\n",
+				spec_to_string(device).c_str(), video_frame.len - video_offset, expected_length);
 		}
 		if (video_frame.owner) {
 			video_frame.owner->release_frame(video_frame);

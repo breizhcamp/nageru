@@ -45,11 +45,12 @@
 #include <memory>
 
 #include "defs.h"
+#include "input_mapping.h"
 
 class ResamplingQueue {
 public:
-	// card_num is for debugging outputs only.
-	ResamplingQueue(unsigned card_num, unsigned freq_in, unsigned freq_out, unsigned num_channels, double expected_delay_seconds);
+	// device_spec is for debugging outputs only.
+	ResamplingQueue(DeviceSpec device_spec, unsigned freq_in, unsigned freq_out, unsigned num_channels, double expected_delay_seconds);
 
 	// If policy is DO_NOT_ADJUST_RATE, the resampling rate will not be changed.
 	// This is primarily useful if you have an extraordinary situation, such as
@@ -68,7 +69,7 @@ private:
 
 	VResampler vresampler;
 
-	unsigned card_num;
+	DeviceSpec device_spec;
 	unsigned freq_in, freq_out, num_channels;
 
 	bool first_output = true;
