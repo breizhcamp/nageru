@@ -225,6 +225,7 @@ private:
 	int card_index = -1;
 	double rate = 1.0;
 	std::atomic<bool> should_interrupt{false};
+	bool last_frame_was_connected = true;
 
 	bool has_dequeue_callbacks = false;
 	std::function<void()> dequeue_init_callback = nullptr;
@@ -246,7 +247,7 @@ private:
 	std::thread producer_thread;
 
 	int64_t pts_origin, last_pts;
-	std::chrono::steady_clock::time_point start, next_frame_start;
+	std::chrono::steady_clock::time_point start, next_frame_start, last_frame;
 
 	std::mutex queue_mu;
 	struct QueuedCommand {

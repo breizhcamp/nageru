@@ -211,6 +211,8 @@ FFmpegCapture::FFmpegCapture(const string &filename, unsigned width, unsigned he
 	// Not really used for anything.
 	description = "Video: " + filename;
 
+	last_frame = steady_clock::now();
+
 	avformat_network_init();  // In case someone wants this.
 }
 
@@ -338,6 +340,7 @@ void FFmpegCapture::send_disconnected_frame()
 		frame_callback(-1, AVRational{1, TIMEBASE}, -1, AVRational{1, TIMEBASE}, timecode++,
 			video_frame, /*video_offset=*/0, video_format,
 			FrameAllocator::Frame(), /*audio_offset=*/0, AudioFormat());
+		last_frame_was_connected = false;
 	}
 }
 
@@ -423,6 +426,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 	internal_rewind();
 
 	// Main loop.
+	bool first_frame = true;
 	while (!producer_thread_should_quit.should_quit()) {
 		if (process_queued_commands(format_ctx.get(), pathname, last_modified, /*rewound=*/nullptr)) {
 			return true;
@@ -471,6 +475,14 @@ bool FFmpegCapture::play_video(const string &pathname)
 				pts_origin = frame->pts;	
 			}
 			next_frame_start = compute_frame_start(frame->pts, pts_origin, video_timebase, start, rate);
+			if (first_frame && last_frame_was_connected) {
+				// If reconnect took more than one second, this is probably a live feed,
+				// and we should reset the resampler. (Or the rate is really, really low,
+				// in which case a reset on the first frame is fine anyway.)
+				if (duration<double>(next_frame_start - last_frame).count() >= 1.0) {
+					last_frame_was_connected = false;
+				}
+			}
 			video_frame->received_timestamp = next_frame_start;
 			audio_frame->received_timestamp = next_frame_start;
 			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
@@ -478,9 +490,19 @@ bool FFmpegCapture::play_video(const string &pathname)
 				if (audio_frame->len > 0) {
 					assert(audio_pts != -1);
 				}
+				if (!last_frame_was_connected) {
+					// We're recovering from an error (or really slow load, see above).
+					// Make sure to get the audio resampler reset. (This is a hack;
+					// ideally, the frame callback should just accept a way to signal
+					// audio discontinuity.)
+					timecode += MAX_FPS * 2 + 1;
+				}
 				frame_callback(frame->pts, video_timebase, audio_pts, audio_timebase, timecode++,
 					video_frame.get_and_release(), 0, video_format,
 					audio_frame.get_and_release(), 0, audio_format);
+				first_frame = false;
+				last_frame = steady_clock::now();
+				last_frame_was_connected = true;
 				break;
 			} else {
 				if (producer_thread_should_quit.should_quit()) break;
