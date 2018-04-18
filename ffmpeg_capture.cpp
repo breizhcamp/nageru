@@ -597,6 +597,7 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 	AVFrameWithDeleter video_avframe = av_frame_alloc_unique();
 	bool eof = false;
 	*audio_pts = -1;
+	bool has_audio = false;
 	do {
 		AVPacket pkt;
 		unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
@@ -615,9 +616,7 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 					return AVFrameWithDeleter(nullptr);
 				}
 			} else if (pkt.stream_index == audio_stream_index) {
-				if (*audio_pts == -1) {
-					*audio_pts = pkt.pts;
-				}
+				has_audio = true;
 				if (avcodec_send_packet(audio_codec_ctx, &pkt) < 0) {
 					fprintf(stderr, "%s: Cannot send packet to audio codec.\n", pathname.c_str());
 					*error = true;
@@ -629,10 +628,13 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 		}
 
 		// Decode audio, if any.
-		if (*audio_pts != -1) {
+		if (has_audio) {
 			for ( ;; ) {
 				int err = avcodec_receive_frame(audio_codec_ctx, audio_avframe.get());
 				if (err == 0) {
+					if (*audio_pts == -1) {
+						*audio_pts = audio_avframe->pts;
+					}
 					convert_audio(audio_avframe.get(), audio_frame, audio_format);
 				} else if (err == AVERROR(EAGAIN)) {
 					break;
