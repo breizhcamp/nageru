@@ -491,6 +491,25 @@ bool FFmpegCapture::play_video(const string &pathname)
 			int64_t audio_pts_as_video_pts = av_rescale_q(audio_pts, audio_timebase, video_timebase);
 			audio_frame->received_timestamp = compute_frame_start(audio_pts_as_video_pts, pts_origin, video_timebase, start, rate);
 
+			if (audio_frame->len != 0) {
+				// The received timestamps in Nageru are measured after we've just received the frame.
+				// However, pts (especially audio pts) is at the _beginning_ of the frame.
+				// If we have locked audio, the distinction doesn't really matter, as pts is
+				// on a relative scale and a fixed offset is fine. But if we don't, we will have
+				// a different number of samples each time, which will cause huge audio jitter
+				// and throw off the resampler.
+				//
+				// In a sense, we should have compensated by adding the frame and audio lengths
+				// to video_frame->received_timestamp and audio_frame->received_timestamp respectively,
+				// but that would mean extra waiting in sleep_until(). All we need is that they
+				// are correct relative to each other, though (and to the other frames we send),
+				// so just align the end of the audio frame, and we're fine.
+				size_t num_samples = (audio_frame->len * 8) / audio_format.bits_per_sample / audio_format.num_channels;
+				double offset = double(num_samples) / OUTPUT_FREQUENCY -
+					double(video_format.frame_rate_den) / video_format.frame_rate_nom;
+				audio_frame->received_timestamp += duration_cast<steady_clock::duration>(duration<double>(offset));
+			}
+
 			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
 			if (finished_wakeup) {
 				if (audio_frame->len > 0) {
