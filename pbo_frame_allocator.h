@@ -55,6 +55,9 @@ public:
 	};
 
 private:
+	void init_frame(size_t frame_idx, size_t frame_size, GLuint width, GLuint height, GLenum permissions, GLenum map_bits);
+	void destroy_frame(Frame *frame);
+
 	bmusb::PixelFormat pixel_format;
 	std::mutex freelist_mutex;
 	std::queue<Frame> freelist;
