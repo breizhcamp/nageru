@@ -22,7 +22,7 @@ using namespace bmusb;
 extern CefRefPtr<NageruCefApp> cef_app;
 
 CEFCapture::CEFCapture(const string &url, unsigned width, unsigned height)
-	: cef_client(new NageruCEFClient(width, height, this)),
+	: cef_client(new NageruCEFClient(this)),
 	  width(width),
 	  height(height),
 	  start_url(url)

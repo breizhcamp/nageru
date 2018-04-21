@@ -35,8 +35,8 @@ class CEFCapture;
 class NageruCEFClient : public CefClient, public CefRenderHandler, public CefLoadHandler
 {
 public:
-	NageruCEFClient(int width, int height, CEFCapture *parent)
-		: width(width), height(height), parent(parent) {}
+	NageruCEFClient(CEFCapture *parent)
+		: parent(parent) {}
 
 	CefRefPtr<CefRenderHandler> GetRenderHandler() override
 	{
@@ -52,14 +52,13 @@ public:
 
 	void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList &dirtyRects, const void *buffer, int width, int height) override;
 
-	bool GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect);
+	bool GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect) override;
 
 	// CefLoadHandler.
 
 	void OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int httpStatusCode) override;
 
 private:
-	int width, height;
 	CEFCapture *parent;
 
 	IMPLEMENT_REFCOUNTING(NageruCEFClient);
@@ -149,7 +148,7 @@ public:
 		assert(pixel_format == bmusb::PixelFormat_8BitBGRA);
 	}
 
-	bmusb::PixelFormat get_current_pixel_format() const
+	bmusb::PixelFormat get_current_pixel_format() const override
 	{
 		return bmusb::PixelFormat_8BitBGRA;
 	}

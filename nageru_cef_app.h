@@ -76,7 +76,7 @@ public:
 		return this;
 	}
 
-	void OnBeforeCommandLineProcessing(const CefString& process_type, CefRefPtr<CefCommandLine> command_line);
+	void OnBeforeCommandLineProcessing(const CefString& process_type, CefRefPtr<CefCommandLine> command_line) override;
 
 private:
 	void cef_thread_func();
