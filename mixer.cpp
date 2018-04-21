@@ -1350,17 +1350,6 @@ void Mixer::render_one_frame(int64_t duration)
 	theme_main_chain.setup_chain();
 	//theme_main_chain.chain->enable_phase_timing(true);
 
-	// The theme can't (or at least shouldn't!) call connect_signal() on
-	// each FFmpeg or CEF input, so we'll do it here.
-	for (const pair<LiveInputWrapper *, FFmpegCapture *> &conn : theme->get_video_signal_connections()) {
-		conn.first->connect_signal_raw(conn.second->get_card_index(), input_state);
-	}
-#ifdef HAVE_CEF
-	for (const pair<LiveInputWrapper *, CEFCapture *> &conn : theme->get_html_signal_connections()) {
-		conn.first->connect_signal_raw(conn.second->get_card_index(), input_state);
-	}
-#endif
-
 	// If HDMI/SDI output is active and the user has requested auto mode,
 	// its mode overrides the existing Y'CbCr setting for the chain.
 	YCbCrLumaCoefficients ycbcr_output_coefficients;

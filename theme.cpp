@@ -297,7 +297,7 @@ int EffectChain_add_video_input(lua_State* L)
 	if (ret == 1) {
 		Theme *theme = get_theme_updata(L);
 		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
-		theme->register_video_signal_connection(*live_input, *capture);
+		theme->register_video_signal_connection(chain, *live_input, *capture);
 	}
 	return ret;
 }
@@ -320,7 +320,7 @@ int EffectChain_add_html_input(lua_State* L)
 	if (ret == 1) {
 		Theme *theme = get_theme_updata(L);
 		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
-		theme->register_html_signal_connection(*live_input, *capture);
+		theme->register_html_signal_connection(chain, *live_input, *capture);
 	}
 	return ret;
 }
@@ -1256,12 +1256,13 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 		exit(1);
 	}
 
-	chain.chain = (EffectChain *)luaL_testudata(L, -2, "EffectChain");
-	if (chain.chain == nullptr) {
+	EffectChain *effect_chain = (EffectChain *)luaL_testudata(L, -2, "EffectChain");
+	if (effect_chain == nullptr) {
 		fprintf(stderr, "get_chain() for chain number %d did not return an EffectChain\n",
 			num);
 		exit(1);
 	}
+	chain.chain = effect_chain;
 	if (!lua_isfunction(L, -1)) {
 		fprintf(stderr, "Argument #-1 should be a function\n");
 		exit(1);
@@ -1271,7 +1272,7 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 	lua_pop(L, 2);
 	assert(lua_gettop(L) == 0);
 
-	chain.setup_chain = [this, funcref, input_state]{
+	chain.setup_chain = [this, funcref, input_state, effect_chain]{
 		unique_lock<mutex> lock(m);
 
 		assert(this->input_state == nullptr);
@@ -1282,8 +1283,23 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 		if (lua_pcall(L, 0, 0, 0) != 0) {
 			fprintf(stderr, "error running chain setup callback: %s\n", lua_tostring(L, -1));
 			exit(1);
-		}
+	}
 		assert(lua_gettop(L) == 0);
+
+		// The theme can't (or at least shouldn't!) call connect_signal() on
+		// each FFmpeg or CEF input, so we'll do it here.
+		if (video_signal_connections.count(effect_chain)) {
+			for (const VideoSignalConnection &conn : video_signal_connections[effect_chain]) {
+				conn.wrapper->connect_signal_raw(conn.source->get_card_index(), input_state);
+			}
+		}
+#ifdef HAVE_CEF
+		if (html_signal_connections.count(effect_chain)) {
+			for (const CEFSignalConnection &conn : html_signal_connections[effect_chain]) {
+				conn.wrapper->connect_signal_raw(conn.source->get_card_index(), input_state);
+			}
+		}
+#endif
 
 		this->input_state = nullptr;
 	};

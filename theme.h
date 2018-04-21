@@ -9,6 +9,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "bmusb/bmusb.h"
@@ -82,25 +83,15 @@ public:
 	}
 #endif
 
-	void register_video_signal_connection(LiveInputWrapper *live_input, FFmpegCapture *capture)
+	void register_video_signal_connection(movit::EffectChain *chain, LiveInputWrapper *live_input, FFmpegCapture *capture)
 	{
-		video_signal_connections.emplace_back(live_input, capture);
-	}
-
-	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> get_video_signal_connections() const
-	{
-		return video_signal_connections;
+		video_signal_connections[chain].emplace_back(VideoSignalConnection { live_input, capture });
 	}
 
 #ifdef HAVE_CEF
-	void register_html_signal_connection(LiveInputWrapper *live_input, CEFCapture *capture)
+	void register_html_signal_connection(movit::EffectChain *chain, LiveInputWrapper *live_input, CEFCapture *capture)
 	{
-		html_signal_connections.emplace_back(live_input, capture);
-	}
-
-	std::vector<std::pair<LiveInputWrapper *, CEFCapture *>> get_html_signal_connections() const
-	{
-		return html_signal_connections;
+		html_signal_connections[chain].emplace_back(CEFSignalConnection { live_input, capture });
 	}
 #endif
 
@@ -136,10 +127,20 @@ private:
 	std::map<int, int> signal_to_card_mapping;  // Protected by <map_m>.
 
 	std::vector<FFmpegCapture *> video_inputs;
-	std::vector<std::pair<LiveInputWrapper *, FFmpegCapture *>> video_signal_connections;
+	struct VideoSignalConnection {
+		LiveInputWrapper *wrapper;
+		FFmpegCapture *source;
+	};
+	std::unordered_map<movit::EffectChain *, std::vector<VideoSignalConnection>>
+		 video_signal_connections;
 #ifdef HAVE_CEF
 	std::vector<CEFCapture *> html_inputs;
-	std::vector<std::pair<LiveInputWrapper *, CEFCapture *>> html_signal_connections;
+	struct CEFSignalConnection {
+		LiveInputWrapper *wrapper;
+		CEFCapture *source;
+	};
+	std::unordered_map<movit::EffectChain *, std::vector<CEFSignalConnection>>
+		html_signal_connections;
 #endif
 
 	std::vector<MenuEntry> theme_menu;
