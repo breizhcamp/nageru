@@ -6,6 +6,13 @@
 //
 // Note that the important point isn't really the pointer to the Frame itself,
 // it's the resources it's representing that need to go back to the allocator.
+//
+// FIXME: There's an issue here in that we could be releasing a frame while
+// we're still uploading textures from it, causing it to be written to in
+// another thread. (Thankfully, it goes to the back of the queue, and there's
+// usually a render in-between, meaning it's fairly unlikely that someone
+// actually managed to get to that race.) We should probably have some mechanism
+// for registering fences.
 
 #include <memory>
 
