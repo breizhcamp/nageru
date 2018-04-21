@@ -322,10 +322,15 @@ void FFmpegCapture::send_disconnected_frame()
 			video_frame.len = width * height * 4;
 		} else {
 			video_format.stride = width;
+			current_frame_ycbcr_format.luma_coefficients = YCBCR_REC_709;
 			current_frame_ycbcr_format.full_range = true;
 			current_frame_ycbcr_format.num_levels = 256;
 			current_frame_ycbcr_format.chroma_subsampling_x = 2;
 			current_frame_ycbcr_format.chroma_subsampling_y = 2;
+			current_frame_ycbcr_format.cb_x_position = 0.0f;
+			current_frame_ycbcr_format.cb_y_position = 0.0f;
+			current_frame_ycbcr_format.cr_x_position = 0.0f;
+			current_frame_ycbcr_format.cr_y_position = 0.0f;
 			video_frame.len = width * height * 2;
 		}
 		memset(video_frame.data, 0, video_frame.len);
