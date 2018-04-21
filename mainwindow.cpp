@@ -321,8 +321,15 @@ void MainWindow::mixer_created(Mixer *mixer)
 		connect(ui_display->display, &GLWidget::color_updated, this, &MainWindow::update_channel_color);
 
 		// Hook up the keyboard key.
-		QShortcut *shortcut = new QShortcut(QKeySequence(Qt::Key_1 + i), this);
-		connect(shortcut, &QShortcut::activated, bind(&MainWindow::channel_clicked, this, i));
+		QShortcut *shortcut = nullptr;
+		if (i < 9) {
+			shortcut = new QShortcut(QKeySequence(Qt::Key_1 + i), this);
+		} else if (i == 9) {
+			shortcut = new QShortcut(QKeySequence(Qt::Key_0), this);
+		}
+		if (shortcut != nullptr) {
+			connect(shortcut, &QShortcut::activated, bind(&MainWindow::channel_clicked, this, i));
+		}
 
 		// Hook up the quick-cut key.
 		if (i < strlen(qwerty)) {
