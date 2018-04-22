@@ -62,8 +62,7 @@ void callback(float level_lufs, float peak_db,
 vector<float> process_frame(unsigned frame_num, AudioMixer *mixer)
 {
 	duration<int64_t, ratio<NUM_SAMPLES, OUTPUT_FREQUENCY>> frame_duration(frame_num);
-	steady_clock::time_point ts = steady_clock::time_point::min() +
-		duration_cast<steady_clock::duration>(frame_duration);
+	steady_clock::time_point ts = steady_clock::time_point(duration_cast<steady_clock::duration>(frame_duration));
 
 	// Feed the inputs.
 	for (unsigned card_index = 0; card_index < NUM_BENCHMARK_CARDS; ++card_index) {
@@ -102,7 +101,7 @@ void init_mapping(AudioMixer *mixer)
 
 void do_test(const char *filename)
 {
-	AudioMixer mixer(NUM_BENCHMARK_CARDS);
+	AudioMixer mixer(NUM_BENCHMARK_CARDS, 0);
 	mixer.set_audio_level_callback(callback);
 	init_mapping(&mixer);
 
@@ -141,7 +140,7 @@ void do_test(const char *filename)
 
 void do_benchmark()
 {
-	AudioMixer mixer(NUM_BENCHMARK_CARDS);
+	AudioMixer mixer(NUM_BENCHMARK_CARDS, 0);
 	mixer.set_audio_level_callback(callback);
 	init_mapping(&mixer);
 
