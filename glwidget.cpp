@@ -313,7 +313,7 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 	if (global_audio_mixer->get_mapping_mode() == AudioMixer::MappingMode::SIMPLE) {
 		audio_source_action = new QAction("Use as audio source", &menu);
 		audio_source_action->setCheckable(true);
-		if (global_audio_mixer->get_simple_input() == signal_num) {
+		if (global_audio_mixer->get_simple_input() == current_card) {
 			audio_source_action->setChecked(true);
 			audio_source_action->setEnabled(false);
 		}
@@ -335,7 +335,7 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 	// Show the menu and look at the result.
 	QAction *selected_item = menu.exec(global_pos);
 	if (audio_source_action != nullptr && selected_item == audio_source_action) {
-		global_audio_mixer->set_simple_input(signal_num);
+		global_audio_mixer->set_simple_input(current_card);
 	} else if (selected_item == master_clock_action) {
 		global_mixer->set_master_clock(signal_num);
 	} else if (selected_item != nullptr) {
