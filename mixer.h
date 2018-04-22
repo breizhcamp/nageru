@@ -322,6 +322,11 @@ public:
 		return cards[card_index].output != nullptr;
 	}
 
+	bool card_is_ffmpeg(unsigned card_index) const {
+		assert(card_index < num_cards + num_video_inputs);
+		return cards[card_index].type == CardType::FFMPEG_INPUT;
+	}
+
 	std::map<uint32_t, bmusb::VideoMode> get_available_video_modes(unsigned card_index) const {
 		assert(card_index < num_cards);
 		return cards[card_index].capture->get_available_video_modes();

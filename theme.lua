@@ -323,9 +323,11 @@ end
 
 -- API ENTRY POINT
 -- Returns, given a channel number, which signal it corresponds to (starting from 0).
--- Should return -1 if the channel does not correspond to a simple signal.
--- (The information is used for whether right-click on the channel should bring up
--- an input selector or not.)
+-- Should return -1 if the channel does not correspond to a simple signal
+-- (one connected to a capture card, or a video input). The information is used for
+-- whether right-click on the channel should bring up a context menu or not,
+-- typically containing an input selector, resolution menu etc.
+--
 -- Called once for each channel, at the start of the program.
 -- Will never be called for live (0) or preview (1).
 function channel_signal(channel)

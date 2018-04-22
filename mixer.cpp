@@ -1018,7 +1018,7 @@ void Mixer::thread_func()
 		} else {
 			master_card_is_output = false;
 			master_card_index = theme->map_signal(master_clock_channel);
-			assert(master_card_index < num_cards);
+			assert(master_card_index < num_cards + num_video_inputs);
 		}
 
 		OutputFrameInfo	output_frame_info = get_one_frame_from_each_card(master_card_index, master_card_is_output, new_frames, has_new_frame);

@@ -953,11 +953,15 @@ void AudioMixer::serialize_device(DeviceSpec device_spec, DeviceSpecProto *devic
 
 void AudioMixer::set_simple_input(unsigned card_index)
 {
+	assert(card_index < num_capture_cards + num_ffmpeg_inputs);
 	InputMapping new_input_mapping;
 	InputMapping::Bus input;
 	input.name = "Main";
-	input.device.type = InputSourceType::CAPTURE_CARD;
-	input.device.index = card_index;
+	if (card_index >= num_capture_cards) {
+		input.device = DeviceSpec{InputSourceType::FFMPEG_VIDEO_INPUT, card_index - num_capture_cards};
+	} else {
+		input.device = DeviceSpec{InputSourceType::CAPTURE_CARD, card_index};
+	}
 	input.source_channel[0] = 0;
 	input.source_channel[1] = 1;
 
@@ -977,6 +981,11 @@ unsigned AudioMixer::get_simple_input() const
 	    input_mapping.buses[0].source_channel[0] == 0 &&
 	    input_mapping.buses[0].source_channel[1] == 1) {
 		return input_mapping.buses[0].device.index;
+	} else if (input_mapping.buses.size() == 1 &&
+	           input_mapping.buses[0].device.type == InputSourceType::FFMPEG_VIDEO_INPUT &&
+	           input_mapping.buses[0].source_channel[0] == 0 &&
+	           input_mapping.buses[0].source_channel[1] == 1) {
+		return input_mapping.buses[0].device.index + num_capture_cards;
 	} else {
 		return numeric_limits<unsigned>::max();
 	}

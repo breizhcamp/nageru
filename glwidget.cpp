@@ -177,134 +177,139 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 
 	unsigned num_cards = global_mixer->get_num_cards();
 	unsigned current_card = global_mixer->map_signal(signal_num);
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
-		QString description(QString::fromStdString(global_mixer->get_card_description(card_index)));
-		QAction *action = new QAction(description, &card_group);
-		action->setCheckable(true);
-		if (current_card == card_index) {
-			action->setChecked(true);
-		}
-		action->setData(QList<QVariant>{"card", card_index});
-		card_submenu.addAction(action);
-	}
+	bool is_ffmpeg = global_mixer->card_is_ffmpeg(current_card);
 
-	card_submenu.setTitle("Input source");
-	menu.addMenu(&card_submenu);
-
-	// Note that this setting depends on which card is active.
-	// TODO: Consider hiding this for BGRA sources.
-
-	QMenu interpretation_submenu;
-	QActionGroup interpretation_group(&interpretation_submenu);
-
-	YCbCrInterpretation current_interpretation = global_mixer->get_input_ycbcr_interpretation(current_card);
-	{
-		QAction *action = new QAction("Auto", &interpretation_group);
-		action->setCheckable(true);
-		if (current_interpretation.ycbcr_coefficients_auto) {
-			action->setChecked(true);
-		}
-		action->setData(QList<QVariant>{"interpretation", true, YCBCR_REC_709, false});
-		interpretation_submenu.addAction(action);
-	}
-	for (YCbCrLumaCoefficients ycbcr_coefficients : { YCBCR_REC_709, YCBCR_REC_601 }) {
-		for (bool full_range : { false, true }) {
-			std::string description;
-			if (ycbcr_coefficients == YCBCR_REC_709) {
-				description = "Rec. 709 (HD)";
-			} else {
-				description = "Rec. 601 (SD)";
-			}
-			if (full_range) {
-				description += ", full range (nonstandard)";
-			}
-			QAction *action = new QAction(QString::fromStdString(description), &interpretation_group);
+	if (!is_ffmpeg) {  // FFmpeg inputs are not connected to any card; they're locked to a given input and have a given Y'CbCr interpretatio and have a given Y'CbCr interpretationn.
+		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+			QString description(QString::fromStdString(global_mixer->get_card_description(card_index)));
+			QAction *action = new QAction(description, &card_group);
 			action->setCheckable(true);
-			if (!current_interpretation.ycbcr_coefficients_auto &&
-			    ycbcr_coefficients == current_interpretation.ycbcr_coefficients &&
-			    full_range == current_interpretation.full_range) {
+			if (current_card == card_index) {
 				action->setChecked(true);
 			}
-			action->setData(QList<QVariant>{"interpretation", false, ycbcr_coefficients, full_range});
+			action->setData(QList<QVariant>{"card", card_index});
+			card_submenu.addAction(action);
+		}
+
+		card_submenu.setTitle("Input source");
+		menu.addMenu(&card_submenu);
+
+		// Note that this setting depends on which card is active.
+
+		QMenu interpretation_submenu;
+		QActionGroup interpretation_group(&interpretation_submenu);
+
+		YCbCrInterpretation current_interpretation = global_mixer->get_input_ycbcr_interpretation(current_card);
+		{
+			QAction *action = new QAction("Auto", &interpretation_group);
+			action->setCheckable(true);
+			if (current_interpretation.ycbcr_coefficients_auto) {
+				action->setChecked(true);
+			}
+			action->setData(QList<QVariant>{"interpretation", true, YCBCR_REC_709, false});
 			interpretation_submenu.addAction(action);
 		}
-	}
+		for (YCbCrLumaCoefficients ycbcr_coefficients : { YCBCR_REC_709, YCBCR_REC_601 }) {
+			for (bool full_range : { false, true }) {
+				std::string description;
+				if (ycbcr_coefficients == YCBCR_REC_709) {
+					description = "Rec. 709 (HD)";
+				} else {
+					description = "Rec. 601 (SD)";
+				}
+				if (full_range) {
+					description += ", full range (nonstandard)";
+				}
+				QAction *action = new QAction(QString::fromStdString(description), &interpretation_group);
+				action->setCheckable(true);
+				if (!current_interpretation.ycbcr_coefficients_auto &&
+				    ycbcr_coefficients == current_interpretation.ycbcr_coefficients &&
+				    full_range == current_interpretation.full_range) {
+					action->setChecked(true);
+				}
+				action->setData(QList<QVariant>{"interpretation", false, ycbcr_coefficients, full_range});
+				interpretation_submenu.addAction(action);
+			}
+		}
 
-	interpretation_submenu.setTitle("Input interpretation");
-	menu.addMenu(&interpretation_submenu);
+		interpretation_submenu.setTitle("Input interpretation");
+		menu.addMenu(&interpretation_submenu);
+	}
 
 	// --- The choices in the next few options depend a lot on which card is active ---
 
-	// Add a submenu for selecting video input, with an action for each input.
-	QMenu video_input_submenu;
-	QActionGroup video_input_group(&video_input_submenu);
-	std::map<uint32_t, string> video_inputs = global_mixer->get_available_video_inputs(current_card);
-	uint32_t current_video_input = global_mixer->get_current_video_input(current_card);
-	for (const auto &mode : video_inputs) {
-		QString description(QString::fromStdString(mode.second));
-		QAction *action = new QAction(description, &video_input_group);
-		action->setCheckable(true);
-		if (mode.first == current_video_input) {
-			action->setChecked(true);
-		}
-		action->setData(QList<QVariant>{"video_input", mode.first});
-		video_input_submenu.addAction(action);
-	}
-
-	video_input_submenu.setTitle("Video input");
-	menu.addMenu(&video_input_submenu);
-
-	// The same for audio input.
-	QMenu audio_input_submenu;
-	QActionGroup audio_input_group(&audio_input_submenu);
-	std::map<uint32_t, string> audio_inputs = global_mixer->get_available_audio_inputs(current_card);
-	uint32_t current_audio_input = global_mixer->get_current_audio_input(current_card);
-	for (const auto &mode : audio_inputs) {
-		QString description(QString::fromStdString(mode.second));
-		QAction *action = new QAction(description, &audio_input_group);
-		action->setCheckable(true);
-		if (mode.first == current_audio_input) {
-			action->setChecked(true);
-		}
-		action->setData(QList<QVariant>{"audio_input", mode.first});
-		audio_input_submenu.addAction(action);
-	}
-
-	audio_input_submenu.setTitle("Audio input");
-	menu.addMenu(&audio_input_submenu);
-
-	// The same for resolution.
-	QMenu mode_submenu;
-	QActionGroup mode_group(&mode_submenu);
-	std::map<uint32_t, bmusb::VideoMode> video_modes = global_mixer->get_available_video_modes(current_card);
-	uint32_t current_video_mode = global_mixer->get_current_video_mode(current_card);
 	bool has_auto_mode = false;
-	for (const auto &mode : video_modes) {
-		QString description(QString::fromStdString(mode.second.name));
-		QAction *action = new QAction(description, &mode_group);
-		action->setCheckable(true);
-		if (mode.first == current_video_mode) {
-			action->setChecked(true);
+	if (!is_ffmpeg) {
+		// Add a submenu for selecting video input, with an action for each input.
+		QMenu video_input_submenu;
+		QActionGroup video_input_group(&video_input_submenu);
+		std::map<uint32_t, string> video_inputs = global_mixer->get_available_video_inputs(current_card);
+		uint32_t current_video_input = global_mixer->get_current_video_input(current_card);
+		for (const auto &mode : video_inputs) {
+			QString description(QString::fromStdString(mode.second));
+			QAction *action = new QAction(description, &video_input_group);
+			action->setCheckable(true);
+			if (mode.first == current_video_input) {
+				action->setChecked(true);
+			}
+			action->setData(QList<QVariant>{"video_input", mode.first});
+			video_input_submenu.addAction(action);
 		}
-		action->setData(QList<QVariant>{"video_mode", mode.first});
-		mode_submenu.addAction(action);
 
-		// TODO: Relying on the 0 value here (from bmusb.h) is ugly, it should be a named constant.
-		if (mode.first == 0) {
-			has_auto_mode = true;
+		video_input_submenu.setTitle("Video input");
+		menu.addMenu(&video_input_submenu);
+
+		// The same for audio input.
+		QMenu audio_input_submenu;
+		QActionGroup audio_input_group(&audio_input_submenu);
+		std::map<uint32_t, string> audio_inputs = global_mixer->get_available_audio_inputs(current_card);
+		uint32_t current_audio_input = global_mixer->get_current_audio_input(current_card);
+		for (const auto &mode : audio_inputs) {
+			QString description(QString::fromStdString(mode.second));
+			QAction *action = new QAction(description, &audio_input_group);
+			action->setCheckable(true);
+			if (mode.first == current_audio_input) {
+				action->setChecked(true);
+			}
+			action->setData(QList<QVariant>{"audio_input", mode.first});
+			audio_input_submenu.addAction(action);
 		}
-	}
 
-	// Add a “scan” menu if there's no “auto” mode.
-	if (!has_auto_mode) {
-		QAction *action = new QAction("Scan", &mode_group);
-		action->setData(QList<QVariant>{"video_mode", 0});
-		mode_submenu.addSeparator();
-		mode_submenu.addAction(action);
-	}
+		audio_input_submenu.setTitle("Audio input");
+		menu.addMenu(&audio_input_submenu);
 
-	mode_submenu.setTitle("Input mode");
-	menu.addMenu(&mode_submenu);
+		// The same for resolution.
+		QMenu mode_submenu;
+		QActionGroup mode_group(&mode_submenu);
+		std::map<uint32_t, bmusb::VideoMode> video_modes = global_mixer->get_available_video_modes(current_card);
+		uint32_t current_video_mode = global_mixer->get_current_video_mode(current_card);
+		for (const auto &mode : video_modes) {
+			QString description(QString::fromStdString(mode.second.name));
+			QAction *action = new QAction(description, &mode_group);
+			action->setCheckable(true);
+			if (mode.first == current_video_mode) {
+				action->setChecked(true);
+			}
+			action->setData(QList<QVariant>{"video_mode", mode.first});
+			mode_submenu.addAction(action);
+
+			// TODO: Relying on the 0 value here (from bmusb.h) is ugly, it should be a named constant.
+			if (mode.first == 0) {
+				has_auto_mode = true;
+			}
+		}
+
+		// Add a “scan” menu if there's no “auto” mode.
+		if (!has_auto_mode) {
+			QAction *action = new QAction("Scan", &mode_group);
+			action->setData(QList<QVariant>{"video_mode", 0});
+			mode_submenu.addSeparator();
+			mode_submenu.addAction(action);
+		}
+
+		mode_submenu.setTitle("Input mode");
+		menu.addMenu(&mode_submenu);
+	}
 
 	// --- End of card-dependent choices ---
 
