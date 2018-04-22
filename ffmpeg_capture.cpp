@@ -510,6 +510,19 @@ bool FFmpegCapture::play_video(const string &pathname)
 				audio_frame->received_timestamp += duration_cast<steady_clock::duration>(duration<double>(offset));
 			}
 
+			steady_clock::time_point now = steady_clock::now();
+			if (duration<double>(now - next_frame_start).count() >= 0.1) {
+				// If we don't have enough CPU to keep up, or if we have a live stream
+				// where the initial origin was somehow wrong, we could be behind indefinitely.
+				// In particular, this will give the audio resampler problems as it tries
+				// to speed up to reduce the delay, hitting the low end of the buffer every time.
+				fprintf(stderr, "%s: Playback %.0f ms behind, resetting time scale\n",
+					pathname.c_str(),
+					1e3 * duration<double>(now - next_frame_start).count());
+				pts_origin = frame->pts;
+				start = next_frame_start = now;
+				timecode += MAX_FPS * 2 + 1;
+			}
 			bool finished_wakeup = producer_thread_should_quit.sleep_until(next_frame_start);
 			if (finished_wakeup) {
 				if (audio_frame->len > 0) {
