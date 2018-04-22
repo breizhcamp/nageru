@@ -266,8 +266,14 @@ void InputMappingDialog::updown_clicked(int direction)
 
 void InputMappingDialog::save_clicked()
 {
+#if HAVE_CEF
+	// The native file dialog uses GTK+, which interferes with CEF's use of the GLib main loop.
+	QFileDialog::Option options(QFileDialog::DontUseNativeDialog);
+#else
+	QFileDialog::Option options;
+#endif
 	QString filename = QFileDialog::getSaveFileName(this,
-		"Save input mapping", QString(), tr("Mapping files (*.mapping)"));
+		"Save input mapping", QString(), tr("Mapping files (*.mapping)"), /*selectedFilter=*/nullptr, options);
 	if (!filename.endsWith(".mapping")) {
 		filename += ".mapping";
 	}
@@ -280,8 +286,14 @@ void InputMappingDialog::save_clicked()
 
 void InputMappingDialog::load_clicked()
 {
+#if HAVE_CEF
+	// The native file dialog uses GTK+, which interferes with CEF's use of the GLib main loop.
+	QFileDialog::Option options(QFileDialog::DontUseNativeDialog);
+#else
+	QFileDialog::Option options;
+#endif
 	QString filename = QFileDialog::getOpenFileName(this,
-		"Load input mapping", QString(), tr("Mapping files (*.mapping)"));
+		"Load input mapping", QString(), tr("Mapping files (*.mapping)"), /*selectedFilter=*/nullptr, options);
 	InputMapping new_mapping;
 	if (!load_input_mapping_from_file(devices, filename.toStdString(), &new_mapping)) {
 		QMessageBox box;

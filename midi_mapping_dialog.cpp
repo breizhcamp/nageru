@@ -280,9 +280,15 @@ void MIDIMappingDialog::cancel_clicked()
 
 void MIDIMappingDialog::save_clicked()
 {
+#if HAVE_CEF
+	// The native file dialog uses GTK+, which interferes with CEF's use of the GLib main loop.
+	QFileDialog::Option options(QFileDialog::DontUseNativeDialog);
+#else
+	QFileDialog::Option options;
+#endif
 	unique_ptr<MIDIMappingProto> new_mapping = construct_mapping_proto_from_ui();
 	QString filename = QFileDialog::getSaveFileName(this,
-		"Save MIDI mapping", QString(), tr("Mapping files (*.midimapping)"));
+		"Save MIDI mapping", QString(), tr("Mapping files (*.midimapping)"), /*selectedFilter=*/nullptr, options);
 	if (!filename.endsWith(".midimapping")) {
 		filename += ".midimapping";
 	}
@@ -295,8 +301,14 @@ void MIDIMappingDialog::save_clicked()
 
 void MIDIMappingDialog::load_clicked()
 {
+#if HAVE_CEF
+	// The native file dialog uses GTK+, which interferes with CEF's use of the GLib main loop.
+	QFileDialog::Option options(QFileDialog::DontUseNativeDialog);
+#else
+	QFileDialog::Option options;
+#endif
 	QString filename = QFileDialog::getOpenFileName(this,
-		"Load MIDI mapping", QString(), tr("Mapping files (*.midimapping)"));
+		"Load MIDI mapping", QString(), tr("Mapping files (*.midimapping)"), /*selectedFilter=*/nullptr, options);
 	MIDIMappingProto new_mapping;
 	if (!load_midi_mapping_from_file(filename.toStdString(), &new_mapping)) {
 		QMessageBox box;
