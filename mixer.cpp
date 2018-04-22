@@ -304,8 +304,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	  num_cards(num_cards),
 	  mixer_surface(create_surface(format)),
 	  h264_encoder_surface(create_surface(format)),
-	  decklink_output_surface(create_surface(format)),
-	  audio_mixer(num_cards)
+	  decklink_output_surface(create_surface(format))
 {
 	memcpy(ycbcr_interpretation, global_flags.ycbcr_interpretation, sizeof(ycbcr_interpretation));
 	CHECK(init_movit(MOVIT_SHADER_DIR, MOVIT_DEBUG_OFF));
@@ -360,6 +359,10 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 	// Must be instantiated after VideoEncoder has initialized global_flags.use_zerocopy.
 	theme.reset(new Theme(global_flags.theme_filename, global_flags.theme_dirs, resource_pool.get(), num_cards));
+
+	// Must be instantiated after the theme, as the theme decides the number of FFmpeg inputs.
+	std::vector<FFmpegCapture *> video_inputs = theme->get_video_inputs();
+	audio_mixer.reset(new AudioMixer(num_cards, video_inputs.size()));
 
 	httpd.add_endpoint("/channels", bind(&Mixer::get_channels_json, this), HTTPD::ALLOW_ALL_ORIGINS);
 	for (int channel_idx = 2; channel_idx < theme->get_num_channels(); ++channel_idx) {
@@ -421,7 +424,6 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 	// Initialize all video inputs the theme asked for. Note that these are
 	// all put _after_ the regular cards, which stop at <num_cards> - 1.
-	std::vector<FFmpegCapture *> video_inputs = theme->get_video_inputs();
 	for (unsigned video_card_index = 0; video_card_index < video_inputs.size(); ++card_index, ++video_card_index) {
 		if (card_index >= MAX_VIDEO_CARDS) {
 			fprintf(stderr, "ERROR: Not enough card slots available for the videos the theme requested.\n");
@@ -558,10 +560,15 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
 
 	// NOTE: start_bm_capture() happens in thread_func().
 
-	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
-	audio_mixer.reset_resampler(device);
-	audio_mixer.set_display_name(device, card->capture->get_description());
-	audio_mixer.trigger_state_changed_callback();
+	DeviceSpec device;
+	if (card_type == CardType::FFMPEG_INPUT) {
+		device = DeviceSpec{InputSourceType::FFMPEG_VIDEO_INPUT, card_index - num_cards};
+	} else {
+		device = DeviceSpec{InputSourceType::CAPTURE_CARD, card_index};
+	}
+	audio_mixer->reset_resampler(device);
+	audio_mixer->set_display_name(device, card->capture->get_description());
+	audio_mixer->trigger_state_changed_callback();
 
 	// Unregister old metrics, if any.
 	if (!card->labels.empty()) {
@@ -688,7 +695,12 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
                      FrameAllocator::Frame video_frame, size_t video_offset, VideoFormat video_format,
 		     FrameAllocator::Frame audio_frame, size_t audio_offset, AudioFormat audio_format)
 {
-	DeviceSpec device{InputSourceType::CAPTURE_CARD, card_index};
+	DeviceSpec device;
+	if (card_index >= num_cards) {
+		device = DeviceSpec{InputSourceType::FFMPEG_VIDEO_INPUT, card_index - num_cards};
+	} else {
+		device = DeviceSpec{InputSourceType::CAPTURE_CARD, card_index};
+	}
 	CaptureCard *card = &cards[card_index];
 
 	++card->metric_input_received_frames;
@@ -723,7 +735,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	assert(frame_length > 0);
 
 	size_t num_samples = (audio_frame.len > audio_offset) ? (audio_frame.len - audio_offset) / audio_format.num_channels / (audio_format.bits_per_sample / 8) : 0;
-	if (num_samples > OUTPUT_FREQUENCY / 10) {
+	if (num_samples > OUTPUT_FREQUENCY / 10 && card->type != CardType::FFMPEG_INPUT) {
 		printf("%s: Dropping frame with implausible audio length (len=%d, offset=%d) [timecode=0x%04x video_len=%d video_offset=%d video_format=%x)\n",
 			spec_to_string(device).c_str(), int(audio_frame.len), int(audio_offset),
 			timecode, int(video_frame.len), int(video_offset), video_format.id);
@@ -748,7 +760,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	if (dropped_frames > MAX_FPS * 2) {
 		fprintf(stderr, "%s lost more than two seconds (or time code jumping around; from 0x%04x to 0x%04x), resetting resampler\n",
 			spec_to_string(device).c_str(), card->last_timecode, timecode);
-		audio_mixer.reset_resampler(device);
+		audio_mixer->reset_resampler(device);
 		dropped_frames = 0;
 		++card->metric_input_resets;
 	} else if (dropped_frames > 0) {
@@ -759,12 +771,12 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 		bool success;
 		do {
-			success = audio_mixer.add_silence(device, silence_samples, dropped_frames, frame_length);
+			success = audio_mixer->add_silence(device, silence_samples, dropped_frames, frame_length);
 		} while (!success);
 	}
 
 	if (num_samples > 0) {
-		audio_mixer.add_audio(device, audio_frame.data + audio_offset, num_samples, audio_format, frame_length, audio_frame.received_timestamp);
+		audio_mixer->add_audio(device, audio_frame.data + audio_offset, num_samples, audio_format, frame_length, audio_frame.received_timestamp);
 	}
 
 	// Done with the audio, so release it.
@@ -1488,7 +1500,7 @@ void Mixer::audio_thread_func()
 
 		ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy =
 			task.adjust_rate ? ResamplingQueue::ADJUST_RATE : ResamplingQueue::DO_NOT_ADJUST_RATE;
-		vector<float> samples_out = audio_mixer.get_output(
+		vector<float> samples_out = audio_mixer->get_output(
 			task.frame_timestamp,
 			task.num_samples,
 			rate_adjustment_policy);

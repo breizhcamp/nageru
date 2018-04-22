@@ -46,7 +46,7 @@ enum EQBand {
 
 class AudioMixer {
 public:
-	AudioMixer(unsigned num_cards);
+	AudioMixer(unsigned num_capture_cards, unsigned num_ffmpeg_inputs);
 	void reset_resampler(DeviceSpec device_spec);
 	void reset_meters();
 
@@ -327,13 +327,14 @@ private:
 	std::vector<DeviceSpec> get_active_devices() const;
 	void set_input_mapping_lock_held(const InputMapping &input_mapping);
 
-	unsigned num_cards;
+	unsigned num_capture_cards, num_ffmpeg_inputs;
 
 	mutable std::timed_mutex audio_mutex;
 
 	ALSAPool alsa_pool;
 	AudioDevice video_cards[MAX_VIDEO_CARDS];  // Under audio_mutex.
 	AudioDevice alsa_inputs[MAX_ALSA_CARDS];  // Under audio_mutex.
+	std::unique_ptr<AudioDevice[]> ffmpeg_inputs;  // Under audio_mutex.
 
 	std::atomic<float> locut_cutoff_hz{120};
 	StereoFilter locut[MAX_BUSES];  // Default cutoff 120 Hz, 24 dB/oct.

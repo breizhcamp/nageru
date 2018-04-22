@@ -17,7 +17,6 @@
 // changes parameters midway, which is allowed in some formats.
 //
 // You can get out the audio either as decoded or in raw form (Kaeru uses this).
-// However, the rest of Nageru can't really use the audio for anything yet.
 
 #include <assert.h>
 #include <stdint.h>

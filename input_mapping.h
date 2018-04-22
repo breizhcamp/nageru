@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-enum class InputSourceType { SILENCE, CAPTURE_CARD, ALSA_INPUT };
+enum class InputSourceType { SILENCE, CAPTURE_CARD, ALSA_INPUT, FFMPEG_VIDEO_INPUT };
 struct DeviceSpec {
 	InputSourceType type;
 	unsigned index;

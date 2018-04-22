@@ -208,7 +208,6 @@ YCbCrFormat decode_ycbcr_format(const AVPixFmtDescriptor *desc, const AVFrame *f
 FFmpegCapture::FFmpegCapture(const string &filename, unsigned width, unsigned height)
 	: filename(filename), width(width), height(height), video_timebase{1, 1}
 {
-	// Not really used for anything.
 	description = "Video: " + filename;
 
 	last_frame = steady_clock::now();

@@ -148,7 +148,8 @@ void InputMappingDialog::setup_channel_choices_from_bus(unsigned row, const Inpu
 		QComboBox *channel_combo = new QComboBox;
 		channel_combo->addItem(QString("(none)"));
 		if (bus.device.type == InputSourceType::CAPTURE_CARD ||
-		    bus.device.type == InputSourceType::ALSA_INPUT) {
+		    bus.device.type == InputSourceType::ALSA_INPUT ||
+		    bus.device.type == InputSourceType::FFMPEG_VIDEO_INPUT) {
 			auto device_it = devices.find(bus.device);
 			assert(device_it != devices.end());
 			unsigned num_device_channels = device_it->second.num_channels;
@@ -159,6 +160,7 @@ void InputMappingDialog::setup_channel_choices_from_bus(unsigned row, const Inpu
 			}
 			channel_combo->setCurrentIndex(bus.source_channel[channel] + 1);
 		} else {
+			assert(bus.device.type == InputSourceType::SILENCE);
 			channel_combo->setCurrentIndex(0);
 		}
 		connect(channel_combo, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),

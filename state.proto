@@ -8,7 +8,7 @@ syntax = "proto2";
 // to the right device even if the devices have moved around.
 message DeviceSpecProto {
 	// Members from DeviceSpec itself.
-	enum InputSourceType { SILENCE = 0; CAPTURE_CARD = 1; ALSA_INPUT = 2; };
+	enum InputSourceType { SILENCE = 0; CAPTURE_CARD = 1; ALSA_INPUT = 2; FFMPEG_VIDEO_INPUT = 3; };
 	optional InputSourceType type = 1;
 	optional int32 index = 2;
 

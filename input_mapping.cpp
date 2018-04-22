@@ -27,6 +27,9 @@ string spec_to_string(DeviceSpec device_spec)
 	case InputSourceType::ALSA_INPUT:
 		snprintf(buf, sizeof(buf), "ALSA input %u", device_spec.index);
 		return buf;
+	case InputSourceType::FFMPEG_VIDEO_INPUT:
+		snprintf(buf, sizeof(buf), "FFmpeg input %u", device_spec.index);
+		return buf;
 	default:
 		assert(false);
 	}
@@ -103,10 +106,15 @@ bool load_input_mapping_from_file(const map<DeviceSpec, DeviceInfo> &devices, co
 		case DeviceSpecProto::SILENCE:
 			device_mapping.push_back(DeviceSpec{InputSourceType::SILENCE, 0});
 			break;
+		case DeviceSpecProto::FFMPEG_VIDEO_INPUT:
 		case DeviceSpecProto::CAPTURE_CARD: {
 			// First see if there's a card that matches on both index and name.
-			DeviceSpec spec{InputSourceType::CAPTURE_CARD, unsigned(device_proto.index())};
+			DeviceSpec spec;
+			spec.type = (device_proto.type() == DeviceSpecProto::CAPTURE_CARD) ?
+				InputSourceType::CAPTURE_CARD : InputSourceType::FFMPEG_VIDEO_INPUT;
+			spec.index = unsigned(device_proto.index());
 			assert(devices.count(spec));
+
 			const DeviceInfo &dev = devices.find(spec)->second;
 			if (remaining_devices.count(spec) &&
 			    dev.display_name == device_proto.display_name()) {

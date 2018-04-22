@@ -167,8 +167,10 @@ void deinterleave_samples(const vector<float> &in, vector<float> *out_l, vector<
 
 }  // namespace
 
-AudioMixer::AudioMixer(unsigned num_cards)
-	: num_cards(num_cards),
+AudioMixer::AudioMixer(unsigned num_capture_cards, unsigned num_ffmpeg_inputs)
+	: num_capture_cards(num_capture_cards),
+	  num_ffmpeg_inputs(num_ffmpeg_inputs),
+	  ffmpeg_inputs(new AudioDevice[num_ffmpeg_inputs]),
 	  limiter(OUTPUT_FREQUENCY),
 	  correlation(OUTPUT_FREQUENCY)
 {
@@ -387,6 +389,8 @@ AudioMixer::AudioDevice *AudioMixer::find_audio_device(DeviceSpec device)
 		return &video_cards[device.index];
 	case InputSourceType::ALSA_INPUT:
 		return &alsa_inputs[device.index];
+	case InputSourceType::FFMPEG_VIDEO_INPUT:
+		return &ffmpeg_inputs[device.index];
 	case InputSourceType::SILENCE:
 	default:
 		assert(false);
@@ -425,7 +429,8 @@ void AudioMixer::fill_audio_bus(const map<DeviceSpec, vector<float>> &samples_ca
 		memset(output, 0, num_samples * 2 * sizeof(*output));
 	} else {
 		assert(bus.device.type == InputSourceType::CAPTURE_CARD ||
-		       bus.device.type == InputSourceType::ALSA_INPUT);
+		       bus.device.type == InputSourceType::ALSA_INPUT ||
+		       bus.device.type == InputSourceType::FFMPEG_VIDEO_INPUT);
 		const float *lsrc, *rsrc;
 		unsigned lstride, rstride;
 		float *dptr = output;
@@ -451,6 +456,12 @@ vector<DeviceSpec> AudioMixer::get_active_devices() const
 	}
 	for (unsigned card_index = 0; card_index < MAX_ALSA_CARDS; ++card_index) {
 		const DeviceSpec device_spec{InputSourceType::ALSA_INPUT, card_index};
+		if (!find_audio_device(device_spec)->interesting_channels.empty()) {
+			ret.push_back(device_spec);
+		}
+	}
+	for (unsigned card_index = 0; card_index < num_ffmpeg_inputs; ++card_index) {
+		const DeviceSpec device_spec{InputSourceType::FFMPEG_VIDEO_INPUT, card_index};
 		if (!find_audio_device(device_spec)->interesting_channels.empty()) {
 			ret.push_back(device_spec);
 		}
@@ -878,7 +889,7 @@ map<DeviceSpec, DeviceInfo> AudioMixer::get_devices()
 	lock_guard<timed_mutex> lock(audio_mutex);
 
 	map<DeviceSpec, DeviceInfo> devices;
-	for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
+	for (unsigned card_index = 0; card_index < num_capture_cards; ++card_index) {
 		const DeviceSpec spec{ InputSourceType::CAPTURE_CARD, card_index };
 		const AudioDevice *device = &video_cards[card_index];
 		DeviceInfo info;
@@ -896,6 +907,14 @@ map<DeviceSpec, DeviceInfo> AudioMixer::get_devices()
 		info.alsa_name = device.name;
 		info.alsa_info = device.info;
 		info.alsa_address = device.address;
+		devices.insert(make_pair(spec, info));
+	}
+	for (unsigned card_index = 0; card_index < num_ffmpeg_inputs; ++card_index) {
+		const DeviceSpec spec{ InputSourceType::FFMPEG_VIDEO_INPUT, card_index };
+		const AudioDevice *device = &ffmpeg_inputs[card_index];
+		DeviceInfo info;
+		info.display_name = device->display_name;
+		info.num_channels = 2;
 		devices.insert(make_pair(spec, info));
 	}
 	return devices;
@@ -923,6 +942,11 @@ void AudioMixer::serialize_device(DeviceSpec device_spec, DeviceSpecProto *devic
 			break;
 		case InputSourceType::ALSA_INPUT:
 			alsa_pool.serialize_device(device_spec.index, device_spec_proto);
+			break;
+		case InputSourceType::FFMPEG_VIDEO_INPUT:
+			device_spec_proto->set_type(DeviceSpecProto::FFMPEG_VIDEO_INPUT);
+			device_spec_proto->set_index(device_spec.index);
+			device_spec_proto->set_display_name(ffmpeg_inputs[device_spec.index].display_name);
 			break;
 	}
 }
@@ -976,12 +1000,15 @@ void AudioMixer::set_input_mapping_lock_held(const InputMapping &new_input_mappi
 	map<DeviceSpec, set<unsigned>> interesting_channels;
 	for (const InputMapping::Bus &bus : new_input_mapping.buses) {
 		if (bus.device.type == InputSourceType::CAPTURE_CARD ||
-		    bus.device.type == InputSourceType::ALSA_INPUT) {
+		    bus.device.type == InputSourceType::ALSA_INPUT ||
+		    bus.device.type == InputSourceType::FFMPEG_VIDEO_INPUT) {
 			for (unsigned channel = 0; channel < 2; ++channel) {
 				if (bus.source_channel[channel] != -1) {
 					interesting_channels[bus.device].insert(bus.source_channel[channel]);
 				}
 			}
+		} else {
+			assert(bus.device.type == InputSourceType::SILENCE);
 		}
 	}
 
@@ -1021,6 +1048,8 @@ void AudioMixer::set_input_mapping_lock_held(const InputMapping &new_input_mappi
 			metrics.labels.emplace_back("source_type", "capture_card");
 		} else if (bus.device.type == InputSourceType::ALSA_INPUT) {
 			metrics.labels.emplace_back("source_type", "alsa_input");
+		} else if (bus.device.type == InputSourceType::FFMPEG_VIDEO_INPUT) {
+			metrics.labels.emplace_back("source_type", "ffmpeg_video_input");
 		} else {
 			assert(false);
 		}
@@ -1061,6 +1090,14 @@ void AudioMixer::set_input_mapping_lock_held(const InputMapping &new_input_mappi
 		if (device->interesting_channels != interesting_channels[device_spec]) {
 			device->interesting_channels = interesting_channels[device_spec];
 			alsa_pool.reset_device(device_spec.index);
+			reset_resampler_mutex_held(device_spec);
+		}
+	}
+	for (unsigned card_index = 0; card_index < num_ffmpeg_inputs; ++card_index) {
+		const DeviceSpec device_spec{InputSourceType::FFMPEG_VIDEO_INPUT, card_index};
+		AudioDevice *device = find_audio_device(device_spec);
+		if (device->interesting_channels != interesting_channels[device_spec]) {
+			device->interesting_channels = interesting_channels[device_spec];
 			reset_resampler_mutex_held(device_spec);
 		}
 	}

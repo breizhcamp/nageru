@@ -288,8 +288,8 @@ public:
 	}
 
 	// Note: You can also get this through the global variable global_audio_mixer.
-	AudioMixer *get_audio_mixer() { return &audio_mixer; }
-	const AudioMixer *get_audio_mixer() const { return &audio_mixer; }
+	AudioMixer *get_audio_mixer() { return audio_mixer.get(); }
+	const AudioMixer *get_audio_mixer() const { return audio_mixer.get(); }
 
 	void schedule_cut()
 	{
@@ -548,7 +548,7 @@ private:
 	JitterHistory output_jitter_history;
 	CaptureCard cards[MAX_VIDEO_CARDS];  // Protected by <card_mutex>.
 	YCbCrInterpretation ycbcr_interpretation[MAX_VIDEO_CARDS];  // Protected by <card_mutex>.
-	AudioMixer audio_mixer;  // Same as global_audio_mixer (see audio_mixer.h).
+	std::unique_ptr<AudioMixer> audio_mixer;  // Same as global_audio_mixer (see audio_mixer.h).
 	bool input_card_is_master_clock(unsigned card_index, unsigned master_card_index) const;
 	struct OutputFrameInfo {
 		int dropped_frames;  // Since last frame.
