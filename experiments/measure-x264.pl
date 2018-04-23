@@ -62,7 +62,7 @@ sub measure_preset {
 	my $ssim;
 	open my $x264, "-|", "/usr/bin/x264 $flags $preset $override_flags -o /dev/null $file 2>&1";
 	for my $line (<$x264>) {
-		$line =~ /SSIM Mean.*\((\d+\.\d+)db\)/ and $ssim = $1;
+		$line =~ /SSIM Mean.*\(\s*(\d+\.\d+)db\)/ and $ssim = $1;
 	}
 	close $x264;
 	my $elapsed = Time::HiRes::tv_interval($now);
