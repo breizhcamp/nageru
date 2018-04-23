@@ -374,6 +374,10 @@ public:
 		cards[card_index].capture->set_audio_input(input);
 	}
 
+	std::string get_ffmpeg_filename(unsigned card_index) const;
+
+	void set_ffmpeg_filename(unsigned card_index, const std::string &filename);
+
 	void change_x264_bitrate(unsigned rate_kbit) {
 		video_encoder->change_x264_bitrate(rate_kbit);
 	}

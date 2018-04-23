@@ -282,9 +282,15 @@ void FFmpegCapture::producer_thread_func()
 	pthread_setname_np(pthread_self(), thread_name);
 
 	while (!producer_thread_should_quit.should_quit()) {
-		string pathname = search_for_file(filename);
-		if (filename.empty()) {
-			fprintf(stderr, "%s not found, sleeping one second and trying again...\n", filename.c_str());
+		string filename_copy;
+		{
+			lock_guard<mutex> lock(filename_mu);
+			filename_copy = filename;
+		}
+
+		string pathname = search_for_file(filename_copy);
+		if (pathname.empty()) {
+			fprintf(stderr, "%s not found, sleeping one second and trying again...\n", filename_copy.c_str());
 			send_disconnected_frame();
 			producer_thread_should_quit.sleep_for(seconds(1));
 			continue;

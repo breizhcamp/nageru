@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <QAction>
 #include <QActionGroup>
+#include <QInputDialog>
 #include <QList>
 #include <QMenu>
 #include <QPoint>
@@ -239,7 +240,15 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 	// --- The choices in the next few options depend a lot on which card is active ---
 
 	bool has_auto_mode = false;
-	if (!is_ffmpeg) {
+	QAction *change_url_action = nullptr;
+	if (is_ffmpeg) {
+		// Add a menu to change the source URL if we're an FFmpeg card.
+		// (The theme can still override.)
+		if (global_mixer->card_is_ffmpeg(current_card)) {
+			change_url_action = new QAction("Change source filename/URL…", &menu);
+			menu.addAction(change_url_action);
+		}
+	} else {
 		// Add a submenu for selecting video input, with an action for each input.
 		QMenu video_input_submenu;
 		QActionGroup video_input_group(&video_input_submenu);
@@ -341,6 +350,17 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 	QAction *selected_item = menu.exec(global_pos);
 	if (audio_source_action != nullptr && selected_item == audio_source_action) {
 		global_audio_mixer->set_simple_input(current_card);
+	} else if (change_url_action != nullptr && selected_item == change_url_action) {
+		// NOTE: We can't use “this” as parent, since the dialog would inherit our style sheet.
+		bool ok;
+		const string url = global_mixer->get_ffmpeg_filename(current_card);
+		QString new_url = QInputDialog::getText(window(), tr("Change URL"),
+			tr("Enter new filename/URL for the given video input:"), QLineEdit::Normal,
+				QString::fromStdString(url), &ok);
+		// FIXME prefill the input
+		if (ok) {
+			global_mixer->set_ffmpeg_filename(current_card, new_url.toStdString());
+		}
 	} else if (selected_item == master_clock_action) {
 		global_mixer->set_master_clock(signal_num);
 	} else if (selected_item != nullptr) {

@@ -1587,6 +1587,17 @@ map<uint32_t, VideoMode> Mixer::get_available_output_video_modes() const
 	return cards[desired_output_card_index].output->get_available_video_modes();
 }
 
+string Mixer::get_ffmpeg_filename(unsigned card_index) const
+{
+	assert(card_index >= num_cards && card_index < num_cards + num_video_inputs);
+	return ((FFmpegCapture *)(cards[card_index].capture.get()))->get_filename();
+}
+
+void Mixer::set_ffmpeg_filename(unsigned card_index, const string &filename) {
+	assert(card_index >= num_cards && card_index < num_cards + num_video_inputs);
+	((FFmpegCapture *)(cards[card_index].capture.get()))->change_filename(filename);
+}
+
 Mixer::OutputChannel::~OutputChannel()
 {
 	if (has_current_frame) {

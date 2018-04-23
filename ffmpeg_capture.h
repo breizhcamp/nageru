@@ -77,6 +77,19 @@ public:
 		producer_thread_should_quit.wakeup();
 	}
 
+	std::string get_filename() const
+	{
+		std::lock_guard<std::mutex> lock(filename_mu);
+		return filename;
+	}
+
+	void change_filename(const std::string &new_filename)
+	{
+		std::lock_guard<std::mutex> lock(filename_mu);
+		filename = new_filename;
+		should_interrupt = true;
+	}
+
 	// Will stop the stream even if it's hung on blocking I/O.
 	void disconnect()
 	{
@@ -215,6 +228,7 @@ private:
 	static int interrupt_cb_thunk(void *unique);
 	int interrupt_cb();
 
+	mutable std::mutex filename_mu;
 	std::string description, filename;
 	uint16_t timecode = 0;
 	unsigned width, height;
