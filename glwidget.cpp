@@ -176,6 +176,18 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 	QMenu card_submenu;
 	QActionGroup card_group(&card_submenu);
 
+	QMenu interpretation_submenu;
+	QActionGroup interpretation_group(&interpretation_submenu);
+
+	QMenu video_input_submenu;
+	QActionGroup video_input_group(&video_input_submenu);
+
+	QMenu audio_input_submenu;
+	QActionGroup audio_input_group(&audio_input_submenu);
+
+	QMenu mode_submenu;
+	QActionGroup mode_group(&mode_submenu);
+
 	unsigned num_cards = global_mixer->get_num_cards();
 	unsigned current_card = global_mixer->map_signal(signal_num);
 	bool is_ffmpeg = global_mixer->card_is_ffmpeg(current_card);
@@ -196,9 +208,6 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 		menu.addMenu(&card_submenu);
 
 		// Note that this setting depends on which card is active.
-
-		QMenu interpretation_submenu;
-		QActionGroup interpretation_group(&interpretation_submenu);
 
 		YCbCrInterpretation current_interpretation = global_mixer->get_input_ycbcr_interpretation(current_card);
 		{
@@ -250,8 +259,6 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 		}
 	} else {
 		// Add a submenu for selecting video input, with an action for each input.
-		QMenu video_input_submenu;
-		QActionGroup video_input_group(&video_input_submenu);
 		std::map<uint32_t, string> video_inputs = global_mixer->get_available_video_inputs(current_card);
 		uint32_t current_video_input = global_mixer->get_current_video_input(current_card);
 		for (const auto &mode : video_inputs) {
@@ -269,8 +276,6 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 		menu.addMenu(&video_input_submenu);
 
 		// The same for audio input.
-		QMenu audio_input_submenu;
-		QActionGroup audio_input_group(&audio_input_submenu);
 		std::map<uint32_t, string> audio_inputs = global_mixer->get_available_audio_inputs(current_card);
 		uint32_t current_audio_input = global_mixer->get_current_audio_input(current_card);
 		for (const auto &mode : audio_inputs) {
@@ -288,8 +293,6 @@ void GLWidget::show_preview_context_menu(unsigned signal_num, const QPoint &pos)
 		menu.addMenu(&audio_input_submenu);
 
 		// The same for resolution.
-		QMenu mode_submenu;
-		QActionGroup mode_group(&mode_submenu);
 		std::map<uint32_t, bmusb::VideoMode> video_modes = global_mixer->get_available_video_modes(current_card);
 		uint32_t current_video_mode = global_mixer->get_current_video_mode(current_card);
 		for (const auto &mode : video_modes) {
