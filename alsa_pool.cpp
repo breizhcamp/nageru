@@ -391,6 +391,10 @@ void ALSAPool::reset_device(unsigned index)
 {
 	lock_guard<mutex> lock(mu);
 	Device *device = &devices[index];
+	if (device->state == Device::State::DEAD) {
+		// Not running, and should not be started.
+		return;
+	}
 	if (inputs[index] != nullptr) {
 		inputs[index]->stop_capture_thread();
 	}

@@ -158,6 +158,7 @@ ALSAInput::~ALSAInput()
 
 void ALSAInput::start_capture_thread()
 {
+	assert(!device.empty());
 	should_quit.unquit();
 	capture_thread = thread(&ALSAInput::capture_thread_func, this);
 }
