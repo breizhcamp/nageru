@@ -327,6 +327,7 @@ void FFmpegCapture::send_disconnected_frame()
 		if (pixel_format == bmusb::PixelFormat_8BitBGRA) {
 			video_format.stride = width * 4;
 			video_frame.len = width * height * 4;
+			memset(video_frame.data, 0, video_frame.len);
 		} else {
 			video_format.stride = width;
 			current_frame_ycbcr_format.luma_coefficients = YCBCR_REC_709;
@@ -339,8 +340,9 @@ void FFmpegCapture::send_disconnected_frame()
 			current_frame_ycbcr_format.cr_x_position = 0.0f;
 			current_frame_ycbcr_format.cr_y_position = 0.0f;
 			video_frame.len = width * height * 2;
+			memset(video_frame.data, 0, width * height);
+			memset(video_frame.data + width * height, 128, width * height);  // Valid for both NV12 and planar.
 		}
-		memset(video_frame.data, 0, video_frame.len);
 
 		frame_callback(-1, AVRational{1, TIMEBASE}, -1, AVRational{1, TIMEBASE}, timecode++,
 			video_frame, /*video_offset=*/0, video_format,
