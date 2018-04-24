@@ -175,6 +175,21 @@ void set_peak_label(QLabel *peak_label, float peak_db)
 	}
 }
 
+string get_bus_desc_label(const InputMapping::Bus &bus)
+{
+	string suffix;
+	if (bus.device.type == InputSourceType::ALSA_INPUT) {
+		ALSAPool::Device::State state = global_audio_mixer->get_alsa_card_state(bus.device.index);
+		if (state == ALSAPool::Device::State::STARTING) {
+			suffix = " (busy)";
+		} else if (state == ALSAPool::Device::State::DEAD) {
+			suffix = " (dead)";
+		}
+	}
+
+	return bus.name + suffix;
+}
+
 }  // namespace
 
 MainWindow::MainWindow()
@@ -497,7 +512,7 @@ void MainWindow::setup_audio_miniview()
 		Ui::AudioMiniView *ui_audio_miniview = new Ui::AudioMiniView;
 		ui_audio_miniview->setupUi(channel);
 		ui_audio_miniview->bus_desc_label->setFullText(
-			QString::fromStdString(mapping.buses[bus_index].name));
+			QString::fromStdString(get_bus_desc_label(mapping.buses[bus_index])));
 		audio_miniviews[bus_index] = ui_audio_miniview;
 
 		// Set up the peak meter.
@@ -540,7 +555,7 @@ void MainWindow::setup_audio_expanded_view()
 		Ui::AudioExpandedView *ui_audio_expanded_view = new Ui::AudioExpandedView;
 		ui_audio_expanded_view->setupUi(channel);
 		ui_audio_expanded_view->bus_desc_label->setFullText(
-			QString::fromStdString(mapping.buses[bus_index].name));
+			QString::fromStdString(get_bus_desc_label(mapping.buses[bus_index])));
 		audio_expanded_views[bus_index] = ui_audio_expanded_view;
 		update_eq_label(bus_index, EQ_BAND_TREBLE, global_audio_mixer->get_eq(bus_index, EQ_BAND_TREBLE));
 		update_eq_label(bus_index, EQ_BAND_MID, global_audio_mixer->get_eq(bus_index, EQ_BAND_MID));
@@ -1515,21 +1530,11 @@ void MainWindow::audio_state_changed()
 		}
 		InputMapping mapping = global_audio_mixer->get_input_mapping();
 		for (unsigned bus_index = 0; bus_index < mapping.buses.size(); ++bus_index) {
-			const InputMapping::Bus &bus = mapping.buses[bus_index];
-			string suffix;
-			if (bus.device.type == InputSourceType::ALSA_INPUT) {
-				ALSAPool::Device::State state = global_audio_mixer->get_alsa_card_state(bus.device.index);
-				if (state == ALSAPool::Device::State::STARTING) {
-					suffix = " (busy)";
-				} else if (state == ALSAPool::Device::State::DEAD) {
-					suffix = " (dead)";
-				}
-			}
-
+			string label = get_bus_desc_label(mapping.buses[bus_index]);
 			audio_miniviews[bus_index]->bus_desc_label->setFullText(
-				QString::fromStdString(bus.name + suffix));
+				QString::fromStdString(label));
 			audio_expanded_views[bus_index]->bus_desc_label->setFullText(
-				QString::fromStdString(bus.name + suffix));
+				QString::fromStdString(label));
 		}
 	});
 }
