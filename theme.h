@@ -158,9 +158,9 @@ private:
 class LiveInputWrapper {
 public:
 	// Note: <override_bounce> is irrelevant for PixelFormat_8BitBGRA.
-	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace);
+	LiveInputWrapper(Theme *theme, movit::EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace, bool user_connectable);
 
-	void connect_signal(int signal_num);  // Must be called with the theme's <m> lock held, since it accesses theme->input_state.
+	bool connect_signal(int signal_num);  // Must be called with the theme's <m> lock held, since it accesses theme->input_state. Returns false on error.
 	void connect_signal_raw(int signal_num, const InputState &input_state);
 	movit::Effect *get_effect() const
 	{
@@ -181,6 +181,7 @@ private:
 	std::vector<movit::FlatInput *> rgba_inputs;  // Multiple ones if deinterlacing. Owned by the chain.
 	movit::Effect *deinterlace_effect = nullptr;  // Owned by the chain.
 	bool deinterlace;
+	bool user_connectable;
 };
 
 #endif  // !defined(_THEME_H)

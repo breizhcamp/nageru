@@ -276,7 +276,7 @@ int EffectChain_add_live_input(lua_State* L)
 	bmusb::PixelFormat pixel_format = global_flags.ten_bit_input ? bmusb::PixelFormat_10BitYCbCr : bmusb::PixelFormat_8BitYCbCr;
 
 	// Needs to be nonowned to match add_video_input (see below).
-	return wrap_lua_object_nonowned<LiveInputWrapper>(L, "LiveInputWrapper", theme, chain, pixel_format, override_bounce, deinterlace);
+	return wrap_lua_object_nonowned<LiveInputWrapper>(L, "LiveInputWrapper", theme, chain, pixel_format, override_bounce, deinterlace, /*user_connectable=*/true);
 }
 
 int EffectChain_add_video_input(lua_State* L)
@@ -293,7 +293,7 @@ int EffectChain_add_video_input(lua_State* L)
 	// to also unregister the signal connection on __gc.)
 	int ret = wrap_lua_object_nonowned<LiveInputWrapper>(
 		L, "LiveInputWrapper", theme, chain, (*capture)->get_current_pixel_format(),
-		/*override_bounce=*/false, deinterlace);
+		/*override_bounce=*/false, deinterlace, /*user_connectable=*/false);
 	if (ret == 1) {
 		Theme *theme = get_theme_updata(L);
 		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
@@ -316,7 +316,7 @@ int EffectChain_add_html_input(lua_State* L)
 	// to also unregister the signal connection on __gc.)
 	int ret = wrap_lua_object_nonowned<LiveInputWrapper>(
 		L, "LiveInputWrapper", theme, chain, (*capture)->get_current_pixel_format(),
-		/*override_bounce=*/false, /*deinterlace=*/false);
+		/*override_bounce=*/false, /*deinterlace=*/false, /*user_connectable=*/false);
 	if (ret == 1) {
 		Theme *theme = get_theme_updata(L);
 		LiveInputWrapper **live_input = (LiveInputWrapper **)lua_touserdata(L, -1);
@@ -422,7 +422,14 @@ int LiveInputWrapper_connect_signal(lua_State* L)
 	assert(lua_gettop(L) == 2);
 	LiveInputWrapper **input = (LiveInputWrapper **)luaL_checkudata(L, 1, "LiveInputWrapper");
 	int signal_num = luaL_checknumber(L, 2);
-	(*input)->connect_signal(signal_num);
+	bool success = (*input)->connect_signal(signal_num);
+	if (!success) {
+		lua_Debug ar;
+		lua_getstack(L, 1, &ar);
+		lua_getinfo(L, "nSl", &ar);
+		fprintf(stderr, "ERROR: %s:%d: Calling connect_signal() on a video or HTML input. Ignoring.\n",
+			ar.source, ar.currentline);
+	}
 	return 0;
 }
 
@@ -876,10 +883,17 @@ const luaL_Reg ThemeMenu_funcs[] = {
 
 }  // namespace
 
-LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::PixelFormat pixel_format, bool override_bounce, bool deinterlace)
+LiveInputWrapper::LiveInputWrapper(
+	Theme *theme,
+	EffectChain *chain,
+	bmusb::PixelFormat pixel_format,
+	bool override_bounce,
+	bool deinterlace,
+	bool user_connectable)
 	: theme(theme),
 	  pixel_format(pixel_format),
-	  deinterlace(deinterlace)
+	  deinterlace(deinterlace),
+	  user_connectable(user_connectable)
 {
 	ImageFormat inout_format;
 	inout_format.color_space = COLORSPACE_sRGB;
@@ -965,15 +979,20 @@ LiveInputWrapper::LiveInputWrapper(Theme *theme, EffectChain *chain, bmusb::Pixe
 	}
 }
 
-void LiveInputWrapper::connect_signal(int signal_num)
+bool LiveInputWrapper::connect_signal(int signal_num)
 {
+	if (!user_connectable) {
+		return false;
+	}
+
 	if (global_mixer == nullptr) {
 		// No data yet.
-		return;
+		return true;
 	}
 
 	signal_num = theme->map_signal(signal_num);
 	connect_signal_raw(signal_num, *theme->input_state);
+	return true;
 }
 
 void LiveInputWrapper::connect_signal_raw(int signal_num, const InputState &input_state)
