@@ -166,7 +166,7 @@ function get_chain(num, t, width, height, signals)
 		signal_num = num - 2
 	end
 
-	prepare = function()
+	local prepare = function()
 		chain.input:connect_signal(signal_num)
 		local color = input_neutral_color[signal_num + 1]
 		chain.wb_effect:set_vec3("neutral_color", color[1], color[2], color[3])

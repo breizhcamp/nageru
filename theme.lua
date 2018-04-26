@@ -183,7 +183,7 @@ function make_simple_chain(input_deint, input_scale, hq)
 	input:connect_signal(0)  -- First input card. Can be changed whenever you want.
 
 	local resample_effect, resize_effect
-	if scale then
+	if input_scale then
 		if hq then
 			resample_effect = chain:add_effect(ResampleEffect.new())
 		else
@@ -268,7 +268,7 @@ end
 -- and get_channel_resolution_raw() is that this one also can say that
 -- there's no signal.
 function get_channel_resolution(signal_num)
-	res = last_resolution[signal_num]
+	local res = last_resolution[signal_num]
 	if (not res) or not res.is_connected then
 		return "disconnected"
 	end
@@ -506,7 +506,7 @@ function get_fade_chain(signals, t, width, height, input_resolution)
 	local input1_type = get_input_type(signals, transition_dst_signal)
 	local input1_scale = needs_scale(signals, transition_dst_signal, width, height)
 	local chain = fade_chains[input0_type][input0_scale][input1_type][input1_scale][true]
-	prepare = function()
+	local prepare = function()
 		if input0_type == "live" or input0_type == "livedeint" then
 			chain.input0.input:connect_signal(transition_src_signal)
 			set_neutral_color_from_signal(chain.input0.wb_effect, transition_src_signal)
@@ -589,14 +589,14 @@ function get_chain(num, t, width, height, signals)
 		if transition_type == ZOOM_TRANSITION then
 			-- Transition in or out of SBS.
 			local chain = get_sbs_chain(signals, t, width, height, input_resolution)
-			prepare = function()
+			local prepare = function()
 				prepare_sbs_chain(chain, calc_zoom_progress(t), transition_type, transition_src_signal, transition_dst_signal, width, height, input_resolution)
 			end
 			return chain.chain, prepare
 		elseif transition_type == NO_TRANSITION and live_signal_num == SBS_SIGNAL_NUM then
 			-- Static SBS view.
 			local chain = get_sbs_chain(signals, t, width, height, input_resolution)
-			prepare = function()
+			local prepare = function()
 				prepare_sbs_chain(chain, 0.0, NO_TRANSITION, 0, SBS_SIGNAL_NUM, width, height, input_resolution)
 			end
 			return chain.chain, prepare
@@ -606,14 +606,14 @@ function get_chain(num, t, width, height, signals)
 			local input_type = get_input_type(signals, live_signal_num)
 			local input_scale = needs_scale(signals, live_signal_num, width, height)
 			local chain = simple_chains[input_type][input_scale][true]
-			prepare = function()
+			local prepare = function()
 				chain.input:connect_signal(live_signal_num)
 				set_scale_parameters_if_needed(chain, width, height)
 				set_neutral_color_from_signal(chain.wb_effect, live_signal_num)
 			end
 			return chain.chain, prepare
 		elseif live_signal_num == STATIC_SIGNAL_NUM then  -- Static picture.
-			prepare = function()
+			local prepare = function()
 			end
 			return static_chain_hq, prepare
 		else
@@ -630,7 +630,7 @@ function get_chain(num, t, width, height, signals)
 		local input_type = get_input_type(signals, signal_num)
 		local input_scale = needs_scale(signals, signal_num, width, height)
 		local chain = simple_chains[input_type][input_scale][false]
-		prepare = function()
+		local prepare = function()
 			chain.input:connect_signal(signal_num)
 			set_scale_parameters_if_needed(chain, width, height)
 			set_neutral_color(chain.wb_effect, neutral_colors[signal_num + 1])
@@ -641,13 +641,13 @@ function get_chain(num, t, width, height, signals)
 		local input0_type = get_input_type(signals, INPUT0_SIGNAL_NUM)
 		local input1_type = get_input_type(signals, INPUT1_SIGNAL_NUM)
 		local chain = sbs_chains[input0_type][input1_type][false]
-		prepare = function()
+		local prepare = function()
 			prepare_sbs_chain(chain, 0.0, NO_TRANSITION, 0, SBS_SIGNAL_NUM, width, height, input_resolution)
 		end
 		return chain.chain, prepare
 	end
 	if num == STATIC_SIGNAL_NUM + 2 then
-		prepare = function()
+		local prepare = function()
 		end
 		return static_chain_lq, prepare
 	end
