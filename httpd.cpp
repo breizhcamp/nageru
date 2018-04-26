@@ -30,13 +30,7 @@ HTTPD::HTTPD()
 
 HTTPD::~HTTPD()
 {
-	if (mhd) {
-		MHD_quiesce_daemon(mhd);
-		for (Stream *stream : streams) {
-			stream->stop();
-		}
-		MHD_stop_daemon(mhd);
-	}
+	stop();
 }
 
 void HTTPD::start(int port)
@@ -49,6 +43,18 @@ void HTTPD::start(int port)
 	                       MHD_OPTION_END);
 	if (mhd == nullptr) {
 		fprintf(stderr, "Warning: Could not open HTTP server. (Port already in use?)\n");
+	}
+}
+
+void HTTPD::stop()
+{
+	if (mhd) {
+		MHD_quiesce_daemon(mhd);
+		for (Stream *stream : streams) {
+			stream->stop();
+		}
+		MHD_stop_daemon(mhd);
+		mhd = nullptr;
 	}
 }
 

@@ -46,6 +46,7 @@ public:
 	}
 
 	void start(int port);
+	void stop();
 	void add_data(const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase);
 	int64_t get_num_connected_clients() const {
 		return metric_num_connected_clients.load();

@@ -499,6 +499,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 Mixer::~Mixer()
 {
+	httpd.stop();
 	BMUSBCapture::stop_bm_thread();
 
 	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
