@@ -7,19 +7,21 @@
 -- where all the low-level details (such as texture formats) are handled by the
 -- C++ side and you generally just build chains.
 
-local transition_start = -2.0
-local transition_end = -1.0
-local transition_type = 0
-local transition_src_signal = 0
-local transition_dst_signal = 0
+local state = {
+	transition_start = -2.0,
+	transition_end = -1.0,
+	transition_type = 0,
+	transition_src_signal = 0,
+	transition_dst_signal = 0,
 
-local neutral_colors = {
-	{0.5, 0.5, 0.5},  -- Input 0.
-	{0.5, 0.5, 0.5}   -- Input 1.
+	neutral_colors = {
+		{0.5, 0.5, 0.5},  -- Input 0.
+		{0.5, 0.5, 0.5}   -- Input 1.
+	},
+
+	live_signal_num = 0,
+	preview_signal_num = 1
 }
-
-local live_signal_num = 0
-local preview_signal_num = 1
 
 -- Valid values for live_signal_num and preview_signal_num.
 local INPUT0_SIGNAL_NUM = 0
@@ -223,6 +225,8 @@ local static_chain_lq = EffectChain.new(16, 9)
 local static_chain_lq_input = static_chain_lq:add_effect(ImageInput.new("bg.jpeg"))
 static_chain_lq:finalize(false)
 
+inspect = require('inspect')
+
 -- Used for indexing into the tables of chains.
 function get_input_type(signals, signal_num)
 	if signal_num == STATIC_SIGNAL_NUM then
@@ -346,17 +350,17 @@ end
 -- "transparent" is allowed.
 -- Will never be called for live (0) or preview (1).
 function channel_color(channel)
-	if transition_type ~= NO_TRANSITION then
-		if channel_involved_in(channel, transition_src_signal) or
-		   channel_involved_in(channel, transition_dst_signal) then
+	if state.transition_type ~= NO_TRANSITION then
+		if channel_involved_in(channel, state.transition_src_signal) or
+		   channel_involved_in(channel, state.transition_dst_signal) then
 			return "#f00"
 		end
 	else
-		if channel_involved_in(channel, live_signal_num) then
+		if channel_involved_in(channel, state.live_signal_num) then
 			return "#f00"
 		end
 	end
-	if channel_involved_in(channel, preview_signal_num) then
+	if channel_involved_in(channel, state.preview_signal_num) then
 		return "#0f0"
 	end
 	return "transparent"
@@ -387,19 +391,19 @@ end
 -- The color is in linear light (not sRGB gamma).
 function set_wb(channel, red, green, blue)
 	if is_plain_signal(channel - 2) then
-		neutral_colors[channel - 2 + 1] = { red, green, blue }
+		state.neutral_colors[channel - 2 + 1] = { red, green, blue }
 	end
 end
 
 function finish_transitions(t)
-	if transition_type ~= NO_TRANSITION and t >= transition_end then
-		live_signal_num = transition_dst_signal
-		transition_type = NO_TRANSITION
+	if state.transition_type ~= NO_TRANSITION and t >= state.transition_end then
+		state.live_signal_num = state.transition_dst_signal
+		state.transition_type = NO_TRANSITION
 	end
 end
 
 function in_transition(t)
-       return t >= transition_start and t <= transition_end
+       return t >= state.transition_start and t <= state.transition_end
 end
 
 -- API ENTRY POINT
@@ -413,20 +417,20 @@ function get_transitions(t)
 
 	finish_transitions(t)
 
-	if live_signal_num == preview_signal_num then
+	if state.live_signal_num == state.preview_signal_num then
 		-- No transitions possible.
 		return {}
 	end
 
-	if (is_plain_signal(live_signal_num) or live_signal_num == STATIC_SIGNAL_NUM) and
-	   (is_plain_signal(preview_signal_num) or preview_signal_num == STATIC_SIGNAL_NUM) then
+	if (is_plain_signal(state.live_signal_num) or state.live_signal_num == STATIC_SIGNAL_NUM) and
+	   (is_plain_signal(state.preview_signal_num) or state.preview_signal_num == STATIC_SIGNAL_NUM) then
 		return {"Cut", "", "Fade"}
 	end
 
 	-- Various zooms.
-	if live_signal_num == SBS_SIGNAL_NUM and is_plain_signal(preview_signal_num) then
+	if state.live_signal_num == SBS_SIGNAL_NUM and is_plain_signal(state.preview_signal_num) then
 		return {"Cut", "Zoom in"}
-	elseif is_plain_signal(live_signal_num) and preview_signal_num == SBS_SIGNAL_NUM then
+	elseif is_plain_signal(state.live_signal_num) and state.preview_signal_num == SBS_SIGNAL_NUM then
 		return {"Cut", "Zoom out"}
 	end
 
@@ -434,17 +438,17 @@ function get_transitions(t)
 end
 
 function swap_preview_live()
-	local temp = live_signal_num
-	live_signal_num = preview_signal_num
-	preview_signal_num = temp
+	local temp = state.live_signal_num
+	state.live_signal_num = state.preview_signal_num
+	state.preview_signal_num = temp
 end
 
 function start_transition(type_, t, duration)
-	transition_start = t
-	transition_end = t + duration
-	transition_type = type_
-	transition_src_signal = live_signal_num
-	transition_dst_signal = preview_signal_num
+	state.transition_start = t
+	state.transition_end = t + duration
+	state.transition_type = type_
+	state.transition_src_signal = state.live_signal_num
+	state.transition_dst_signal = state.preview_signal_num
 	swap_preview_live()
 end
 
@@ -455,7 +459,7 @@ function transition_clicked(num, t)
 		-- Cut.
 		if in_transition(t) then
 			-- Ongoing transition; finish it immediately before the cut.
-			finish_transitions(transition_end)
+			finish_transitions(state.transition_end)
 		end
 
 		swap_preview_live()
@@ -463,31 +467,31 @@ function transition_clicked(num, t)
 		-- Zoom.
 		finish_transitions(t)
 
-		if live_signal_num == preview_signal_num then
+		if state.live_signal_num == state.preview_signal_num then
 			-- Nothing to do.
 			return
 		end
 
-		if is_plain_signal(live_signal_num) and is_plain_signal(preview_signal_num) then
+		if is_plain_signal(state.live_signal_num) and is_plain_signal(state.preview_signal_num) then
 			-- We can't zoom between these. Just make a cut.
-			io.write("Cutting from " .. live_signal_num .. " to " .. live_signal_num .. "\n")
+			io.write("Cutting from " .. state.live_signal_num .. " to " .. state.live_signal_num .. "\n")
 			swap_preview_live()
 			return
 		end
 
-		if (live_signal_num == SBS_SIGNAL_NUM and is_plain_signal(preview_signal_num)) or
-		   (preview_signal_num == SBS_SIGNAL_NUM and is_plain_signal(live_signal_num)) then
+		if (state.live_signal_num == SBS_SIGNAL_NUM and is_plain_signal(state.preview_signal_num)) or
+		   (state.preview_signal_num == SBS_SIGNAL_NUM and is_plain_signal(state.live_signal_num)) then
 			start_transition(ZOOM_TRANSITION, t, 1.0)
 		end
 	elseif num == 2 then
 		finish_transitions(t)
 
 		-- Fade.
-		if (live_signal_num ~= preview_signal_num) and
-		   (is_plain_signal(live_signal_num) or
-		    live_signal_num == STATIC_SIGNAL_NUM) and
-		   (is_plain_signal(preview_signal_num) or
-		    preview_signal_num == STATIC_SIGNAL_NUM) then
+		if (state.live_signal_num ~= state.preview_signal_num) and
+		   (is_plain_signal(state.live_signal_num) or
+		    state.live_signal_num == STATIC_SIGNAL_NUM) and
+		   (is_plain_signal(state.preview_signal_num) or
+		    state.preview_signal_num == STATIC_SIGNAL_NUM) then
 			start_transition(FADE_TRANSITION, t, 1.0)
 		else
 			-- Fades involving SBS are ignored (we have no chain for it).
@@ -497,27 +501,27 @@ end
 
 -- API ENTRY POINT
 function channel_clicked(num)
-	preview_signal_num = num
+	state.preview_signal_num = num
 end
 
-function get_fade_chain(signals, t, width, height, input_resolution)
-	local input0_type = get_input_type(signals, transition_src_signal)
-	local input0_scale = needs_scale(signals, transition_src_signal, width, height)
-	local input1_type = get_input_type(signals, transition_dst_signal)
-	local input1_scale = needs_scale(signals, transition_dst_signal, width, height)
+function get_fade_chain(state, signals, t, width, height, input_resolution)
+	local input0_type = get_input_type(signals, state.transition_src_signal)
+	local input0_scale = needs_scale(signals, state.transition_src_signal, width, height)
+	local input1_type = get_input_type(signals, state.transition_dst_signal)
+	local input1_scale = needs_scale(signals, state.transition_dst_signal, width, height)
 	local chain = fade_chains[input0_type][input0_scale][input1_type][input1_scale][true]
 	local prepare = function()
 		if input0_type == "live" or input0_type == "livedeint" then
-			chain.input0.input:connect_signal(transition_src_signal)
-			set_neutral_color_from_signal(chain.input0.wb_effect, transition_src_signal)
+			chain.input0.input:connect_signal(state.transition_src_signal)
+			set_neutral_color_from_signal(state, chain.input0.wb_effect, state.transition_src_signal)
 		end
 		set_scale_parameters_if_needed(chain.input0, width, height)
 		if input1_type == "live" or input1_type == "livedeint" then
-			chain.input1.input:connect_signal(transition_dst_signal)
-			set_neutral_color_from_signal(chain.input1.wb_effect, transition_dst_signal)
+			chain.input1.input:connect_signal(state.transition_dst_signal)
+			set_neutral_color_from_signal(state, chain.input1.wb_effect, state.transition_dst_signal)
 		end
 		set_scale_parameters_if_needed(chain.input1, width, height)
-		local tt = calc_fade_progress(t, transition_start, transition_end)
+		local tt = calc_fade_progress(t, state.transition_start, state.transition_end)
 
 		chain.mix_effect:set_float("strength_first", 1.0 - tt)
 		chain.mix_effect:set_float("strength_second", tt)
@@ -584,35 +588,43 @@ function get_chain(num, t, width, height, signals)
 	end
 	last_resolution = input_resolution
 
+	-- Make a (semi-shallow) copy of the current state, so that the returned prepare function
+	-- is unaffected by state changes made by the UI before it is rendered.
+	local state_copy = {}
+	for key, value in pairs(state) do
+		state_copy[key] = value
+	end
+	state_copy.neutral_colors = { unpack(state.neutral_colors) }
+
 	if num == 0 then  -- Live.
 		finish_transitions(t)
-		if transition_type == ZOOM_TRANSITION then
+		if state.transition_type == ZOOM_TRANSITION then
 			-- Transition in or out of SBS.
 			local chain = get_sbs_chain(signals, t, width, height, input_resolution)
 			local prepare = function()
-				prepare_sbs_chain(chain, calc_zoom_progress(t), transition_type, transition_src_signal, transition_dst_signal, width, height, input_resolution)
+				prepare_sbs_chain(state_copy, chain, calc_zoom_progress(state_copy, t), state_copy.transition_type, state_copy.transition_src_signal, state_copy.transition_dst_signal, width, height, input_resolution)
 			end
 			return chain.chain, prepare
-		elseif transition_type == NO_TRANSITION and live_signal_num == SBS_SIGNAL_NUM then
+		elseif state.transition_type == NO_TRANSITION and state.live_signal_num == SBS_SIGNAL_NUM then
 			-- Static SBS view.
 			local chain = get_sbs_chain(signals, t, width, height, input_resolution)
 			local prepare = function()
-				prepare_sbs_chain(chain, 0.0, NO_TRANSITION, 0, SBS_SIGNAL_NUM, width, height, input_resolution)
+				prepare_sbs_chain(state_copy, chain, 0.0, NO_TRANSITION, 0, SBS_SIGNAL_NUM, width, height, input_resolution)
 			end
 			return chain.chain, prepare
-		elseif transition_type == FADE_TRANSITION then
-			return get_fade_chain(signals, t, width, height, input_resolution)
-		elseif is_plain_signal(live_signal_num) then
-			local input_type = get_input_type(signals, live_signal_num)
-			local input_scale = needs_scale(signals, live_signal_num, width, height)
+		elseif state.transition_type == FADE_TRANSITION then
+			return get_fade_chain(state_copy, signals, t, width, height, input_resolution)
+		elseif is_plain_signal(state.live_signal_num) then
+			local input_type = get_input_type(signals, state.live_signal_num)
+			local input_scale = needs_scale(signals, state.live_signal_num, width, height)
 			local chain = simple_chains[input_type][input_scale][true]
 			local prepare = function()
-				chain.input:connect_signal(live_signal_num)
+				chain.input:connect_signal(state_copy.live_signal_num)
 				set_scale_parameters_if_needed(chain, width, height)
-				set_neutral_color_from_signal(chain.wb_effect, live_signal_num)
+				set_neutral_color_from_signal(state_copy, chain.wb_effect, state_copy.live_signal_num)
 			end
 			return chain.chain, prepare
-		elseif live_signal_num == STATIC_SIGNAL_NUM then  -- Static picture.
+		elseif state.live_signal_num == STATIC_SIGNAL_NUM then  -- Static picture.
 			local prepare = function()
 			end
 			return static_chain_hq, prepare
@@ -621,7 +633,7 @@ function get_chain(num, t, width, height, signals)
 		end
 	end
 	if num == 1 then  -- Preview.
-		num = preview_signal_num + 2
+		num = state.preview_signal_num + 2
 	end
 
 	-- Individual preview inputs.
@@ -633,7 +645,7 @@ function get_chain(num, t, width, height, signals)
 		local prepare = function()
 			chain.input:connect_signal(signal_num)
 			set_scale_parameters_if_needed(chain, width, height)
-			set_neutral_color(chain.wb_effect, neutral_colors[signal_num + 1])
+			set_neutral_color(chain.wb_effect, state_copy.neutral_colors[signal_num + 1])
 		end
 		return chain.chain, prepare
 	end
@@ -642,7 +654,7 @@ function get_chain(num, t, width, height, signals)
 		local input1_type = get_input_type(signals, INPUT1_SIGNAL_NUM)
 		local chain = sbs_chains[input0_type][input1_type][false]
 		local prepare = function()
-			prepare_sbs_chain(chain, 0.0, NO_TRANSITION, 0, SBS_SIGNAL_NUM, width, height, input_resolution)
+			prepare_sbs_chain(state_copy, chain, 0.0, NO_TRANSITION, 0, SBS_SIGNAL_NUM, width, height, input_resolution)
 		end
 		return chain.chain, prepare
 	end
@@ -772,11 +784,11 @@ function pos_from_top_left(x, y, width, height, screen_width, screen_height)
 	}
 end
 
-function prepare_sbs_chain(chain, t, transition_type, src_signal, dst_signal, screen_width, screen_height, input_resolution)
+function prepare_sbs_chain(state, chain, t, transition_type, src_signal, dst_signal, screen_width, screen_height, input_resolution)
 	chain.input0.input:connect_signal(0)
 	chain.input1.input:connect_signal(1)
-	set_neutral_color(chain.input0.wb_effect, neutral_colors[1])
-	set_neutral_color(chain.input1.wb_effect, neutral_colors[2])
+	set_neutral_color(chain.input0.wb_effect, state.neutral_colors[1])
+	set_neutral_color(chain.input1.wb_effect, state.neutral_colors[2])
 
 	-- First input is positioned (16,48) from top-left.
 	-- Second input is positioned (16,48) from the bottom-right.
@@ -838,19 +850,19 @@ function set_neutral_color(effect, color)
 	effect:set_vec3("neutral_color", color[1], color[2], color[3])
 end
 
-function set_neutral_color_from_signal(effect, signal)
+function set_neutral_color_from_signal(state, effect, signal)
 	if is_plain_signal(signal) then
-		set_neutral_color(effect, neutral_colors[signal - INPUT0_SIGNAL_NUM + 1])
+		set_neutral_color(effect, state.neutral_colors[signal - INPUT0_SIGNAL_NUM + 1])
 	end
 end
 
-function calc_zoom_progress(t)
-	if t < transition_start then
+function calc_zoom_progress(state, t)
+	if t < state.transition_start then
 		return 0.0
-	elseif t > transition_end then
+	elseif t > state.transition_end then
 		return 1.0
 	else
-		local tt = (t - transition_start) / (transition_end - transition_start)
+		local tt = (t - state.transition_start) / (state.transition_end - state.transition_start)
 		-- Smooth it a bit.
 		return math.sin(tt * 3.14159265358 * 0.5)
 	end

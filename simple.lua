@@ -166,9 +166,13 @@ function get_chain(num, t, width, height, signals)
 		signal_num = num - 2
 	end
 
+	-- Make a copy of the current neutral color before returning, so that the
+	-- returned prepare function is unaffected by state changes made by the UI
+	-- before it is rendered.
+	local color = input_neutral_color[signal_num + 1]
+
 	local prepare = function()
 		chain.input:connect_signal(signal_num)
-		local color = input_neutral_color[signal_num + 1]
 		chain.wb_effect:set_vec3("neutral_color", color[1], color[2], color[3])
 	end
 	return chain.chain, prepare
