@@ -1066,7 +1066,11 @@ void Mixer::thread_func()
 
 		int64_t frame_duration = output_frame_info.frame_duration;
 		render_one_frame(frame_duration);
-		++frame_num;
+		{
+			lock_guard<mutex> lock(frame_num_mutex);
+			++frame_num;
+		}
+		frame_num_updated.notify_all();
 		pts_int += frame_duration;
 
 		basic_stats.update(frame_num, stats_dropped_frames);
@@ -1596,6 +1600,14 @@ string Mixer::get_ffmpeg_filename(unsigned card_index) const
 void Mixer::set_ffmpeg_filename(unsigned card_index, const string &filename) {
 	assert(card_index >= num_cards && card_index < num_cards + num_video_inputs);
 	((FFmpegCapture *)(cards[card_index].capture.get()))->change_filename(filename);
+}
+
+void Mixer::wait_for_next_frame()
+{
+	unique_lock<mutex> lock(frame_num_mutex);
+	unsigned old_frame_num = frame_num;
+	frame_num_updated.wait_for(lock, seconds(1),  // Timeout is just in case.
+		[old_frame_num, this]{ return this->frame_num > old_frame_num; });
 }
 
 Mixer::OutputChannel::~OutputChannel()

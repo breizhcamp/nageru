@@ -125,7 +125,6 @@ private:
 	void setup_audio_expanded_view();
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void closeEvent(QCloseEvent *event) override;
-	void set_white_balance(int channel_number, int x, int y);
 	void update_cutoff_labels(float cutoff_hz);
 	void update_eq_label(unsigned bus_index, EQBand band, float gain_db);
 	void setup_theme_menu();

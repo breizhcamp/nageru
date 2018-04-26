@@ -33,10 +33,22 @@ class QMouseEvent;
 #include <movit/util.h>
 #include <string>
 
-
 using namespace movit;
 using namespace std;
 using namespace std::placeholders;
+
+namespace {
+
+double srgb_to_linear(double x)
+{
+	if (x < 0.04045) {
+		return x / 12.92;
+	} else {
+		return pow((x + 0.055) / 1.055, 2.4);
+	}
+}
+
+}  // namespace
 
 GLWidget::GLWidget(QWidget *parent)
     : QGLWidget(parent, global_share_widget)
@@ -54,6 +66,22 @@ void GLWidget::shutdown()
 		resource_pool->clean_context();
 	}
 	global_mixer->remove_frame_ready_callback(output, this);
+}
+
+void GLWidget::grab_white_balance(unsigned channel, unsigned x, unsigned y)
+{
+	// Set the white balance to neutral for the grab. It's probably going to
+	// flicker a bit, but hopefully this display is not live anyway.
+	global_mixer->set_wb(output, 0.5, 0.5, 0.5);
+	global_mixer->wait_for_next_frame();
+
+	// Mark that the next paintGL() should grab the given pixel.
+	grab_x = x;
+	grab_y = y;
+	grab_output = Mixer::Output(Mixer::OUTPUT_INPUT0 + channel);
+	should_grab = true;
+
+	updateGL();
 }
 
 void GLWidget::initializeGL()
@@ -121,6 +149,16 @@ void GLWidget::paintGL()
 		resource_pool = frame.chain->get_resource_pool();
 	} else {
 		assert(resource_pool == frame.chain->get_resource_pool());
+	}
+
+	if (should_grab) {
+		QRgb reference_color = grabFrameBuffer().pixel(grab_x, grab_y);
+
+		double r = srgb_to_linear(qRed(reference_color) / 255.0);
+		double g = srgb_to_linear(qGreen(reference_color) / 255.0);
+		double b = srgb_to_linear(qBlue(reference_color) / 255.0);
+		global_mixer->set_wb(grab_output, r, g, b);
+		should_grab = false;
 	}
 }
 

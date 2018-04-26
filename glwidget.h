@@ -39,6 +39,9 @@ public:
 
 	void shutdown();
 
+	// NOTE: Will make the white balance flicker for a frame.
+	void grab_white_balance(unsigned channel, unsigned x, unsigned y);
+
 protected:
 	void initializeGL() override;
 	void resizeGL(int width, int height) override;
@@ -63,6 +66,9 @@ private:
 	GLuint position_vbo, texcoord_vbo;
 	movit::ResourcePool *resource_pool = nullptr;
 	int current_width = 1, current_height = 1;
+	bool should_grab = false;
+	unsigned grab_x, grab_y;
+	Mixer::Output grab_output;  // Should nominally be the same as output.
 };
 
 #endif

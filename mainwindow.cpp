@@ -1468,7 +1468,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		QApplication::restoreOverrideCursor();
 		if (watched == previews[current_wb_pick_display]->display) {
 			const QMouseEvent *mouse_event = (QMouseEvent *)event;
-			set_white_balance(current_wb_pick_display, mouse_event->x(), mouse_event->y());
+			previews[current_wb_pick_display]->display->grab_white_balance(
+				current_wb_pick_display,
+				mouse_event->x(), mouse_event->y());
 		} else {
 			// The user clicked on something else, give up.
 			// (The click goes through, which might not be ideal, but, yes.)
@@ -1492,34 +1494,6 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 	analyzer->hide();
 	event->accept();
-}
-
-namespace {
-
-double srgb_to_linear(double x)
-{
-	if (x < 0.04045) {
-		return x / 12.92;
-	} else {
-		return pow((x + 0.055) / 1.055, 2.4);
-	}
-}
-
-}  // namespace
-
-void MainWindow::set_white_balance(int channel_number, int x, int y)
-{
-	// Set the white balance to neutral for the grab. It's probably going to
-	// flicker a bit, but hopefully this display is not live anyway.
-	global_mixer->set_wb(Mixer::OUTPUT_INPUT0 + channel_number, 0.5, 0.5, 0.5);
-	previews[channel_number]->display->updateGL();
-	QRgb reference_color = previews[channel_number]->display->grabFrameBuffer().pixel(x, y);
-
-	double r = srgb_to_linear(qRed(reference_color) / 255.0);
-	double g = srgb_to_linear(qGreen(reference_color) / 255.0);
-	double b = srgb_to_linear(qBlue(reference_color) / 255.0);
-	global_mixer->set_wb(Mixer::OUTPUT_INPUT0 + channel_number, r, g, b);
-	previews[channel_number]->display->updateGL();
 }
 
 void MainWindow::audio_state_changed()

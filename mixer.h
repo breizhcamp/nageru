@@ -421,6 +421,8 @@ public:
 		theme->set_theme_menu_callback(callback);
 	}
 
+	void wait_for_next_frame();
+
 private:
 	struct CaptureCard;
 
@@ -482,7 +484,10 @@ private:
 	movit::YCbCrInput *display_input;
 
 	int64_t pts_int = 0;  // In TIMEBASE units.
-	unsigned frame_num = 0;
+
+	mutable std::mutex frame_num_mutex;
+	std::condition_variable frame_num_updated;
+	unsigned frame_num = 0;  // Under <frame_num_mutex>.
 
 	// Accumulated errors in number of 1/TIMEBASE audio samples. If OUTPUT_FREQUENCY divided by
 	// frame rate is integer, will always stay zero.
