@@ -152,11 +152,12 @@ void GLWidget::paintGL()
 	}
 
 	if (should_grab) {
-		QRgb reference_color = grabFrameBuffer().pixel(grab_x, grab_y);
+		GLfloat reference_color[4];
+		glReadPixels(grab_x, current_height - grab_y - 1, 1, 1, GL_BGRA, GL_FLOAT, reference_color);
 
-		double r = srgb_to_linear(qRed(reference_color) / 255.0);
-		double g = srgb_to_linear(qGreen(reference_color) / 255.0);
-		double b = srgb_to_linear(qBlue(reference_color) / 255.0);
+		double r = srgb_to_linear(reference_color[2]);
+		double g = srgb_to_linear(reference_color[1]);
+		double b = srgb_to_linear(reference_color[0]);
 		global_mixer->set_wb(grab_output, r, g, b);
 		should_grab = false;
 	}
