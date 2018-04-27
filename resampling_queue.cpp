@@ -60,7 +60,11 @@ void ResamplingQueue::add_input_samples(steady_clock::time_point ts, const float
 	a1.good_sample = good_sample;
 	if (a0.good_sample && a1.good_sample) {
 		current_estimated_freq_in = (a1.input_samples_received - a0.input_samples_received) / duration<double>(a1.ts - a0.ts).count();
-		assert(current_estimated_freq_in >= 0.0);
+		if (!(current_estimated_freq_in >= 0.0)) {
+			fprintf(stderr, "%s: PANIC: Input audio clock going backwards, ignoring.\n",
+				spec_to_string(device_spec).c_str());
+			current_estimated_freq_in = freq_in;
+		}
 
 		// Bound the frequency, so that a single wild result won't throw the filter off guard.
 		current_estimated_freq_in = min(current_estimated_freq_in, 1.2 * freq_in);
