@@ -956,11 +956,13 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
 		set_peak_label(ui->peak_display, peak_db);
 
 		// NOTE: Will be invisible when using multitrack audio.
-		ui->gainstaging_knob->blockSignals(true);
-		ui->gainstaging_knob->setValue(lrintf(bus_levels[0].gain_staging_db * 10.0f));
-		ui->gainstaging_knob->blockSignals(false);
-		ui->gainstaging_db_display->setText(
-			QString::fromStdString(format_db(bus_levels[0].gain_staging_db, DB_WITH_SIGN)));
+		if (!bus_levels.empty()) {
+			ui->gainstaging_knob->blockSignals(true);
+			ui->gainstaging_knob->setValue(lrintf(bus_levels[0].gain_staging_db * 10.0f));
+			ui->gainstaging_knob->blockSignals(false);
+			ui->gainstaging_db_display->setText(
+				QString::fromStdString(format_db(bus_levels[0].gain_staging_db, DB_WITH_SIGN)));
+		}
 
 		ui->makeup_gain_knob->blockSignals(true);
 		ui->makeup_gain_knob->setValue(lrintf(final_makeup_gain_db * 10.0f));
