@@ -100,7 +100,7 @@ ifneq ($(CEF_DIR),)
 CEF_RESOURCES = natives_blob.bin snapshot_blob.bin v8_context_snapshot.bin
 CEF_RESOURCES += cef.pak cef_100_percent.pak cef_200_percent.pak cef_extensions.pak devtools_resources.pak
 CEF_RESOURCES += libEGL.so libGLESv2.so swiftshader/libEGL.so swiftshader/libGLESv2.so
-CEF_RESOURCES += locales/en-US.pak locales/en-US.pak.info
+CEF_RESOURCES += locales/en-US.pak
 ifneq ($(CEF_NO_ICUDTL),yes)
 CEF_RESOURCES += icudtl.dat
 endif
@@ -137,8 +137,6 @@ locales/:
 	mkdir locales/
 locales/en-US.pak: | locales/ $(CEF_RESOURCE_DIR)/locales/en-US.pak
 	$(CEF_CP) $(CEF_RESOURCE_DIR)/locales/en-US.pak $@
-locales/en-US.pak.info: | locales/ $(CEF_RESOURCE_DIR)/locales/en-US.pak.info
-	$(CEF_CP) $(CEF_RESOURCE_DIR)/locales/en-US.pak.info $@
 icudtl.dat: $(CEF_RESOURCE_DIR)/icudtl.dat
 	$(CEF_CP) $< $@
 %.bin: $(CEF_LIB_DIR)/%.bin
