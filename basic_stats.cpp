@@ -3,13 +3,31 @@
 
 #include <assert.h>
 #include <sys/resource.h>
+#include <epoxy/gl.h>
+
+// Epoxy seems to be missing these. Taken from the NVX_gpu_memory_info spec.
+#ifndef GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX
+#define GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX          0x9047
+#endif
+#ifndef GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX
+#define GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX    0x9048
+#endif
+#ifndef GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX
+#define GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX  0x9049
+#endif
+#ifndef GPU_MEMORY_INFO_EVICTION_COUNT_NVX
+#define GPU_MEMORY_INFO_EVICTION_COUNT_NVX            0x904A
+#endif
+#ifndef GPU_MEMORY_INFO_EVICTED_MEMORY_NVX
+#define GPU_MEMORY_INFO_EVICTED_MEMORY_NVX            0x904B
+#endif
 
 using namespace std;
 using namespace std::chrono;
 
 bool uses_mlock = false;
 
-BasicStats::BasicStats(bool verbose)
+BasicStats::BasicStats(bool verbose, bool use_opengl)
 	: verbose(verbose)
 {
 	start = steady_clock::now();
@@ -20,6 +38,12 @@ BasicStats::BasicStats(bool verbose)
 	global_metrics.add("start_time_seconds", &metric_start_time_seconds, Metrics::TYPE_GAUGE);
 	global_metrics.add("memory_used_bytes", &metrics_memory_used_bytes);
 	global_metrics.add("memory_locked_limit_bytes", &metrics_memory_locked_limit_bytes);
+
+	// TODO: It would be nice to compile this out entirely for Kaeru,
+	// to avoid pulling in the symbols from libGL/Epoxy.
+	if (use_opengl) {
+		gpu_memory_stats.reset(new GPUMemoryStats(verbose));
+	}
 }
 
 void BasicStats::update(int frame_num, int stats_dropped_frames)
@@ -76,9 +100,57 @@ void BasicStats::update(int frame_num, int stats_dropped_frames)
 		}
 	}
 
+	if (gpu_memory_stats != nullptr) {
+		gpu_memory_stats->update();
+	}
+
 	if (verbose) {
 		printf("\n");
 	}
 }
 
+GPUMemoryStats::GPUMemoryStats(bool verbose)
+	: verbose(verbose)
+{
+	// GL_NV_query_memory is exposed but supposedly only works on
+	// Quadro/Titan cards, so we use GL_NVX_gpu_memory_info even though it's
+	// formally marked as experimental.
+	// Intel/Mesa doesn't seem to have anything comparable (at least nothing
+	// that gets the amount of _available_ memory).
+	supported = epoxy_has_gl_extension("GL_NVX_gpu_memory_info");
+	if (supported) {
+		global_metrics.add("metric_memory_gpu_total_bytes", &metric_memory_gpu_total_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("metric_memory_gpu_dedicated_bytes", &metric_memory_gpu_dedicated_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("metric_memory_gpu_used_bytes", &metric_memory_gpu_used_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("metric_memory_gpu_evicted_bytes", &metric_memory_gpu_evicted_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("metric_memory_gpu_evictions", &metric_memory_gpu_evictions);
+	}
+}
 
+void GPUMemoryStats::update()
+{
+	if (!supported) {
+		return;
+	}
+
+	GLint total, dedicated, available, evicted, evictions;
+	glGetIntegerv(GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &total);
+	glGetIntegerv(GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &dedicated);
+	glGetIntegerv(GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &available);
+	glGetIntegerv(GPU_MEMORY_INFO_EVICTED_MEMORY_NVX, &evicted);
+	glGetIntegerv(GPU_MEMORY_INFO_EVICTION_COUNT_NVX, &evictions);
+
+	if (glGetError() == 0) {
+		metric_memory_gpu_total_bytes = int64_t(total) * 1024;
+		metric_memory_gpu_dedicated_bytes = int64_t(dedicated) * 1024;
+		metric_memory_gpu_used_bytes = int64_t(total - available) * 1024;
+		metric_memory_gpu_evicted_bytes = int64_t(evicted) * 1024;
+		metric_memory_gpu_evictions = evictions;
+
+		if (verbose) {
+			printf(", using %d / %d MB GPU memory (%.1f%%)",
+				(total - available) / 1024, total / 1024,
+				float(100.0 * (total - available) / total));
+		}
+	}
+}

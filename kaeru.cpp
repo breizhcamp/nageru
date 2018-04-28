@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
 	video.start_bm_capture();
 	video.change_rate(2.0);  // Be sure never to really fall behind, but also don't dump huge amounts of stuff onto x264.
 
-	BasicStats basic_stats(/*verbose=*/false);
+	BasicStats basic_stats(/*verbose=*/false, /*use_opengl=*/false);
 	global_basic_stats = &basic_stats;
 	httpd.start(global_flags.http_port);
 

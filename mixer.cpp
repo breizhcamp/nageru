@@ -993,7 +993,7 @@ void Mixer::thread_func()
 		}
 	}
 
-	BasicStats basic_stats(/*verbose=*/true);
+	BasicStats basic_stats(/*verbose=*/true, /*use_opengl=*/true);
 	int stats_dropped_frames = 0;
 
 	while (!should_quit) {
