@@ -225,8 +225,6 @@ local static_chain_lq = EffectChain.new(16, 9)
 local static_chain_lq_input = static_chain_lq:add_effect(ImageInput.new("bg.jpeg"))
 static_chain_lq:finalize(false)
 
-inspect = require('inspect')
-
 -- Used for indexing into the tables of chains.
 function get_input_type(signals, signal_num)
 	if signal_num == STATIC_SIGNAL_NUM then
