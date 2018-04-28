@@ -119,11 +119,11 @@ GPUMemoryStats::GPUMemoryStats(bool verbose)
 	// that gets the amount of _available_ memory).
 	supported = epoxy_has_gl_extension("GL_NVX_gpu_memory_info");
 	if (supported) {
-		global_metrics.add("metric_memory_gpu_total_bytes", &metric_memory_gpu_total_bytes, Metrics::TYPE_GAUGE);
-		global_metrics.add("metric_memory_gpu_dedicated_bytes", &metric_memory_gpu_dedicated_bytes, Metrics::TYPE_GAUGE);
-		global_metrics.add("metric_memory_gpu_used_bytes", &metric_memory_gpu_used_bytes, Metrics::TYPE_GAUGE);
-		global_metrics.add("metric_memory_gpu_evicted_bytes", &metric_memory_gpu_evicted_bytes, Metrics::TYPE_GAUGE);
-		global_metrics.add("metric_memory_gpu_evictions", &metric_memory_gpu_evictions);
+		global_metrics.add("memory_gpu_total_bytes", &metric_memory_gpu_total_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("memory_gpu_dedicated_bytes", &metric_memory_gpu_dedicated_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("memory_gpu_used_bytes", &metric_memory_gpu_used_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("memory_gpu_evicted_bytes", &metric_memory_gpu_evicted_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("memory_gpu_evictions", &metric_memory_gpu_evictions);
 	}
 }
 
