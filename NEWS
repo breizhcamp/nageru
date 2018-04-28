@@ -1,3 +1,41 @@
+Nageru 1.7.2, April 28th, 2018
+
+  - Several improvements to video (FFmpeg) inputs: You can now use
+    them as audio sources, you can right-click on video channels
+    to change URL/filename on-the-fly, themes can ask for forced
+    disconnection (useful for network sources that are hanging),
+    and various other improvements. Be aware that the audio support
+    may still be somewhat rough, as A/V sync of arbitrary video
+    playout is a hard problem.
+
+  - The included themes have been fixed to properly make the returned
+    chain preparation functions independent of global state (e.g. if
+    the white balance for a channel was changed before the frame was
+    actually rendered). If you are using a custom theme, you may want
+    to apply similar fixes to it.
+
+  - In Metacube stream output, mark each keyframe with a pts metadata
+    block. This allows Cubemap 1.4.0 or newer to serve fMP4 fragments
+    for HLS from Nageru's output, without any further remuxing or
+    transcoding.
+
+  - If needed, Nageru will now automatically try to autodetect a
+    usable --va-display parameter by probing all DRM nodes for H.264
+    encoders. This removes the need to set --va-display in almost all
+    cases, and also removes the dependency on libpci.
+
+  - For GPUs that support querying available memory (in practice only
+    NVIDIA GPUs at the current time), expose the amount of used/total
+    GPU memory both on standard output and in the Prometheus metrics
+    (as well as included Grafana dashboard).
+
+  - The Grafana dashboard now supports heatmaps for the chosen x264
+    speedcontrol preset (requires Grafana 5.1 or newer). (There used to
+    be a heatmap earlier, but it was all broken.)
+
+  - Various bugfixes.
+
+
 Nageru 1.7.1, March 26th, 2018
 
   - Various bugfixes, mostly related to HTML and video inputs.
