@@ -31,6 +31,16 @@ struct __bitstream {
 };
 typedef struct __bitstream bitstream;
 
+struct VADisplayWithCleanup {
+	~VADisplayWithCleanup();
+
+	VADisplay va_dpy;
+	Display *x11_display = nullptr;
+	bool can_use_zerocopy = true;
+	int drm_fd = -1;
+};
+std::unique_ptr<VADisplayWithCleanup> va_open_display(const std::string &va_display);  // Can return nullptr on failure.
+
 class QuickSyncEncoderImpl {
 public:
 	QuickSyncEncoderImpl(const std::string &filename, movit::ResourcePool *resource_pool, QSurface *surface, const std::string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator);
@@ -121,10 +131,7 @@ private:
 	int build_packed_seq_buffer(movit::YCbCrLumaCoefficients ycbcr_coefficients, unsigned char **header_buffer);
 	int build_packed_slice_buffer(unsigned char **header_buffer);
 	int init_va(const std::string &va_display);
-	int deinit_va();
 	void enable_zerocopy_if_possible();
-	VADisplay va_open_display(const std::string &va_display);
-	void va_close_display(VADisplay va_dpy);
 	int setup_encode();
 	void release_encode();
 	void update_ReferenceFrames(int current_display_frame, int frame_type);
@@ -135,8 +142,7 @@ private:
 
 	bool is_shutdown = false;
 	bool has_released_gl_resources = false;
-	std::atomic<bool> use_zerocopy;
-	int drm_fd = -1;
+	std::atomic<bool> use_zerocopy{false};
 
 	std::thread encode_thread, storage_thread;
 
@@ -170,10 +176,8 @@ private:
 	Mux* stream_mux = nullptr;  // To HTTP.
 	std::unique_ptr<Mux> file_mux;  // To local disk.
 
-	Display *x11_display = nullptr;
-
 	// Encoder parameters
-	VADisplay va_dpy;
+	std::unique_ptr<VADisplayWithCleanup> va_dpy;
 	VAProfile h264_profile = (VAProfile)~0;
 	VAConfigAttrib config_attrib[VAConfigAttribTypeMax];
 	int config_attrib_num = 0, enc_packed_header_idx;

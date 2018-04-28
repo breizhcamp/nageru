@@ -29,6 +29,7 @@ extern "C" {
 #include "image_input.h"
 #include "mainwindow.h"
 #include "mixer.h"
+#include "quicksync_encoder.h"
 
 #ifdef HAVE_CEF
 CefRefPtr<NageruCefApp> cef_app;
@@ -54,6 +55,13 @@ int main(int argc, char *argv[])
 #endif
 
 	parse_flags(PROGRAM_NAGERU, argc, argv);
+
+	if (global_flags.va_display.empty()) {
+		// The user didn't specify a VA-API display. See if the default works,
+		// and if not, let's try to help the user by seeing if there's any
+		// that would work automatically.
+		global_flags.va_display = QuickSyncEncoder::get_usable_va_display();
+	}
 
 	if (global_flags.va_display.empty() ||
 	    global_flags.va_display[0] != '/') {

@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <epoxy/egl.h>
 #include <fcntl.h>
+#include <glob.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -724,116 +725,136 @@ void QuickSyncEncoderImpl::enable_zerocopy_if_possible()
 	global_flags.use_zerocopy = use_zerocopy;
 }
 
-VADisplay QuickSyncEncoderImpl::va_open_display(const string &va_display)
+VADisplayWithCleanup::~VADisplayWithCleanup()
 {
-	if (va_display.empty()) {
-		x11_display = XOpenDisplay(NULL);
-		if (!x11_display) {
-			fprintf(stderr, "error: can't connect to X server!\n");
-			return NULL;
-		}
-		return vaGetDisplay(x11_display);
-	} else if (va_display[0] != '/') {
-		x11_display = XOpenDisplay(va_display.c_str());
-		if (!x11_display) {
-			fprintf(stderr, "error: can't connect to X server!\n");
-			return NULL;
-		}
-		return vaGetDisplay(x11_display);
-	} else {
-		drm_fd = open(va_display.c_str(), O_RDWR);
-		if (drm_fd == -1) {
-			perror(va_display.c_str());
-			return NULL;
-		}
-		use_zerocopy = false;
-		return vaGetDisplayDRM(drm_fd);
+	if (va_dpy != nullptr) {
+		vaTerminate(va_dpy);
 	}
-}
-
-void QuickSyncEncoderImpl::va_close_display(VADisplay va_dpy)
-{
-	if (x11_display) {
+	if (x11_display != nullptr) {
 		XCloseDisplay(x11_display);
-		x11_display = nullptr;
 	}
 	if (drm_fd != -1) {
 		close(drm_fd);
 	}
 }
 
+unique_ptr<VADisplayWithCleanup> va_open_display(const string &va_display)
+{
+	if (va_display.empty() || va_display[0] != '/') {  // An X display.
+		Display *x11_display = XOpenDisplay(va_display.empty() ? nullptr : va_display.c_str());
+		if (x11_display == nullptr) {
+			fprintf(stderr, "error: can't connect to X server!\n");
+			return nullptr;
+		}
+
+		unique_ptr<VADisplayWithCleanup> ret(new VADisplayWithCleanup);
+		ret->x11_display = x11_display;
+		ret->can_use_zerocopy = true;
+		ret->va_dpy = vaGetDisplay(x11_display);
+		if (ret->va_dpy == nullptr) {
+			return nullptr;
+		}
+		return ret;
+	} else {  // A DRM node on the filesystem (e.g. /dev/dri/renderD128).
+		int drm_fd = open(va_display.c_str(), O_RDWR);
+		if (drm_fd == -1) {
+			perror(va_display.c_str());
+			return NULL;
+		}
+		unique_ptr<VADisplayWithCleanup> ret(new VADisplayWithCleanup);
+		ret->drm_fd = drm_fd;
+		ret->can_use_zerocopy = false;
+		ret->va_dpy = vaGetDisplayDRM(drm_fd);
+		if (ret->va_dpy == nullptr) {
+			return nullptr;
+		}
+		return ret;
+	}
+}
+
+unique_ptr<VADisplayWithCleanup> try_open_va(const string &va_display, VAProfile *h264_profile, string *error)
+{
+	unique_ptr<VADisplayWithCleanup> va_dpy = va_open_display(va_display);
+	if (va_dpy == nullptr) {
+		if (error) *error = "Opening VA display failed";
+		return nullptr;
+	}
+	int major_ver, minor_ver;
+	VAStatus va_status = vaInitialize(va_dpy->va_dpy, &major_ver, &minor_ver);
+	if (va_status != VA_STATUS_SUCCESS) {
+		char buf[256];
+		snprintf(buf, sizeof(buf), "vaInitialize() failed with status %d\n", va_status);
+		if (error != nullptr) *error = buf;
+		return nullptr;
+	}
+
+	int num_entrypoints = vaMaxNumEntrypoints(va_dpy->va_dpy);
+	unique_ptr<VAEntrypoint[]> entrypoints(new VAEntrypoint[num_entrypoints]);
+	if (entrypoints == nullptr) {
+		if (error != nullptr) *error = "Failed to allocate memory for VA entry points";
+		return nullptr;
+	}
+
+	// Try the profiles from highest to lowest until we find one that can be encoded.
+	constexpr VAProfile profile_list[] = { VAProfileH264High, VAProfileH264Main, VAProfileH264ConstrainedBaseline };
+	for (unsigned i = 0; i < sizeof(profile_list) / sizeof(profile_list[0]); ++i) {
+		vaQueryConfigEntrypoints(va_dpy->va_dpy, profile_list[i], entrypoints.get(), &num_entrypoints);
+		for (int slice_entrypoint = 0; slice_entrypoint < num_entrypoints; slice_entrypoint++) {
+			if (entrypoints[slice_entrypoint] != VAEntrypointEncSlice) {
+				continue;
+			}
+
+			// We found a usable encoder, so return it.
+			if (h264_profile != nullptr) {
+				*h264_profile = profile_list[i];
+			}
+			return va_dpy;
+		}
+	}
+
+	if (error != nullptr) *error = "Can't find VAEntrypointEncSlice for H264 profiles";
+	return nullptr;
+}
+
 int QuickSyncEncoderImpl::init_va(const string &va_display)
 {
-    VAProfile profile_list[]={VAProfileH264High, VAProfileH264Main, VAProfileH264ConstrainedBaseline};
-    VAEntrypoint *entrypoints;
-    int num_entrypoints, slice_entrypoint;
-    int support_encode = 0;    
-    int major_ver, minor_ver;
-    VAStatus va_status;
-    unsigned int i;
-
-    va_dpy = va_open_display(va_display);
-    va_status = vaInitialize(va_dpy, &major_ver, &minor_ver);
-    CHECK_VASTATUS(va_status, "vaInitialize");
-
-    num_entrypoints = vaMaxNumEntrypoints(va_dpy);
-    entrypoints = (VAEntrypoint *)malloc(num_entrypoints * sizeof(*entrypoints));
-    if (!entrypoints) {
-        fprintf(stderr, "error: failed to initialize VA entrypoints array\n");
+    string error;
+    va_dpy = try_open_va(va_display, &h264_profile, &error);
+    if (va_dpy == nullptr) {
+	fprintf(stderr, "error: %s\n", error.c_str());
         exit(1);
     }
-
-    /* use the highest profile */
-    for (i = 0; i < sizeof(profile_list)/sizeof(profile_list[0]); i++) {
-        if ((h264_profile != ~0) && h264_profile != profile_list[i])
-            continue;
-        
-        h264_profile = profile_list[i];
-        vaQueryConfigEntrypoints(va_dpy, h264_profile, entrypoints, &num_entrypoints);
-        for (slice_entrypoint = 0; slice_entrypoint < num_entrypoints; slice_entrypoint++) {
-            if (entrypoints[slice_entrypoint] == VAEntrypointEncSlice) {
-                support_encode = 1;
-                break;
-            }
-        }
-        if (support_encode == 1)
-            break;
+    if (!va_dpy->can_use_zerocopy) {
+        use_zerocopy = false;
     }
     
-    if (support_encode == 0) {
-        printf("Can't find VAEntrypointEncSlice for H264 profiles. If you are using a non-Intel GPU\n");
-        printf("but have one in your system, try launching Nageru with --va-display /dev/dri/renderD128\n");
-        printf("to use VA-API against DRM instead of X11.\n");
-        exit(1);
-    } else {
-        switch (h264_profile) {
-            case VAProfileH264ConstrainedBaseline:
-                constraint_set_flag |= (1 << 0 | 1 << 1); /* Annex A.2.2 */
-                ip_period = 1;
-                break;
+    switch (h264_profile) {
+        case VAProfileH264ConstrainedBaseline:
+            constraint_set_flag |= (1 << 0 | 1 << 1); /* Annex A.2.2 */
+            ip_period = 1;
+            break;
 
-            case VAProfileH264Main:
-                constraint_set_flag |= (1 << 1); /* Annex A.2.2 */
-                break;
+        case VAProfileH264Main:
+            constraint_set_flag |= (1 << 1); /* Annex A.2.2 */
+            break;
 
-            case VAProfileH264High:
-                constraint_set_flag |= (1 << 3); /* Annex A.2.4 */
-                break;
-            default:
-                h264_profile = VAProfileH264ConstrainedBaseline;
-                ip_period = 1;
-                constraint_set_flag |= (1 << 0); /* Annex A.2.1 */
-                break;
-        }
+        case VAProfileH264High:
+            constraint_set_flag |= (1 << 3); /* Annex A.2.4 */
+            break;
+        default:
+            h264_profile = VAProfileH264ConstrainedBaseline;
+            ip_period = 1;
+            constraint_set_flag |= (1 << 0); /* Annex A.2.1 */
+            break;
     }
 
     VAConfigAttrib attrib[VAConfigAttribTypeMax];
 
     /* find out the format for the render target, and rate control mode */
-    for (i = 0; i < VAConfigAttribTypeMax; i++)
+    for (unsigned i = 0; i < VAConfigAttribTypeMax; i++)
         attrib[i].type = (VAConfigAttribType)i;
 
-    va_status = vaGetConfigAttributes(va_dpy, h264_profile, VAEntrypointEncSlice,
+    VAStatus va_status = vaGetConfigAttributes(va_dpy->va_dpy, h264_profile, VAEntrypointEncSlice,
                                       &attrib[0], VAConfigAttribTypeMax);
     CHECK_VASTATUS(va_status, "vaGetConfigAttributes");
     /* check the interested configattrib */
@@ -895,7 +916,6 @@ int QuickSyncEncoderImpl::init_va(const string &va_display)
         h264_maxref = attrib[VAConfigAttribEncMaxRefFrames].value;
     }
 
-    free(entrypoints);
     return 0;
 }
 
@@ -908,19 +928,19 @@ int QuickSyncEncoderImpl::setup_encode()
 		VASurfaceID src_surface[SURFACE_NUM];
 		VASurfaceID ref_surface[SURFACE_NUM];
 
-		va_status = vaCreateConfig(va_dpy, h264_profile, VAEntrypointEncSlice,
+		va_status = vaCreateConfig(va_dpy->va_dpy, h264_profile, VAEntrypointEncSlice,
 				&config_attrib[0], config_attrib_num, &config_id);
 		CHECK_VASTATUS(va_status, "vaCreateConfig");
 
 		/* create source surfaces */
-		va_status = vaCreateSurfaces(va_dpy,
+		va_status = vaCreateSurfaces(va_dpy->va_dpy,
 				VA_RT_FORMAT_YUV420, frame_width_mbaligned, frame_height_mbaligned,
 				&src_surface[0], SURFACE_NUM,
 				NULL, 0);
 		CHECK_VASTATUS(va_status, "vaCreateSurfaces");
 
 		/* create reference surfaces */
-		va_status = vaCreateSurfaces(va_dpy,
+		va_status = vaCreateSurfaces(va_dpy->va_dpy,
 				VA_RT_FORMAT_YUV420, frame_width_mbaligned, frame_height_mbaligned,
 				&ref_surface[0], SURFACE_NUM,
 				NULL, 0);
@@ -936,7 +956,7 @@ int QuickSyncEncoderImpl::setup_encode()
 		}
 
 		/* Create a context for this encode pipe */
-		va_status = vaCreateContext(va_dpy, config_id,
+		va_status = vaCreateContext(va_dpy->va_dpy, config_id,
 				frame_width_mbaligned, frame_height_mbaligned,
 				VA_PROGRESSIVE,
 				tmp_surfaceid, 2 * SURFACE_NUM,
@@ -953,7 +973,7 @@ int QuickSyncEncoderImpl::setup_encode()
 			 * but coded buffer need to be mapped and accessed after vaRenderPicture/vaEndPicture
 			 * so VA won't maintain the coded buffer
 			 */
-			va_status = vaCreateBuffer(va_dpy, context_id, VAEncCodedBufferType,
+			va_status = vaCreateBuffer(va_dpy->va_dpy, context_id, VAEncCodedBufferType,
 					codedbuf_size, 1, NULL, &gl_surfaces[i].coded_buf);
 			CHECK_VASTATUS(va_status, "vaCreateBuffer");
 		}
@@ -1092,18 +1112,18 @@ int QuickSyncEncoderImpl::render_sequence()
         seq_param.frame_crop_bottom_offset = (frame_height_mbaligned - frame_height)/2;
     }
     
-    va_status = vaCreateBuffer(va_dpy, context_id,
+    va_status = vaCreateBuffer(va_dpy->va_dpy, context_id,
                                VAEncSequenceParameterBufferType,
                                sizeof(seq_param), 1, &seq_param, &seq_param_buf);
     CHECK_VASTATUS(va_status, "vaCreateBuffer");
     
-    va_status = vaCreateBuffer(va_dpy, context_id,
+    va_status = vaCreateBuffer(va_dpy->va_dpy, context_id,
                                VAEncMiscParameterBufferType,
                                sizeof(VAEncMiscParameterBuffer) + sizeof(VAEncMiscParameterRateControl),
                                1, NULL, &rc_param_buf);
     CHECK_VASTATUS(va_status, "vaCreateBuffer");
     
-    vaMapBuffer(va_dpy, rc_param_buf, (void **)&misc_param);
+    vaMapBuffer(va_dpy->va_dpy, rc_param_buf, (void **)&misc_param);
     misc_param->type = VAEncMiscParameterTypeRateControl;
     misc_rate_ctrl = (VAEncMiscParameterRateControl *)misc_param->data;
     memset(misc_rate_ctrl, 0, sizeof(*misc_rate_ctrl));
@@ -1113,12 +1133,12 @@ int QuickSyncEncoderImpl::render_sequence()
     misc_rate_ctrl->initial_qp = initial_qp;
     misc_rate_ctrl->min_qp = minimal_qp;
     misc_rate_ctrl->basic_unit_size = 0;
-    vaUnmapBuffer(va_dpy, rc_param_buf);
+    vaUnmapBuffer(va_dpy->va_dpy, rc_param_buf);
 
     render_id[0] = seq_param_buf;
     render_id[1] = rc_param_buf;
     
-    render_picture_and_delete(va_dpy, context_id, &render_id[0], 2);
+    render_picture_and_delete(va_dpy->va_dpy, context_id, &render_id[0], 2);
     
     return 0;
 }
@@ -1185,11 +1205,11 @@ int QuickSyncEncoderImpl::render_picture(GLSurface *surf, int frame_type, int di
     pic_param.last_picture = false;  // FIXME
     pic_param.pic_init_qp = initial_qp;
 
-    va_status = vaCreateBuffer(va_dpy, context_id, VAEncPictureParameterBufferType,
+    va_status = vaCreateBuffer(va_dpy->va_dpy, context_id, VAEncPictureParameterBufferType,
                                sizeof(pic_param), 1, &pic_param, &pic_param_buf);
     CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
-    render_picture_and_delete(va_dpy, context_id, &pic_param_buf, 1);
+    render_picture_and_delete(va_dpy->va_dpy, context_id, &pic_param_buf, 1);
 
     return 0;
 }
@@ -1208,14 +1228,14 @@ int QuickSyncEncoderImpl::render_packedsequence(YCbCrLumaCoefficients ycbcr_coef
     
     packedheader_param_buffer.bit_length = length_in_bits; /*length_in_bits*/
     packedheader_param_buffer.has_emulation_bytes = 0;
-    va_status = vaCreateBuffer(va_dpy,
+    va_status = vaCreateBuffer(va_dpy->va_dpy,
                                context_id,
                                VAEncPackedHeaderParameterBufferType,
                                sizeof(packedheader_param_buffer), 1, &packedheader_param_buffer,
                                &packedseq_para_bufid);
     CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
-    va_status = vaCreateBuffer(va_dpy,
+    va_status = vaCreateBuffer(va_dpy->va_dpy,
                                context_id,
                                VAEncPackedHeaderDataBufferType,
                                (length_in_bits + 7) / 8, 1, packedseq_buffer,
@@ -1224,7 +1244,7 @@ int QuickSyncEncoderImpl::render_packedsequence(YCbCrLumaCoefficients ycbcr_coef
 
     render_id[0] = packedseq_para_bufid;
     render_id[1] = packedseq_data_bufid;
-    render_picture_and_delete(va_dpy, context_id, render_id, 2);
+    render_picture_and_delete(va_dpy->va_dpy, context_id, render_id, 2);
 
     free(packedseq_buffer);
     
@@ -1245,14 +1265,14 @@ int QuickSyncEncoderImpl::render_packedpicture()
     packedheader_param_buffer.bit_length = length_in_bits;
     packedheader_param_buffer.has_emulation_bytes = 0;
 
-    va_status = vaCreateBuffer(va_dpy,
+    va_status = vaCreateBuffer(va_dpy->va_dpy,
                                context_id,
                                VAEncPackedHeaderParameterBufferType,
                                sizeof(packedheader_param_buffer), 1, &packedheader_param_buffer,
                                &packedpic_para_bufid);
     CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
-    va_status = vaCreateBuffer(va_dpy,
+    va_status = vaCreateBuffer(va_dpy->va_dpy,
                                context_id,
                                VAEncPackedHeaderDataBufferType,
                                (length_in_bits + 7) / 8, 1, packedpic_buffer,
@@ -1261,7 +1281,7 @@ int QuickSyncEncoderImpl::render_packedpicture()
 
     render_id[0] = packedpic_para_bufid;
     render_id[1] = packedpic_data_bufid;
-    render_picture_and_delete(va_dpy, context_id, render_id, 2);
+    render_picture_and_delete(va_dpy->va_dpy, context_id, render_id, 2);
 
     free(packedpic_buffer);
     
@@ -1281,14 +1301,14 @@ void QuickSyncEncoderImpl::render_packedslice()
     packedheader_param_buffer.bit_length = length_in_bits;
     packedheader_param_buffer.has_emulation_bytes = 0;
 
-    va_status = vaCreateBuffer(va_dpy,
+    va_status = vaCreateBuffer(va_dpy->va_dpy,
                                context_id,
                                VAEncPackedHeaderParameterBufferType,
                                sizeof(packedheader_param_buffer), 1, &packedheader_param_buffer,
                                &packedslice_para_bufid);
     CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
-    va_status = vaCreateBuffer(va_dpy,
+    va_status = vaCreateBuffer(va_dpy->va_dpy,
                                context_id,
                                VAEncPackedHeaderDataBufferType,
                                (length_in_bits + 7) / 8, 1, packedslice_buffer,
@@ -1297,7 +1317,7 @@ void QuickSyncEncoderImpl::render_packedslice()
 
     render_id[0] = packedslice_para_bufid;
     render_id[1] = packedslice_data_bufid;
-    render_picture_and_delete(va_dpy, context_id, render_id, 2);
+    render_picture_and_delete(va_dpy->va_dpy, context_id, render_id, 2);
 
     free(packedslice_buffer);
 }
@@ -1356,11 +1376,11 @@ int QuickSyncEncoderImpl::render_slice(int encoding_frame_num, int display_frame
         config_attrib[enc_packed_header_idx].value & VA_ENC_PACKED_HEADER_SLICE)
         render_packedslice();
 
-    va_status = vaCreateBuffer(va_dpy, context_id, VAEncSliceParameterBufferType,
+    va_status = vaCreateBuffer(va_dpy->va_dpy, context_id, VAEncSliceParameterBufferType,
                                sizeof(slice_param), 1, &slice_param, &slice_param_buf);
     CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
-    render_picture_and_delete(va_dpy, context_id, &slice_param_buf, 1);
+    render_picture_and_delete(va_dpy->va_dpy, context_id, &slice_param_buf, 1);
 
     return 0;
 }
@@ -1374,13 +1394,13 @@ void QuickSyncEncoderImpl::save_codeddata(GLSurface *surf, storage_task task)
 
 	string data;
 
-	va_status = vaMapBuffer(va_dpy, surf->coded_buf, (void **)(&buf_list));
+	va_status = vaMapBuffer(va_dpy->va_dpy, surf->coded_buf, (void **)(&buf_list));
 	CHECK_VASTATUS(va_status, "vaMapBuffer");
 	while (buf_list != NULL) {
 		data.append(reinterpret_cast<const char *>(buf_list->buf), buf_list->size);
 		buf_list = (VACodedBufferSegment *) buf_list->next;
 	}
-	vaUnmapBuffer(va_dpy, surf->coded_buf);
+	vaUnmapBuffer(va_dpy->va_dpy, surf->coded_buf);
 
 	static int frameno = 0;
 	print_latency("Current Quick Sync latency (video inputs → disk mux):",
@@ -1442,7 +1462,7 @@ void QuickSyncEncoderImpl::storage_task_thread()
 		vector<size_t> ref_display_frame_numbers = move(current.ref_display_frame_numbers);
 	   
 		// waits for data, then saves it to disk.
-		va_status = vaSyncSurface(va_dpy, surf->src_surface);
+		va_status = vaSyncSurface(va_dpy->va_dpy, surf->src_surface);
 		CHECK_VASTATUS(va_status, "vaSyncSurface");
 		save_codeddata(surf, move(current));
 
@@ -1461,13 +1481,13 @@ void QuickSyncEncoderImpl::storage_task_thread()
 void QuickSyncEncoderImpl::release_encode()
 {
 	for (unsigned i = 0; i < SURFACE_NUM; i++) {
-		vaDestroyBuffer(va_dpy, gl_surfaces[i].coded_buf);
-		vaDestroySurfaces(va_dpy, &gl_surfaces[i].src_surface, 1);
-		vaDestroySurfaces(va_dpy, &gl_surfaces[i].ref_surface, 1);
+		vaDestroyBuffer(va_dpy->va_dpy, gl_surfaces[i].coded_buf);
+		vaDestroySurfaces(va_dpy->va_dpy, &gl_surfaces[i].src_surface, 1);
+		vaDestroySurfaces(va_dpy->va_dpy, &gl_surfaces[i].ref_surface, 1);
 	}
 
-	vaDestroyContext(va_dpy, context_id);
-	vaDestroyConfig(va_dpy, config_id);
+	vaDestroyContext(va_dpy->va_dpy, context_id);
+	vaDestroyConfig(va_dpy->va_dpy, config_id);
 }
 
 void QuickSyncEncoderImpl::release_gl_resources()
@@ -1490,15 +1510,6 @@ void QuickSyncEncoderImpl::release_gl_resources()
 	}
 
 	has_released_gl_resources = true;
-}
-
-int QuickSyncEncoderImpl::deinit_va()
-{ 
-    vaTerminate(va_dpy);
-
-    va_close_display(va_dpy);
-
-    return 0;
 }
 
 QuickSyncEncoderImpl::QuickSyncEncoderImpl(const std::string &filename, ResourcePool *resource_pool, QSurface *surface, const string &va_display, int width, int height, AVOutputFormat *oformat, X264Encoder *x264_encoder, DiskSpaceEstimator *disk_space_estimator)
@@ -1621,13 +1632,13 @@ bool QuickSyncEncoderImpl::begin_frame(int64_t pts, int64_t duration, YCbCrLumaC
 	}
 
 	if (!global_flags.x264_video_to_disk) {
-		VAStatus va_status = vaDeriveImage(va_dpy, surf->src_surface, &surf->surface_image);
+		VAStatus va_status = vaDeriveImage(va_dpy->va_dpy, surf->src_surface, &surf->surface_image);
 		CHECK_VASTATUS(va_status, "vaDeriveImage");
 
 		if (use_zerocopy) {
 			VABufferInfo buf_info;
 			buf_info.mem_type = VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME;  // or VA_SURFACE_ATTRIB_MEM_TYPE_KERNEL_DRM?
-			va_status = vaAcquireBufferHandle(va_dpy, surf->surface_image.buf, &buf_info);
+			va_status = vaAcquireBufferHandle(va_dpy->va_dpy, surf->surface_image.buf, &buf_info);
 			CHECK_VASTATUS(va_status, "vaAcquireBufferHandle");
 
 			// Create Y image.
@@ -1766,7 +1777,7 @@ void QuickSyncEncoderImpl::shutdown()
 
 	if (!global_flags.x264_video_to_disk) {
 		release_encode();
-		deinit_va();
+		va_dpy.reset();
 	}
 	is_shutdown = true;
 }
@@ -1997,12 +2008,12 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	if (use_zerocopy) {
 		eglDestroyImageKHR(eglGetCurrentDisplay(), surf->y_egl_image);
 		eglDestroyImageKHR(eglGetCurrentDisplay(), surf->cbcr_egl_image);
-		va_status = vaReleaseBufferHandle(va_dpy, surf->surface_image.buf);
+		va_status = vaReleaseBufferHandle(va_dpy->va_dpy, surf->surface_image.buf);
 		CHECK_VASTATUS(va_status, "vaReleaseBufferHandle");
 	} else {
 		// Upload the frame to VA-API.
 		unsigned char *surface_p = nullptr;
-		vaMapBuffer(va_dpy, surf->surface_image.buf, (void **)&surface_p);
+		vaMapBuffer(va_dpy->va_dpy, surf->surface_image.buf, (void **)&surface_p);
 
 		unsigned char *va_y_ptr = (unsigned char *)surface_p + surf->surface_image.offsets[0];
 		memcpy_with_pitch(va_y_ptr, surf->y_ptr, frame_width, surf->surface_image.pitches[0], frame_height);
@@ -2010,16 +2021,16 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 		unsigned char *va_cbcr_ptr = (unsigned char *)surface_p + surf->surface_image.offsets[1];
 		memcpy_with_pitch(va_cbcr_ptr, surf->cbcr_ptr, (frame_width / 2) * sizeof(uint16_t), surf->surface_image.pitches[1], frame_height / 2);
 
-		va_status = vaUnmapBuffer(va_dpy, surf->surface_image.buf);
+		va_status = vaUnmapBuffer(va_dpy->va_dpy, surf->surface_image.buf);
 		CHECK_VASTATUS(va_status, "vaUnmapBuffer");
 	}
 
-	va_status = vaDestroyImage(va_dpy, surf->surface_image.image_id);
+	va_status = vaDestroyImage(va_dpy->va_dpy, surf->surface_image.image_id);
 	CHECK_VASTATUS(va_status, "vaDestroyImage");
 
 	// Schedule the frame for encoding.
 	VASurfaceID va_surface = surf->src_surface;
-	va_status = vaBeginPicture(va_dpy, context_id, va_surface);
+	va_status = vaBeginPicture(va_dpy->va_dpy, context_id, va_surface);
 	CHECK_VASTATUS(va_status, "vaBeginPicture");
 
 	if (frame_type == FRAME_IDR) {
@@ -2042,7 +2053,7 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	}
 	render_slice(encoding_frame_num, display_frame_num, gop_start_display_frame_num, frame_type);
 
-	va_status = vaEndPicture(va_dpy, context_id);
+	va_status = vaEndPicture(va_dpy->va_dpy, context_id);
 	CHECK_VASTATUS(va_status, "vaEndPicture");
 
 	update_ReferenceFrames(display_frame_num, frame_type);
@@ -2118,4 +2129,41 @@ void QuickSyncEncoder::set_stream_mux(Mux *mux)
 
 int64_t QuickSyncEncoder::global_delay() const {
 	return impl->global_delay();
+}
+
+string QuickSyncEncoder::get_usable_va_display()
+{
+	// First try the default (ie., whatever $DISPLAY is set to).
+	unique_ptr<VADisplayWithCleanup> va_dpy = try_open_va("", nullptr, nullptr);
+	if (va_dpy != nullptr) {
+		return "";
+	}
+
+	fprintf(stderr, "No --va-display was given, and the X11 display did not expose a VA-API H.264 encoder.\n");
+
+	// Try all /dev/dri/render* in turn. TODO: Accept /dev/dri/card*, too?
+	glob_t g;
+	int err = glob("/dev/dri/renderD*", 0, nullptr, &g);
+	if (err != 0) {
+	        fprintf(stderr, "Couldn't list render nodes (%s) when trying to autodetect a replacement.\n", strerror(errno));
+	} else {
+		for (size_t i = 0; i < g.gl_pathc; ++i) {
+			string path = g.gl_pathv[i];
+			va_dpy = try_open_va(path, nullptr, nullptr);
+			if (va_dpy != nullptr) {
+				fprintf(stderr, "Autodetected %s as a suitable replacement; using it.\n",
+					path.c_str());
+				globfree(&g);
+				return path;
+			}
+		}
+	}
+
+	fprintf(stderr, "No suitable VA-API H.264 encoders were found in /dev/dri; giving up.\n");
+	fprintf(stderr, "Note that if you are using an Intel CPU with an external GPU,\n");
+	fprintf(stderr, "you may need to enable the integrated Intel GPU in your BIOS\n");
+	fprintf(stderr, "to expose Quick Sync. Alternatively, you can use --record-x264-video\n");
+	fprintf(stderr, "to use software instead of hardware H.264 encoding, at the expense\n");
+	fprintf(stderr, "of increased CPU usage and possibly bit rate.\n");
+	exit(1);
 }

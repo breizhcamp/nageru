@@ -38,7 +38,7 @@ Nageru currently needs:
  - An Intel processor with Intel Quick Sync, or otherwise some hardware
    H.264 encoder exposed through VA-API. Note that you can use VA-API over
    DRM instead of X11, to use a non-Intel GPU for rendering but still use
-   Quick Sync (by giving e.g. “--va-display /dev/dri/renderD128”).
+   Quick Sync (Nageru does this automatically for you if needed).
 
  - Two or more Blackmagic USB3 or PCI cards, either HDMI or SDI.
    The PCI cards need Blackmagic's own drivers installed. The USB3 cards
@@ -71,8 +71,6 @@ Nageru currently needs:
 
  - LuaJIT, for driving the theme engine.
 
- - libpci, for printing friendly PCI device names in an error message.
-
  - Optional: CEF (Chromium Embedded Framework), for HTML graphics.
    If you build without CEF, the HTMLInput class will not be available from
    the theme. You can get binary downloads of CEF from
@@ -92,13 +90,13 @@ with:
     libzita-resampler-dev libva-dev libavcodec-dev libavformat-dev \
     libswscale-dev libavresample-dev libmovit-dev libegl1-mesa-dev \
     libasound2-dev libx264-dev libbmusb-dev protobuf-compiler \
-    libprotobuf-dev libpci-dev
+    libprotobuf-dev
 
-Exceptions as of February 2018:
+Exceptions as of April 2018:
 
-  - You will need Movit from unstable; stretch only has 1.4.0.
+  - You will need Movit from testing or unstable; stretch only has 1.4.0.
 
-  - You will need bmusb from unstable; stretch only has 0.5.4.
+  - You will need bmusb from testing or unstable; stretch only has 0.5.4.
 
   - Debian does not carry CEF (but it is optional).
 

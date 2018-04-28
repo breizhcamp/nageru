@@ -78,6 +78,11 @@ public:
 	void release_gl_resources();  // Requires an OpenGL context. Must be run after shutdown.
 	int64_t global_delay() const;  // So we never get negative dts.
 
+	// Tries to autodetect a device with a usable VA-API H.264 encoder.
+	// Tries first the default X11 display, then every /dev/dri/renderD* node in turn.
+	// Dies if none could be found.
+	static std::string get_usable_va_display();
+
 private:
 	std::unique_ptr<QuickSyncEncoderImpl> impl;
 };

@@ -2,7 +2,7 @@ CXX=g++
 PROTOC=protoc
 INSTALL=install
 EMBEDDED_BMUSB=no
-PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL Qt5PrintSupport libusb-1.0 movit luajit libmicrohttpd epoxy x264 protobuf libpci
+PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL Qt5PrintSupport libusb-1.0 movit luajit libmicrohttpd epoxy x264 protobuf
 CXXFLAGS ?= -O2 -g -Wall  # Will be overridden by environment.
 CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -Idecklink/
 
