@@ -58,7 +58,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1524926525805,
+  "iteration": 1524926525808,
   "links": [],
   "panels": [
     {
@@ -679,6 +679,14 @@
           "legendFormat": "x264 speedcontrol late frames",
           "refId": "F",
           "step": 20
+        },
+        {
+          "expr": "rate(nageru_memory_gpu_evictions{instance=~\"$instance\"}[1m])",
+          "format": "time_series",
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "GPU memory evictions",
+          "refId": "G"
         }
       ],
       "thresholds": [],
@@ -1729,5 +1737,5 @@
   "timezone": "browser",
   "title": "Nageru",
   "uid": "UML0ZDMmz",
-  "version": 5
+  "version": 7
 }
