@@ -58,7 +58,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1524926525802,
+  "iteration": 1524926525805,
   "links": [],
   "panels": [
     {
@@ -1150,9 +1150,9 @@
       "datasource": "${DS_EXAMPLE}",
       "gridPos": {
         "h": 7,
-        "w": 8,
-        "x": 8,
-        "y": 22
+        "w": 24,
+        "x": 0,
+        "y": 29
       },
       "heatmap": {},
       "highlightCards": true,
@@ -1209,7 +1209,7 @@
         "h": 7,
         "w": 8,
         "x": 16,
-        "y": 22
+        "y": 36
       },
       "id": 62,
       "legend": {
@@ -1290,7 +1290,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 43
       },
       "id": 67,
       "panels": [],
@@ -1309,7 +1309,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 30
+        "y": 44
       },
       "id": 2,
       "legend": {
@@ -1429,7 +1429,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 51
       },
       "id": 20,
       "legend": {
@@ -1549,7 +1549,7 @@
         "h": 7,
         "w": 8,
         "x": 0,
-        "y": 44
+        "y": 58
       },
       "id": 14,
       "legend": {
@@ -1591,6 +1591,21 @@
           "legendFormat": "Max locked",
           "refId": "B",
           "step": 30
+        },
+        {
+          "expr": "nageru_memory_gpu_used_bytes{instance=~\"$instance\"} ",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "GPU used",
+          "refId": "C"
+        },
+        {
+          "expr": "nageru_memory_gpu_total_bytes{instance=~\"$instance\"} ",
+          "format": "time_series",
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "GPU max",
+          "refId": "D"
         }
       ],
       "thresholds": [],
@@ -1714,5 +1729,5 @@
   "timezone": "browser",
   "title": "Nageru",
   "uid": "UML0ZDMmz",
-  "version": 4
+  "version": 5
 }
