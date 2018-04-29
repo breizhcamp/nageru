@@ -98,7 +98,11 @@ Exceptions as of April 2018:
 
   - You will need bmusb from testing or unstable; stretch only has 0.5.4.
 
-  - Debian does not carry CEF (but it is optional).
+  - Debian does not carry CEF (but it is optional). You can get experimental
+    (and not security-supported) CEF Debian packages built for unstable at
+    http://storage.sesse.net/cef/, and then build Nageru with
+
+     make CEF_DIR=/usr/lib/x86_64-linux-gnu/cef CEF_BUILD_TYPE=system CEF_NO_ICUDTL=yes
 
 The patches/ directory contains a patch that helps zita-resampler performance.
 It is meant for upstream, but was not in at the time Nageru was released.
