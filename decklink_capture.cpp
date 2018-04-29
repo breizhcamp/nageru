@@ -468,14 +468,11 @@ void DeckLinkCapture::stop_dequeue_thread()
 		fprintf(stderr, "StopStreams failed with error 0x%x\n", result);
 		exit(1);
 	}
-	if (input->DisableVideoInput() != S_OK) {
-		fprintf(stderr, "Failed to disable video input for card %d\n", card_index);
-		exit(1);
-	}
-	if (input->DisableAudioInput() != S_OK) {
-		fprintf(stderr, "Failed to disable audio input for card %d\n", card_index);
-		exit(1);
-	}
+
+	// We could call DisableVideoInput() and DisableAudioInput() here,
+	// but they seem to be taking a really long time, and we only do this
+	// during shutdown anyway, so StopStreams() will suffice.
+
 	running = false;
 }
 
