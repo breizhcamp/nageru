@@ -532,8 +532,7 @@ private:
 			std::chrono::steady_clock::time_point received_timestamp = std::chrono::steady_clock::time_point::min();
 		};
 		std::deque<NewFrame> new_frames;
-		bool should_quit = false;
-		std::condition_variable new_frames_changed;  // Set whenever new_frames (or should_quit) is changed.
+		std::condition_variable new_frames_changed;  // Set whenever new_frames is changed.
 
 		QueueLengthPolicy queue_length_policy;  // Refers to the "new_frames" queue.
 

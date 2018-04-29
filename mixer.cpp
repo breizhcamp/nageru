@@ -503,11 +503,6 @@ Mixer::~Mixer()
 	BMUSBCapture::stop_bm_thread();
 
 	for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
-		{
-			unique_lock<mutex> lock(card_mutex);
-			cards[card_index].should_quit = true;  // Unblock thread.
-			cards[card_index].new_frames_changed.notify_all();
-		}
 		cards[card_index].capture->stop_dequeue_thread();
 		if (cards[card_index].output) {
 			cards[card_index].output->end_output();
