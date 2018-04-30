@@ -339,6 +339,7 @@ AudioMixer::BusSettings AudioMixer::get_default_bus_settings()
 	settings.fader_volume_db = 0.0f;
 	settings.muted = false;
 	settings.locut_enabled = global_flags.locut_enabled;
+	settings.stereo_width = 1.0f;
 	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
 		settings.eq_level_db[band_index] = 0.0f;
 	}
@@ -356,6 +357,7 @@ AudioMixer::BusSettings AudioMixer::get_bus_settings(unsigned bus_index) const
 	settings.fader_volume_db = fader_volume_db[bus_index];
 	settings.muted = mute[bus_index];
 	settings.locut_enabled = locut_enabled[bus_index];
+	settings.stereo_width = stereo_width[bus_index];
 	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
 		settings.eq_level_db[band_index] = eq_level_db[bus_index][band_index];
 	}
@@ -372,6 +374,7 @@ void AudioMixer::set_bus_settings(unsigned bus_index, const AudioMixer::BusSetti
 	fader_volume_db[bus_index] = settings.fader_volume_db;
 	mute[bus_index] = settings.muted;
 	locut_enabled[bus_index] = settings.locut_enabled;
+	stereo_width[bus_index] = settings.stereo_width;
 	for (unsigned band_index = 0; band_index < NUM_EQ_BANDS; ++band_index) {
 		eq_level_db[bus_index][band_index] = settings.eq_level_db[band_index];
 	}
@@ -423,7 +426,7 @@ void AudioMixer::find_sample_src_from_device(const map<DeviceSpec, vector<float>
 }
 
 // TODO: Can be SSSE3-optimized if need be.
-void AudioMixer::fill_audio_bus(const map<DeviceSpec, vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output)
+void AudioMixer::fill_audio_bus(const map<DeviceSpec, vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float stereo_width, float *output)
 {
 	if (bus.device.type == InputSourceType::SILENCE) {
 		memset(output, 0, num_samples * 2 * sizeof(*output));
@@ -436,11 +439,44 @@ void AudioMixer::fill_audio_bus(const map<DeviceSpec, vector<float>> &samples_ca
 		float *dptr = output;
 		find_sample_src_from_device(samples_card, bus.device, bus.source_channel[0], &lsrc, &lstride);
 		find_sample_src_from_device(samples_card, bus.device, bus.source_channel[1], &rsrc, &rstride);
-		for (unsigned i = 0; i < num_samples; ++i) {
-			*dptr++ = *lsrc;
-			*dptr++ = *rsrc;
-			lsrc += lstride;
-			rsrc += rstride;
+
+		// Apply stereo width settings. Set stereo width w to a 0..1 range instead of
+		// -1..1, since it makes for much easier calculations (so 0.5 = completely mono).
+		// Then, what we want is
+		//
+		//   L' = wL + (1-w)R = R + w(L-R)
+		//   R' = wR + (1-w)L = L + w(R-L)
+		//
+		// This can be further simplified calculation-wise by defining the weighted
+		// difference signal D = w(R-L), so that:
+		//
+		//   L' = R - D
+		//   R' = L + D
+		float w = 0.5f * stereo_width + 0.5f;
+		if (fabs(w) < 1e-3) {
+			// Perfect inverse.
+			swap(lsrc, rsrc);
+			swap(lstride, rstride);
+			w = 1.0f;
+		}
+		if (fabs(w - 1.0f) < 1e-3) {
+			// No calculations needed for stereo_width = 1.
+			for (unsigned i = 0; i < num_samples; ++i) {
+				*dptr++ = *lsrc;
+				*dptr++ = *rsrc;
+				lsrc += lstride;
+				rsrc += rstride;
+			}
+		} else {
+			// General case.
+			for (unsigned i = 0; i < num_samples; ++i) {
+				float left = *lsrc, right = *rsrc;
+				float diff = w * (right - left);
+				*dptr++ = right - diff;
+				*dptr++ = left + diff;
+				lsrc += lstride;
+				rsrc += rstride;
+			}
 		}
 	}
 }
@@ -520,7 +556,7 @@ vector<float> AudioMixer::get_output(steady_clock::time_point ts, unsigned num_s
 	samples_out.resize(num_samples * 2);
 	samples_bus.resize(num_samples * 2);
 	for (unsigned bus_index = 0; bus_index < input_mapping.buses.size(); ++bus_index) {
-		fill_audio_bus(samples_card, input_mapping.buses[bus_index], num_samples, &samples_bus[0]);
+		fill_audio_bus(samples_card, input_mapping.buses[bus_index], num_samples, stereo_width[bus_index], &samples_bus[0]);
 		apply_eq(bus_index, &samples_bus);
 
 		{

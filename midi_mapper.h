@@ -32,6 +32,7 @@ public:
 	virtual void set_limiter_threshold(float value) = 0;
 	virtual void set_makeup_gain(float value) = 0;
 
+	virtual void set_stereo_width(unsigned bus_idx, float value) = 0;
 	virtual void set_treble(unsigned bus_idx, float value) = 0;
 	virtual void set_mid(unsigned bus_idx, float value) = 0;
 	virtual void set_bass(unsigned bus_idx, float value) = 0;
@@ -55,6 +56,7 @@ public:
 	virtual void highlight_limiter_threshold(bool highlight) = 0;
 	virtual void highlight_makeup_gain(bool highlight) = 0;
 
+	virtual void highlight_stereo_width(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_treble(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_mid(unsigned bus_idx, bool highlight) = 0;
 	virtual void highlight_bass(unsigned bus_idx, bool highlight) = 0;

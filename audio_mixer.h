@@ -142,6 +142,16 @@ public:
 		return locut_enabled[bus];
 	}
 
+	void set_stereo_width(unsigned bus_index, float width)
+	{
+		stereo_width[bus_index] = width;
+	}
+
+	float get_stereo_width(unsigned bus_index)
+	{
+		return stereo_width[bus_index];
+	}
+
 	void set_eq(unsigned bus_index, EQBand band, float db_gain)
 	{
 		assert(band >= 0 && band < NUM_EQ_BANDS);
@@ -289,6 +299,7 @@ public:
 		float fader_volume_db;
 		bool muted;
 		bool locut_enabled;
+		float stereo_width;
 		float eq_level_db[NUM_EQ_BANDS];
 		float gain_staging_db;
 		bool level_compressor_enabled;
@@ -317,7 +328,7 @@ private:
 	AudioDevice *find_audio_device(DeviceSpec device_spec);
 
 	void find_sample_src_from_device(const std::map<DeviceSpec, std::vector<float>> &samples_card, DeviceSpec device_spec, int source_channel, const float **srcptr, unsigned *stride);
-	void fill_audio_bus(const std::map<DeviceSpec, std::vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float *output);
+	void fill_audio_bus(const std::map<DeviceSpec, std::vector<float>> &samples_card, const InputMapping::Bus &bus, unsigned num_samples, float stereo_width, float *output);
 	void reset_resampler_mutex_held(DeviceSpec device_spec);
 	void apply_eq(unsigned bus_index, std::vector<float> *samples_bus);
 	void update_meters(const std::vector<float> &samples);
@@ -376,6 +387,7 @@ private:
 	std::atomic<float> fader_volume_db[MAX_BUSES] {{ 0.0f }};
 	std::atomic<bool> mute[MAX_BUSES] {{ false }};
 	float last_fader_volume_db[MAX_BUSES] { 0.0f };  // Under audio_mutex.
+	std::atomic<float> stereo_width[MAX_BUSES] {{ 0.0f }};  // Default 1.0f (is set in constructor).
 	std::atomic<float> eq_level_db[MAX_BUSES][NUM_EQ_BANDS] {{{ 0.0f }}};
 	float last_eq_level_db[MAX_BUSES][NUM_EQ_BANDS] {{ 0.0f }};
 

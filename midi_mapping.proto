@@ -24,6 +24,7 @@ message MIDIMappingBusProto {
 	// on a mixer), add a system for bus banks, like we have for controller banks.
 	// optional int32 bus_bank = 1;
 
+	optional MIDIControllerProto stereo_width = 37;
 	optional MIDIControllerProto treble = 2;
 	optional MIDIControllerProto mid = 3;
 	optional MIDIControllerProto bass = 4;
@@ -90,6 +91,7 @@ message MIDIMappingProto {
 	optional int32 num_controller_banks = 1 [default = 0];  // Max 5.
 
 	// Bus controller banks.
+	optional int32 stereo_width_bank = 19;
 	optional int32 treble_bank = 2;
 	optional int32 mid_bank = 3;
 	optional int32 bass_bank = 4;

@@ -66,6 +66,7 @@ public slots:
 	void gain_staging_knob_changed(unsigned bus_index, int value);
 	void final_makeup_gain_knob_changed(int value);
 	void cutoff_knob_changed(int value);
+	void stereo_width_knob_changed(unsigned bus_index, int value);
 	void eq_knob_changed(unsigned bus_index, EQBand band, int value);
 	void limiter_threshold_knob_changed(int value);
 	void compressor_threshold_knob_changed(unsigned bus_index, int value);
@@ -79,6 +80,7 @@ public slots:
 	void set_limiter_threshold(float value) override;
 	void set_makeup_gain(float value) override;
 
+	void set_stereo_width(unsigned bus_idx, float value) override;
 	void set_treble(unsigned bus_idx, float value) override;
 	void set_mid(unsigned bus_idx, float value) override;
 	void set_bass(unsigned bus_idx, float value) override;
@@ -100,6 +102,7 @@ public slots:
 	void highlight_limiter_threshold(bool highlight) override;
 	void highlight_makeup_gain(bool highlight) override;
 
+	void highlight_stereo_width(unsigned bus_idx, bool highlight) override;
 	void highlight_treble(unsigned bus_idx, bool highlight) override;
 	void highlight_mid(unsigned bus_idx, bool highlight) override;
 	void highlight_bass(unsigned bus_idx, bool highlight) override;
@@ -126,6 +129,7 @@ private:
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void closeEvent(QCloseEvent *event) override;
 	void update_cutoff_labels(float cutoff_hz);
+	void update_stereo_label(unsigned bus_index, int stereo_width_percent);
 	void update_eq_label(unsigned bus_index, EQBand band, float gain_db);
 	void setup_theme_menu();
 

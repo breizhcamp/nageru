@@ -270,6 +270,8 @@ void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 			value, bind(&ControllerReceiver::set_makeup_gain, receiver, _2));
 
 		// Bus controllers.
+		match_controller(controller, MIDIMappingBusProto::kStereoWidthFieldNumber, MIDIMappingProto::kStereoWidthBankFieldNumber,
+			value, bind(&ControllerReceiver::set_stereo_width, receiver, _1, _2));
 		match_controller(controller, MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber,
 			value, bind(&ControllerReceiver::set_treble, receiver, _1, _2));
 		match_controller(controller, MIDIMappingBusProto::kMidFieldNumber, MIDIMappingProto::kMidBankFieldNumber,
@@ -543,6 +545,8 @@ void MIDIMapper::update_highlights()
 
 	// Per-bus controllers.
 	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
+		receiver->highlight_stereo_width(bus_idx, has_active_controller(
+			bus_idx, MIDIMappingBusProto::kStereoWidthFieldNumber, MIDIMappingProto::kStereoWidthBankFieldNumber));
 		receiver->highlight_treble(bus_idx, has_active_controller(
 			bus_idx, MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber));
 		receiver->highlight_mid(bus_idx, has_active_controller(

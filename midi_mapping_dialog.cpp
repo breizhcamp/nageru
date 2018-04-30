@@ -29,6 +29,8 @@ using namespace google::protobuf;
 using namespace std;
 
 vector<MIDIMappingDialog::Control> per_bus_controllers = {
+	{ "Stereo width",             MIDIMappingBusProto::kStereoWidthFieldNumber,
+	                              MIDIMappingProto::kStereoWidthBankFieldNumber },
 	{ "Treble",                   MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber },
 	{ "Mid",                      MIDIMappingBusProto::kMidFieldNumber,    MIDIMappingProto::kMidBankFieldNumber },
 	{ "Bass",                     MIDIMappingBusProto::kBassFieldNumber,   MIDIMappingProto::kBassBankFieldNumber },

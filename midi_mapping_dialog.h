@@ -47,6 +47,7 @@ public:
 	void set_limiter_threshold(float value) override {}
 	void set_makeup_gain(float value) override {}
 
+	void set_stereo_width(unsigned bus_idx, float value) override {}
 	void set_treble(unsigned bus_idx, float value) override {}
 	void set_mid(unsigned bus_idx, float value) override {}
 	void set_bass(unsigned bus_idx, float value) override {}
@@ -68,6 +69,7 @@ public:
 	void highlight_limiter_threshold(bool highlight) override {}
 	void highlight_makeup_gain(bool highlight) override {}
 
+	void highlight_stereo_width(unsigned bus_idx, bool highlight) override {}
 	void highlight_treble(unsigned bus_idx, bool highlight) override {}
 	void highlight_mid(unsigned bus_idx, bool highlight) override {}
 	void highlight_bass(unsigned bus_idx, bool highlight) override {}

@@ -557,6 +557,7 @@ void MainWindow::setup_audio_expanded_view()
 		ui_audio_expanded_view->bus_desc_label->setFullText(
 			QString::fromStdString(get_bus_desc_label(mapping.buses[bus_index])));
 		audio_expanded_views[bus_index] = ui_audio_expanded_view;
+		update_stereo_label(bus_index, lrintf(100.0f * global_audio_mixer->get_stereo_width(bus_index)));
 		update_eq_label(bus_index, EQ_BAND_TREBLE, global_audio_mixer->get_eq(bus_index, EQ_BAND_TREBLE));
 		update_eq_label(bus_index, EQ_BAND_MID, global_audio_mixer->get_eq(bus_index, EQ_BAND_MID));
 		update_eq_label(bus_index, EQ_BAND_BASS, global_audio_mixer->get_eq(bus_index, EQ_BAND_BASS));
@@ -571,6 +572,9 @@ void MainWindow::setup_audio_expanded_view()
 			global_audio_mixer->set_locut_enabled(bus_index, state == Qt::Checked);
 			midi_mapper.refresh_lights();
 		});
+
+		connect(ui_audio_expanded_view->stereo_width_knob, &QDial::valueChanged,
+		        bind(&MainWindow::stereo_width_knob_changed, this, bus_index, _1));
 
 		connect(ui_audio_expanded_view->treble_knob, &QDial::valueChanged,
 		        bind(&MainWindow::eq_knob_changed, this, bus_index, EQ_BAND_TREBLE, _1));
@@ -805,12 +809,29 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
 	});
 }
 
+void MainWindow::stereo_width_knob_changed(unsigned bus_index, int value)
+{
+	float stereo_width = value * 0.01f;
+	global_audio_mixer->set_stereo_width(bus_index, stereo_width);
+
+	update_stereo_label(bus_index, value);
+}
+
 void MainWindow::eq_knob_changed(unsigned bus_index, EQBand band, int value)
 {
 	float gain_db = value * 0.1f;
 	global_audio_mixer->set_eq(bus_index, band, gain_db);
 
 	update_eq_label(bus_index, band, gain_db);
+}
+
+void MainWindow::update_stereo_label(unsigned bus_index, int stereo_width_percent)
+{
+	char buf[256];
+	snprintf(buf, sizeof(buf), "Stereo: %d%%", stereo_width_percent);
+
+	Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
+	view->stereo_width_label->setText(buf);
 }
 
 void MainWindow::update_eq_label(unsigned bus_index, EQBand band, float gain_db)
@@ -1098,6 +1119,11 @@ void MainWindow::set_makeup_gain(float value)
 	set_relative_value(ui->makeup_gain_knob, value);
 }
 
+void MainWindow::set_stereo_width(unsigned bus_idx, float value)
+{
+	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::stereo_width_knob, value);
+}
+
 void MainWindow::set_treble(unsigned bus_idx, float value)
 {
 	set_relative_value_if_exists(bus_idx, &Ui::AudioExpandedView::treble_knob, value);
@@ -1218,6 +1244,11 @@ void MainWindow::highlight_makeup_gain(bool highlight)
 		highlight_control(ui->makeup_gain_knob, highlight);
 		highlight_control(ui->makeup_gain_knob_2, highlight);
 	});
+}
+
+void MainWindow::highlight_stereo_width(unsigned bus_idx, bool highlight)
+{
+	highlight_control_if_exists(bus_idx, &Ui::AudioExpandedView::stereo_width_knob, highlight);
 }
 
 void MainWindow::highlight_treble(unsigned bus_idx, bool highlight)
