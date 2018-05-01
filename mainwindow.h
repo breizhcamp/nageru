@@ -129,6 +129,7 @@ private:
 	bool eventFilter(QObject *watched, QEvent *event) override;
 	void closeEvent(QCloseEvent *event) override;
 	void update_cutoff_labels(float cutoff_hz);
+	void update_stereo_knob_and_label(unsigned bus_index, int stereo_width_percent);
 	void update_stereo_label(unsigned bus_index, int stereo_width_percent);
 	void update_eq_label(unsigned bus_index, EQBand band, float gain_db);
 	void setup_theme_menu();

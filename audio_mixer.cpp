@@ -453,7 +453,10 @@ void AudioMixer::fill_audio_bus(const map<DeviceSpec, vector<float>> &samples_ca
 		//   L' = R - D
 		//   R' = L + D
 		float w = 0.5f * stereo_width + 0.5f;
-		if (fabs(w) < 1e-3) {
+		if (bus.source_channel[0] == bus.source_channel[1]) {
+			// Mono anyway, so no need to bother.
+			w = 1.0f;
+		} else if (fabs(w) < 1e-3) {
 			// Perfect inverse.
 			swap(lsrc, rsrc);
 			swap(lstride, rstride);
@@ -1172,6 +1175,20 @@ void AudioMixer::reset_peak(unsigned bus_index)
 		history.current_peak = 0.0f;
 		history.last_peak = 0.0f;
 		history.age_seconds = 0.0f;
+	}
+}
+
+bool AudioMixer::is_mono(unsigned bus_index)
+{
+	lock_guard<timed_mutex> lock(audio_mutex);
+	const InputMapping::Bus &bus = input_mapping.buses[bus_index];
+	if (bus.device.type == InputSourceType::SILENCE) {
+		return true;
+	} else {
+		assert(bus.device.type == InputSourceType::CAPTURE_CARD ||
+		       bus.device.type == InputSourceType::ALSA_INPUT ||
+		       bus.device.type == InputSourceType::FFMPEG_VIDEO_INPUT);
+		return bus.source_channel[0] == bus.source_channel[1];
 	}
 }
 

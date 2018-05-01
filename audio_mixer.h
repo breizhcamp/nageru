@@ -142,6 +142,8 @@ public:
 		return locut_enabled[bus];
 	}
 
+	bool is_mono(unsigned bus_index);
+
 	void set_stereo_width(unsigned bus_index, float width)
 	{
 		stereo_width[bus_index] = width;

@@ -557,7 +557,7 @@ void MainWindow::setup_audio_expanded_view()
 		ui_audio_expanded_view->bus_desc_label->setFullText(
 			QString::fromStdString(get_bus_desc_label(mapping.buses[bus_index])));
 		audio_expanded_views[bus_index] = ui_audio_expanded_view;
-		update_stereo_label(bus_index, lrintf(100.0f * global_audio_mixer->get_stereo_width(bus_index)));
+		update_stereo_knob_and_label(bus_index, lrintf(100.0f * global_audio_mixer->get_stereo_width(bus_index)));
 		update_eq_label(bus_index, EQ_BAND_TREBLE, global_audio_mixer->get_eq(bus_index, EQ_BAND_TREBLE));
 		update_eq_label(bus_index, EQ_BAND_MID, global_audio_mixer->get_eq(bus_index, EQ_BAND_MID));
 		update_eq_label(bus_index, EQ_BAND_BASS, global_audio_mixer->get_eq(bus_index, EQ_BAND_BASS));
@@ -825,13 +825,32 @@ void MainWindow::eq_knob_changed(unsigned bus_index, EQBand band, int value)
 	update_eq_label(bus_index, band, gain_db);
 }
 
+void MainWindow::update_stereo_knob_and_label(unsigned bus_index, int stereo_width_percent)
+{
+	Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
+
+	if (global_audio_mixer->is_mono(bus_index)) {
+		view->stereo_width_knob->setEnabled(false);
+		view->stereo_width_label->setEnabled(false);
+	} else {
+		view->stereo_width_knob->setEnabled(true);
+		view->stereo_width_label->setEnabled(true);
+	}
+	view->stereo_width_knob->setValue(stereo_width_percent);
+	update_stereo_label(bus_index, stereo_width_percent);
+}
+
 void MainWindow::update_stereo_label(unsigned bus_index, int stereo_width_percent)
 {
-	char buf[256];
-	snprintf(buf, sizeof(buf), "Stereo: %d%%", stereo_width_percent);
-
 	Ui::AudioExpandedView *view = audio_expanded_views[bus_index];
-	view->stereo_width_label->setText(buf);
+
+	if (global_audio_mixer->is_mono(bus_index)) {
+		view->stereo_width_label->setText("Mono");
+	} else {
+		char buf[256];
+		snprintf(buf, sizeof(buf), "Stereo: %d%%", stereo_width_percent);
+		view->stereo_width_label->setText(buf);
+	}
 }
 
 void MainWindow::update_eq_label(unsigned bus_index, EQBand band, float gain_db)
