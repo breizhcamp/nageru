@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
 	}
 
 	MainWindow mainWindow;
-	mainWindow.resize(QSize(1500, 850));
+	mainWindow.resize(QSize(1500, 910));
 	mainWindow.show();
 
 	app.installEventFilter(&mainWindow);  // For white balance color picking.
