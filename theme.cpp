@@ -1007,6 +1007,9 @@ void LiveInputWrapper::connect_signal_raw(int signal_num, const InputState &inpu
 		const PBOFrameAllocator::Userdata *userdata = (const PBOFrameAllocator::Userdata *)first_frame.frame->userdata;
 		width = userdata->last_width[first_frame.field_number];
 		height = userdata->last_height[first_frame.field_number];
+		if (userdata->last_interlaced) {
+			height *= 2;
+		}
 	}
 
 	movit::YCbCrLumaCoefficients ycbcr_coefficients = input_state.ycbcr_coefficients[signal_num];
