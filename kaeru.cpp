@@ -69,8 +69,7 @@ unique_ptr<Mux> create_mux(HTTPD *httpd, AVOutputFormat *oformat, X264Encoder *x
 	string video_extradata = x264_encoder->get_global_headers();
 
 	unique_ptr<Mux> mux;
-	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
-	mux.reset(new Mux(avctx, global_flags.width, global_flags.height, Mux::CODEC_H264, video_extradata, audio_encoder->get_codec_parameters().get(), time_base,
+	mux.reset(new Mux(avctx, global_flags.width, global_flags.height, Mux::CODEC_H264, video_extradata, audio_encoder->get_codec_parameters().get(), COARSE_TIMEBASE,
 	        /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, { &stream_mux_metrics }));
 	stream_mux_metrics.init({{ "destination", "http" }});
 	return mux;

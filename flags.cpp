@@ -116,8 +116,6 @@ void usage(Program program)
 		fprintf(stderr, "      --no-transcode-audio        copy encoded audio raw from the source stream\n");
 		fprintf(stderr, "                                    (requires --http-audio-codec= to be set)\n");
 	}
-	fprintf(stderr, "      --http-coarse-timebase      use less timebase for HTTP (recommended for muxers\n");
-	fprintf(stderr, "                                  that handle large pts poorly, like e.g. MP4)\n");
 	if (program == PROGRAM_NAGERU) {
 		fprintf(stderr, "      --flat-audio                start with most audio processing turned off\n");
 		fprintf(stderr, "                                    (can be overridden by e.g. --enable-limiter)\n");
@@ -189,7 +187,6 @@ void parse_flags(Program program, int argc, char * const argv[])
 		{ "x264-vbv-max-bitrate", required_argument, 0, OPTION_X264_VBV_MAX_BITRATE },
 		{ "x264-param", required_argument, 0, OPTION_X264_PARAM },
 		{ "http-mux", required_argument, 0, OPTION_HTTP_MUX },
-		{ "http-coarse-timebase", no_argument, 0, OPTION_HTTP_COARSE_TIMEBASE },
 		{ "http-audio-codec", required_argument, 0, OPTION_HTTP_AUDIO_CODEC },
 		{ "http-audio-bitrate", required_argument, 0, OPTION_HTTP_AUDIO_BITRATE },
 		{ "http-port", required_argument, 0, OPTION_HTTP_PORT },
@@ -291,9 +288,6 @@ void parse_flags(Program program, int argc, char * const argv[])
 			break;
 		case OPTION_HTTP_MUX:
 			global_flags.stream_mux_name = optarg;
-			break;
-		case OPTION_HTTP_COARSE_TIMEBASE:
-			global_flags.stream_coarse_timebase = true;
 			break;
 		case OPTION_HTTP_AUDIO_CODEC:
 			global_flags.stream_audio_codec_name = optarg;

@@ -193,8 +193,7 @@ void VideoEncoder::open_output_stream()
 		video_extradata = x264_encoder->get_global_headers();
 	}
 
-	int time_base = global_flags.stream_coarse_timebase ? COARSE_TIMEBASE : TIMEBASE;
-	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_codec_parameters().get(), time_base,
+	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_codec_parameters().get(), COARSE_TIMEBASE,
 		/*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, { &stream_mux_metrics }));
 	stream_mux_metrics.init({{ "destination", "http" }});
 }
