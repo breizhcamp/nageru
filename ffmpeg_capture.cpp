@@ -751,7 +751,7 @@ void FFmpegCapture::convert_audio(const AVFrame *audio_avframe, FrameAllocator::
 		}
 
 		av_opt_set_int(resampler, "in_channel_layout",  channel_layout,                             0);
-		av_opt_set_int(resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO,                        0);
+		av_opt_set_int(resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO_DOWNMIX,                0);
 		av_opt_set_int(resampler, "in_sample_rate",     av_frame_get_sample_rate(audio_avframe),    0);
 		av_opt_set_int(resampler, "out_sample_rate",    OUTPUT_FREQUENCY,                           0);
 		av_opt_set_int(resampler, "in_sample_fmt",      audio_avframe->format,                      0);
