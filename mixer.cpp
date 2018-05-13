@@ -685,18 +685,22 @@ int unwrap_timecode(uint16_t current_wrapped, int last)
 	}
 }
 
+DeviceSpec card_index_to_device(unsigned card_index, unsigned num_cards)
+{
+	if (card_index >= num_cards) {
+		return DeviceSpec{InputSourceType::FFMPEG_VIDEO_INPUT, card_index - num_cards};
+	} else {
+		return DeviceSpec{InputSourceType::CAPTURE_CARD, card_index};
+	}
+}
+
 }  // namespace
 
 void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
                      FrameAllocator::Frame video_frame, size_t video_offset, VideoFormat video_format,
 		     FrameAllocator::Frame audio_frame, size_t audio_offset, AudioFormat audio_format)
 {
-	DeviceSpec device;
-	if (card_index >= num_cards) {
-		device = DeviceSpec{InputSourceType::FFMPEG_VIDEO_INPUT, card_index - num_cards};
-	} else {
-		device = DeviceSpec{InputSourceType::CAPTURE_CARD, card_index};
-	}
+	DeviceSpec device = card_index_to_device(card_index, num_cards);
 	CaptureCard *card = &cards[card_index];
 
 	++card->metric_input_received_frames;
@@ -1024,6 +1028,7 @@ void Mixer::thread_func()
 		handle_hotplugged_cards();
 
 		for (unsigned card_index = 0; card_index < num_cards + num_video_inputs + num_html_inputs; ++card_index) {
+			DeviceSpec device = card_index_to_device(card_index, num_cards);
 			if (card_index == master_card_index || !has_new_frame[card_index]) {
 				continue;
 			}
@@ -1031,8 +1036,8 @@ void Mixer::thread_func()
 				++new_frames[card_index].dropped_frames;
 			}
 			if (new_frames[card_index].dropped_frames > 0) {
-				printf("Card %u dropped %d frames before this\n",
-					card_index, int(new_frames[card_index].dropped_frames));
+				printf("%s dropped %d frames before this\n",
+					spec_to_string(device).c_str(), int(new_frames[card_index].dropped_frames));
 			}
 		}
 
