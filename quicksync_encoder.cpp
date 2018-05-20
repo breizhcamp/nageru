@@ -2133,9 +2133,20 @@ int64_t QuickSyncEncoder::global_delay() const {
 
 string QuickSyncEncoder::get_usable_va_display()
 {
+	// Reduce the amount of chatter while probing,
+	// unless the user has specified otherwise.
+	bool need_env_reset = false;
+	if (getenv("LIBVA_MESSAGING_LEVEL") == nullptr) {
+		setenv("LIBVA_MESSAGING_LEVEL", "0", true);
+		need_env_reset = true;
+	}
+
 	// First try the default (ie., whatever $DISPLAY is set to).
 	unique_ptr<VADisplayWithCleanup> va_dpy = try_open_va("", nullptr, nullptr);
 	if (va_dpy != nullptr) {
+		if (need_env_reset) {
+			unsetenv("LIBVA_MESSAGING_LEVEL");
+		}
 		return "";
 	}
 
@@ -2154,6 +2165,9 @@ string QuickSyncEncoder::get_usable_va_display()
 				fprintf(stderr, "Autodetected %s as a suitable replacement; using it.\n",
 					path.c_str());
 				globfree(&g);
+				if (need_env_reset) {
+					unsetenv("LIBVA_MESSAGING_LEVEL");
+				}
 				return path;
 			}
 		}
