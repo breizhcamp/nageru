@@ -1,3 +1,14 @@
+Nageru 1.7.3, May 22nd, 2018
+
+  - When using multichannel audio, add a control for adjusting the
+    stereo width (from normal stereo to mono, all the way to
+    inverted stereo).
+
+  - Removed --http-coarse-timebase (it is now always on).
+
+  - Various bugfixes.
+
+
 Nageru 1.7.2, April 28th, 2018
 
   - Several improvements to video (FFmpeg) inputs: You can now use
