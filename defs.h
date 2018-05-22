@@ -4,7 +4,7 @@
 #include <libavformat/version.h>
 
 // This flag is only supported in FFmpeg 3.3 and up, and we only require 3.1.
-#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(57, 39, 100)
+#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(57, 71, 100)
 #define MUX_SKIP_TRAILER "+skip_trailer"
 #else
 #define MUX_SKIP_TRAILER ""
