@@ -62,7 +62,7 @@ public:
 	// will be added to.
 	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback, WriteStrategy write_strategy, const std::vector<MuxMetrics *> &metrics);
 	~Mux();
-	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational timebase = { 1, TIMEBASE });
+	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational timebase = { 1, TIMEBASE }, int stream_index_override = -1);
 
 	// As long as the mux is plugged, it will not actually write anything to disk,
 	// just queue the packets. Once it is unplugged, the packets are reordered by pts

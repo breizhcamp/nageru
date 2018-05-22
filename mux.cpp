@@ -145,7 +145,7 @@ Mux::~Mux()
 	avformat_free_context(avctx);
 }
 
-void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational timebase)
+void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational timebase, int stream_index_override)
 {
 	AVPacket pkt_copy;
 	av_init_packet(&pkt_copy);
@@ -153,11 +153,14 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational t
 		fprintf(stderr, "av_copy_packet() failed\n");
 		exit(1);
 	}
-	if (pkt.stream_index == 0) {
+	if (stream_index_override != -1) {
+		pkt_copy.stream_index = stream_index_override;
+	}
+	if (pkt_copy.stream_index == 0) {
 		pkt_copy.pts = av_rescale_q(pts, timebase, avstream_video->time_base);
 		pkt_copy.dts = av_rescale_q(dts, timebase, avstream_video->time_base);
 		pkt_copy.duration = av_rescale_q(pkt.duration, timebase, avstream_video->time_base);
-	} else if (pkt.stream_index == 1) {
+	} else if (pkt_copy.stream_index == 1) {
 		pkt_copy.pts = av_rescale_q(pts, timebase, avstream_audio->time_base);
 		pkt_copy.dts = av_rescale_q(dts, timebase, avstream_audio->time_base);
 		pkt_copy.duration = av_rescale_q(pkt.duration, timebase, avstream_audio->time_base);

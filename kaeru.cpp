@@ -129,7 +129,7 @@ void video_frame_callback(FFmpegCapture *video, X264Encoder *x264_encoder, Audio
 
 void audio_frame_callback(Mux *mux, const AVPacket *pkt, AVRational timebase)
 {
-	mux->add_packet(*pkt, pkt->pts, pkt->dts == AV_NOPTS_VALUE ? pkt->pts : pkt->dts, timebase);
+	mux->add_packet(*pkt, pkt->pts, pkt->dts == AV_NOPTS_VALUE ? pkt->pts : pkt->dts, timebase, /*stream_index=*/1);
 }
 
 void adjust_bitrate(int signal)
