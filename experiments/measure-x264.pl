@@ -11,7 +11,7 @@ use Time::HiRes;
 my $ssim_mode = 1;
 my $output_cpp = 1;
 my $flags = "--bitrate 4000 --frames 1000";
-my $override_flags = "--weightp 1 --mbtree --rc-lookahead 20";
+my $override_flags = "--weightp 1 --mbtree --rc-lookahead 20 --b-adapt 1 --bframes 3";
 my $file = "elephants_dream_1080p24.y4m";  # https://media.xiph.org/video/derf/y4m/elephants_dream_1080p24.y4m
 
 if ($ssim_mode) {
@@ -107,25 +107,15 @@ sub output_cpp {
 	push @partitions, 'P4' if ($partitions_hex & 0x0020);
 	my $partitions = join('|', @partitions);
 
-	$raw =~ /bframes=(\d+)/ or die;
-	my $bframes = $1;
-
-	my ($badapt, $direct);
-	if ($bframes > 0) {
-		$raw =~ /b_adapt=(\d+)/ or die;
-		$badapt = $1;
-		$raw =~ /direct=(\d+)/ or die;
-		$direct = $1;
-	} else {
-		$badapt = $direct = 0;
-	}
+	$raw =~ /direct=(\d+)/ or die;
+	my $direct = $1;
 
 	$raw =~ /me_range=(\d+)/ or die;
 	my $merange = $1;
 
 	print "\n";
 	print "\t// Preset $preset_num: ${ssim}db, $preset\n";
-	print "\t{ .time= 0.000, .subme=$subme, .me=$me, .refs=$refs, .mix=$mix, .trellis=$trellis, .partitions=$partitions, .badapt=$badapt, .bframes=$bframes, .direct=$direct, .merange=$merange },\n";
+	print "\t{ .time= 0.000, .subme=$subme, .me=$me, .refs=$refs, .mix=$mix, .trellis=$trellis, .partitions=$partitions, .direct=$direct, .merange=$merange },\n";
 
 #x264 - core 148 r2705 3f5ed56 - H.264/MPEG-4 AVC codec - Copyleft 2003-2016 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=34 lookahead_threads=5 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=24 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
 }

@@ -1,4 +1,3 @@
---preset superfast --b-adapt 0 --bframes 0
 --preset superfast
 --preset superfast --subme 2
 --preset veryfast
@@ -15,11 +14,10 @@
 --preset medium --subme 8 --trellis 2
 --preset medium --subme 8 --trellis 2 --direct auto
 --preset slow
---preset slow --b-adapt 2 --subme 9
---preset slow --b-adapt 2 --subme 9 --me umh
---preset slow --b-adapt 2 --subme 9 --me umh --ref 6
---preset slow --b-adapt 2 --subme 9 --me umh --ref 7
+--preset slow --subme 9
+--preset slow --subme 9 --me umh
+--preset slow --subme 9 --me umh --ref 6
+--preset slow --subme 9 --me umh --ref 7
 --preset slower
 --preset slower --subme 10
---preset slower --subme 10 --bframes 8
 --preset veryslow

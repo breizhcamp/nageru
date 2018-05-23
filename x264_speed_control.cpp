@@ -16,7 +16,7 @@
 using namespace std;
 using namespace std::chrono;
 
-#define SC_PRESETS 25
+#define SC_PRESETS 23
 
 X264SpeedControl::X264SpeedControl(x264_t *x264, float f_speed, int i_buffer_size, float f_buffer_init)
 	: dyn(load_x264_for_bit_depth(global_flags.x264_bit_depth)),
@@ -71,18 +71,16 @@ typedef struct
 	int mix;
 	int trellis;
 	int partitions;
-	int badapt;
-	int bframes;
 	int direct;
 	int merange;
 } sc_preset_t;
 
 // The actual presets, including the equivalent commandline options. Note that
 // all presets are benchmarked with --weightp 1 --mbtree --rc-lookahead 20
-// on top of the given settings (equivalent settings to the "faster" preset).
-// Timings and SSIM measurements were done on a quadcore Haswell i5 3.2 GHz
-// on the first 1000 frames of "Elephants Dream" in 1080p.
-// See experiments/measure-x264.pl for a way to reproduce.
+// --b-adapt 1 --bframes 3 on top of the given settings (equivalent settings to
+// the "faster" preset). Timings and SSIM measurements were done on a four cores
+// of a 6-core Coffee Lake i5 2.8 GHz on the first 1000 frames of “Elephants
+// Dream” in 1080p. See experiments/measure-x264.pl for a way to reproduce.
 //
 // Note that the two first and the two last are also used for extrapolation
 // should the desired time be outside the range. Thus, it is disadvantageous if
@@ -93,80 +91,76 @@ static const sc_preset_t presets[SC_PRESETS] = {
 #define P4 X264_ANALYSE_PSUB8x8
 #define P8 X264_ANALYSE_PSUB16x16
 #define B8 X264_ANALYSE_BSUB16x16
-	// Preset 0: 16.583db, --preset superfast --b-adapt 0 --bframes 0
-	{ .time= 1.000, .subme=1, .me=X264_ME_DIA, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4, .badapt=0, .bframes=0, .direct=0, .merange=16 },
 
-	// Preset 1: 17.386db, --preset superfast
-	{ .time= 1.288, .subme=1, .me=X264_ME_DIA, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 0: 17.386db, --preset superfast
+	{ .time= 1.000, .subme=1, .me=X264_ME_DIA, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4, .direct=1, .merange=16 },
 
-	// Preset 2: 17.919db, --preset superfast --subme 2
-	{ .time= 2.231, .subme=2, .me=X264_ME_DIA, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 1: 17.919db, --preset superfast --subme 2
+	{ .time= 1.707, .subme=2, .me=X264_ME_DIA, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4, .direct=1, .merange=16 },
 
-	// Preset 3: 18.051db, --preset veryfast
-	{ .time= 2.403, .subme=2, .me=X264_ME_HEX, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 2: 18.051db, --preset veryfast
+	{ .time= 1.832, .subme=2, .me=X264_ME_HEX, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 4: 18.422db, --preset veryfast --subme 3
-	{ .time= 2.636, .subme=3, .me=X264_ME_HEX, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 3: 18.422db, --preset veryfast --subme 3
+	{ .time= 1.853, .subme=3, .me=X264_ME_HEX, .refs=1, .mix=0, .trellis=0, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 5: 18.514db, --preset veryfast --subme 3 --ref 2
-	{ .time= 2.844, .subme=3, .me=X264_ME_HEX, .refs=2, .mix=0, .trellis=0, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 4: 18.514db, --preset veryfast --subme 3 --ref 2
+	{ .time= 1.925, .subme=3, .me=X264_ME_HEX, .refs=2, .mix=0, .trellis=0, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 6: 18.564db, --preset veryfast --subme 4 --ref 2
-	{ .time= 3.366, .subme=4, .me=X264_ME_HEX, .refs=2, .mix=0, .trellis=0, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 5: 18.564db, --preset veryfast --subme 4 --ref 2
+	{ .time= 2.111, .subme=4, .me=X264_ME_HEX, .refs=2, .mix=0, .trellis=0, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 7: 18.411db, --preset faster
-	{ .time= 3.450, .subme=4, .me=X264_ME_HEX, .refs=2, .mix=0, .trellis=1, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 6: 18.411db, --preset faster
+	{ .time= 2.240, .subme=4, .me=X264_ME_HEX, .refs=2, .mix=0, .trellis=1, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 8: 18.429db, --preset faster --mixed-refs
-	{ .time= 3.701, .subme=4, .me=X264_ME_HEX, .refs=2, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 7: 18.429db, --preset faster --mixed-refs
+	{ .time= 2.414, .subme=4, .me=X264_ME_HEX, .refs=2, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 9: 18.454db, --preset faster --mixed-refs --subme 5
-	{ .time= 4.297, .subme=5, .me=X264_ME_HEX, .refs=2, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 8: 18.454db, --preset faster --mixed-refs --subme 5
+	{ .time= 2.888, .subme=5, .me=X264_ME_HEX, .refs=2, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 10: 18.528db, --preset fast
-	{ .time= 5.181, .subme=6, .me=X264_ME_HEX, .refs=2, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 9: 18.528db, --preset fast
+	{ .time= 3.570, .subme=6, .me=X264_ME_HEX, .refs=2, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 11: 18.762db, --preset fast --subme 7
-	{ .time= 5.357, .subme=7, .me=X264_ME_HEX, .refs=2, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 10: 18.762db, --preset fast --subme 7
+	{ .time= 3.698, .subme=7, .me=X264_ME_HEX, .refs=2, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 12: 18.819db, --preset medium
-	{ .time= 6.040, .subme=7, .me=X264_ME_HEX, .refs=3, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 11: 18.819db, --preset medium
+	{ .time= 4.174, .subme=7, .me=X264_ME_HEX, .refs=3, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 13: 18.889db, --preset medium --subme 8
-	{ .time= 7.408, .subme=8, .me=X264_ME_HEX, .refs=3, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 12: 18.889db, --preset medium --subme 8
+	{ .time= 5.155, .subme=8, .me=X264_ME_HEX, .refs=3, .mix=1, .trellis=1, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 14: 19.127db, --preset medium --subme 8 --trellis 2
-	{ .time=10.124, .subme=8, .me=X264_ME_HEX, .refs=3, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=1, .merange=16 },
+	// Preset 13: 19.127db, --preset medium --subme 8 --trellis 2
+	{ .time= 7.237, .subme=8, .me=X264_ME_HEX, .refs=3, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .direct=1, .merange=16 },
 
-	// Preset 15: 19.118db, --preset medium --subme 8 --trellis 2 --direct auto
-	{ .time=10.144, .subme=8, .me=X264_ME_HEX, .refs=3, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=3, .merange=16 },
+	// Preset 14: 19.118db, --preset medium --subme 8 --trellis 2 --direct auto
+	{ .time= 7.240, .subme=8, .me=X264_ME_HEX, .refs=3, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .direct=3, .merange=16 },
 
-	// Preset 16: 19.172db, --preset slow
-	{ .time=11.142, .subme=8, .me=X264_ME_HEX, .refs=5, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .badapt=1, .bframes=3, .direct=3, .merange=16 },
+	// Preset 15: 19.172db, --preset slow
+	{ .time= 7.910, .subme=8, .me=X264_ME_HEX, .refs=5, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .direct=3, .merange=16 },
 
-	// Preset 17: 19.309db, --preset slow --b-adapt 2 --subme 9
-	{ .time=11.168, .subme=9, .me=X264_ME_HEX, .refs=5, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .badapt=2, .bframes=3, .direct=3, .merange=16 },
+	// Preset 16: 19.208db, --preset slow --subme 9
+	{ .time= 8.091, .subme=9, .me=X264_ME_HEX, .refs=5, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .direct=3, .merange=16 },
 
-	// Preset 18: 19.316db, --preset slow --b-adapt 2 --subme 9 --me umh
-	{ .time=12.942, .subme=9, .me=X264_ME_UMH, .refs=5, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .badapt=2, .bframes=3, .direct=3, .merange=16 },
+	// Preset 17: 19.216db, --preset slow --subme 9 --me umh
+	{ .time= 9.539, .subme=9, .me=X264_ME_UMH, .refs=5, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .direct=3, .merange=16 },
 
-	// Preset 19: 19.342db, --preset slow --b-adapt 2 --subme 9 --me umh --ref 6
-	{ .time=14.302, .subme=9, .me=X264_ME_UMH, .refs=6, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .badapt=2, .bframes=3, .direct=3, .merange=16 },
+	// Preset 18: 19.253db, --preset slow --subme 9 --me umh --ref 6
+	{ .time=10.521, .subme=9, .me=X264_ME_UMH, .refs=6, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .direct=3, .merange=16 },
 
-	// Preset 20: 19.365db, --preset slow --b-adapt 2 --subme 9 --me umh --ref 7
-	{ .time=15.554, .subme=9, .me=X264_ME_UMH, .refs=7, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .badapt=2, .bframes=3, .direct=3, .merange=16 },
+	// Preset 19: 19.275db, --preset slow --subme 9 --me umh --ref 7
+	{ .time=11.461, .subme=9, .me=X264_ME_UMH, .refs=7, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8, .direct=3, .merange=16 },
 
-	// Preset 21: 19.396db, --preset slower
-	{ .time=17.551, .subme=9, .me=X264_ME_UMH, .refs=8, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8|P4, .badapt=2, .bframes=3, .direct=3, .merange=16 },
+	// Preset 20: 19.314db, --preset slower
+	{ .time=13.145, .subme=9, .me=X264_ME_UMH, .refs=8, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8|P4, .direct=3, .merange=16 },
 
-	// Preset 22: 19.491db, --preset slower --subme 10
-	{ .time=21.321, .subme=10, .me=X264_ME_UMH, .refs=8, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8|P4, .badapt=2, .bframes=3, .direct=3, .merange=16 },
+	// Preset 21: 19.407db, --preset slower --subme 10
+	{ .time=16.386, .subme=10, .me=X264_ME_UMH, .refs=8, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8|P4, .direct=3, .merange=16 },
 
-	// Preset 23: 19.764db, --preset slower --subme 10 --bframes 8
-	{ .time=23.200, .subme=10, .me=X264_ME_UMH, .refs=8, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8|P4, .badapt=2, .bframes=8, .direct=3, .merange=16 },
+	// Preset 22: 19.483db, --preset veryslow
+	{ .time=26.861, .subme=10, .me=X264_ME_UMH, .refs=16, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8|P4, .direct=3, .merange=24 },
 
-	// Preset 24: 19.807db, --preset veryslow
-	{ .time=36.922, .subme=10, .me=X264_ME_UMH, .refs=16, .mix=1, .trellis=2, .partitions=I8|I4|P8|B8|P4, .badapt=2, .bframes=8, .direct=3, .merange=24 },
 #undef I4
 #undef I8
 #undef P4
@@ -324,8 +318,6 @@ void X264SpeedControl::apply_preset(int new_preset)
 	dyn.x264_encoder_parameters(x264, &p);
 
 	p.i_frame_reference = s->refs;
-	p.i_bframe_adaptive = s->badapt;
-	p.i_bframe = s->bframes;
 	p.analyse.inter = s->partitions;
 	p.analyse.i_subpel_refine = s->subme;
 	p.analyse.i_me_method = s->me;
