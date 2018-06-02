@@ -301,6 +301,9 @@ MainWindow::MainWindow()
 	}
 	midi_mapper.refresh_highlights();
 	midi_mapper.refresh_lights();
+	if (global_flags.fullscreen) {
+		QMainWindow::showFullScreen();
+	}
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event)

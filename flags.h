@@ -66,6 +66,7 @@ struct Flags {
 	int x264_bit_depth = 8;  // Not user-settable.
 	bool use_zerocopy = false;  // Not user-settable.
 	bool can_disable_srgb_decoder = false;  // Not user-settable.
+	bool fullscreen = false;
 };
 extern Flags global_flags;
 

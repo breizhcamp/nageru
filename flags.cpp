@@ -14,6 +14,7 @@ Flags global_flags;
 // Long options that have no corresponding short option.
 enum LongOption {
 	OPTION_HELP = 1000,
+	OPTION_FULLSCREEN,
 	OPTION_MULTICHANNEL,
 	OPTION_MIDI_MAPPING,
 	OPTION_DEFAULT_HDMI_INPUT,
@@ -73,6 +74,9 @@ void usage(Program program)
 	}
 	fprintf(stderr, "\n");
 	fprintf(stderr, "      --help                      print usage information\n");
+	if (program == PROGRAM_NAGERU) {
+		fprintf(stderr, "      --fullscreen                run in full screen, with no decorations\n");
+	}
 	fprintf(stderr, "  -w, --width                     output width in pixels (default 1280)\n");
 	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
 	if (program == PROGRAM_NAGERU) {
@@ -163,6 +167,7 @@ void parse_flags(Program program, int argc, char * const argv[])
 {
 	static const option long_options[] = {
 		{ "help", no_argument, 0, OPTION_HELP },
+		{ "fullscreen", no_argument, 0, OPTION_FULLSCREEN },
 		{ "width", required_argument, 0, 'w' },
 		{ "height", required_argument, 0, 'h' },
 		{ "num-cards", required_argument, 0, 'c' },
@@ -473,6 +478,9 @@ void parse_flags(Program program, int argc, char * const argv[])
 			global_flags.ycbcr_interpretation[card_num] = interpretation;
 			break;
 		}
+		case OPTION_FULLSCREEN:
+			global_flags.fullscreen = true;
+			break;
 		case OPTION_HELP:
 			usage(program);
 			exit(0);
