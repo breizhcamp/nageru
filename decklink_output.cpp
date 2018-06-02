@@ -115,8 +115,10 @@ bool DeckLinkOutput::set_device(IDeckLink *decklink)
 
 	// HDMI or SDI generally mean “both HDMI and SDI at the same time” on DeckLink cards
 	// that support both; pick_default_video_connection() will generally pick one of those
-	// if they exist. We're not very likely to need analog outputs, so we don't need a way
-	// to change beyond that.
+	// if they exist. (--prefer-hdmi-input would also affect the selection despite the name
+	// of the option, but since either generally means both, it's inconsequential.)
+	// We're not very likely to need analog outputs, so we don't need a way to change
+	// beyond that.
 	video_connection = pick_default_video_connection(decklink, BMDDeckLinkVideoOutputConnections, card_index);
 	return true;
 }

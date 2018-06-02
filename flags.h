@@ -46,6 +46,7 @@ struct Flags {
 	bool multichannel_mapping_mode = false;  // Implicitly true if input_mapping_filename is nonempty.
 	std::string input_mapping_filename;  // Empty for none.
 	std::string midi_mapping_filename;  // Empty for none.
+	bool default_hdmi_input = false;
 	bool print_video_latency = false;
 	double audio_queue_length_ms = 100.0;
 	bool ycbcr_rec709_coefficients = false;  // Will be overridden by HDMI/SDI output if ycbcr_auto_coefficients == true.

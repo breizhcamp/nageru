@@ -4,6 +4,7 @@
 #include <assert.h>
 
 #include "decklink_util.h"
+#include "flags.h"
 
 using namespace bmusb;
 using namespace std;
@@ -72,15 +73,18 @@ BMDVideoConnection pick_default_video_connection(IDeckLink *card, BMDDeckLinkAtt
 		if (attribute_id == BMDDeckLinkVideoInputConnections) {
 			fprintf(stderr, "Card %u has no input connections\n", card_index);
 		} else {
-			fprintf(stderr, "Card %u has no outpu connectionss\n", card_index);
+			fprintf(stderr, "Card %u has no output connections\n", card_index);
 		}
 		exit(1);
 	}
 
-	if (connection_mask & bmdVideoConnectionHDMI) {
+	if ((connection_mask & bmdVideoConnectionHDMI) &&
+	    global_flags.default_hdmi_input) {
 		return bmdVideoConnectionHDMI;
 	} else if (connection_mask & bmdVideoConnectionSDI) {
 		return bmdVideoConnectionSDI;
+	} else if (connection_mask & bmdVideoConnectionHDMI) {
+		return bmdVideoConnectionHDMI;
 	} else {
 		// Fallback: Return lowest-set bit, whatever that might be.
 		return connection_mask & (-connection_mask);
