@@ -62,7 +62,7 @@ OBJS += chroma_subsampler.o v210_converter.o mixer.o basic_stats.o metrics.o pbo
 OBJS += quicksync_encoder.o x264_encoder.o x264_dynamic.o x264_speed_control.o video_encoder.o metacube2.o mux.o audio_encoder.o ffmpeg_raii.o ffmpeg_util.o json.pb.o
 
 # DeckLink
-OBJS += decklink_capture.o decklink_util.o decklink_output.o decklink/DeckLinkAPIDispatch.o
+OBJS += decklink_capture.o decklink_util.o decklink_output.o memcpy_interleaved.o decklink/DeckLinkAPIDispatch.o
 
 KAERU_OBJS = kaeru.o x264_encoder.o mux.o basic_stats.o metrics.o flags.o audio_encoder.o x264_speed_control.o print_latency.o x264_dynamic.o ffmpeg_raii.o ref_counted_frame.o ffmpeg_capture.o ffmpeg_util.o httpd.o json.pb.o metacube2.o
 
