@@ -1,0 +1,7 @@
+*.d
+*.o
+*.pb.h
+*.pb.cc
+*.moc.cpp
+futatabi
+frames/*.jpeg
