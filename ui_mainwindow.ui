@@ -17,32 +17,32 @@
    <widget class="QWidget" name="gridLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>20</x>
+      <x>10</x>
       <y>20</y>
-      <width>381</width>
-      <height>211</height>
+      <width>391</width>
+      <height>291</height>
      </rect>
     </property>
     <layout class="QGridLayout" name="gridLayout_2">
      <item row="0" column="1">
-      <widget class="QGraphicsView" name="input2_display"/>
+      <widget class="JPEGFrameView" name="input2_display"/>
      </item>
      <item row="0" column="0">
-      <widget class="QGraphicsView" name="input1_display"/>
+      <widget class="JPEGFrameView" name="input1_display"/>
      </item>
      <item row="1" column="0">
-      <widget class="QGraphicsView" name="input3_display"/>
+      <widget class="JPEGFrameView" name="input3_display"/>
      </item>
      <item row="1" column="1">
-      <widget class="QGraphicsView" name="input4_display"/>
+      <widget class="JPEGFrameView" name="input4_display"/>
      </item>
     </layout>
    </widget>
    <widget class="QLabel" name="label">
     <property name="geometry">
      <rect>
-      <x>90</x>
-      <y>240</y>
+      <x>70</x>
+      <y>320</y>
       <width>261</width>
       <height>17</height>
      </rect>
@@ -57,7 +57,7 @@
    <widget class="QGraphicsView" name="preview_display">
     <property name="geometry">
      <rect>
-      <x>410</x>
+      <x>430</x>
       <y>20</y>
       <width>281</width>
       <height>192</height>
@@ -67,7 +67,7 @@
    <widget class="QGraphicsView" name="live_display">
     <property name="geometry">
      <rect>
-      <x>705</x>
+      <x>730</x>
       <y>20</y>
       <width>291</width>
       <height>192</height>
@@ -78,7 +78,7 @@
     <property name="geometry">
      <rect>
       <x>470</x>
-      <y>240</y>
+      <y>230</y>
       <width>191</width>
       <height>17</height>
      </rect>
@@ -93,7 +93,7 @@
    <widget class="QLabel" name="label_3">
     <property name="geometry">
      <rect>
-      <x>760</x>
+      <x>770</x>
       <y>230</y>
       <width>191</width>
       <height>17</height>
@@ -108,6 +108,13 @@
    </widget>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>JPEGFrameView</class>
+   <extends>QGraphicsView</extends>
+   <header>jpeg_frame_view.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

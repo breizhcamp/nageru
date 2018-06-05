@@ -17,6 +17,8 @@ extern "C" {
 
 #include "mainwindow.h"
 #include "ffmpeg_raii.h"
+#include "post_to_main_thread.h"
+#include "ui_mainwindow.h"
 
 #define MAX_STREAMS 16
 
@@ -77,6 +79,14 @@ int thread_func()
 		}
 		fwrite(pkt.data, pkt.size, 1, fp);
 		fclose(fp);
+
+		post_to_main_thread([pkt] {
+			if (pkt.stream_index == 0) {
+				global_mainwindow->ui->input1_display->setFrame(pkt.stream_index, pkt.pts);
+			} else if (pkt.stream_index == 1) {
+				global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, pkt.pts);
+			}
+		});
 
 		assert(pkt.stream_index < MAX_STREAMS);
 		frames[pkt.stream_index].push_back(pkt.pts);

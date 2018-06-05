@@ -16,7 +16,7 @@ class MainWindow : public QMainWindow
 public:
 	MainWindow();
 
-private:
+//private:
 	Ui::MainWindow *ui;
 };
 
