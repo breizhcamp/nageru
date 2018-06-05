@@ -6,7 +6,7 @@ CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthr
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lavformat -lavcodec -lavutil -lswscale
 
 # Qt objects
-OBJS_WITH_MOC = 
+OBJS_WITH_MOC = mainwindow.o
 OBJS += $(OBJS_WITH_MOC)
 OBJS += $(OBJS_WITH_MOC:.o=.moc.o) 
 
@@ -26,6 +26,8 @@ OBJS += ffmpeg_raii.o main.o
 	moc $< -o $@
 
 all: futatabi
+
+mainwindow.o: ui_mainwindow.h
 
 futatabi: $(OBJS) $(CEF_LIBS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)

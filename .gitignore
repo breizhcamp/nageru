@@ -3,5 +3,7 @@
 *.pb.h
 *.pb.cc
 *.moc.cpp
+ui_*.h
 futatabi
 frames/*.jpeg
+.ycm_extra_conf.py
