@@ -14,98 +14,93 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QWidget" name="gridLayoutWidget">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>20</y>
-      <width>391</width>
-      <height>291</height>
-     </rect>
-    </property>
-    <layout class="QGridLayout" name="gridLayout_2">
-     <item row="0" column="1">
-      <widget class="JPEGFrameView" name="input2_display"/>
-     </item>
-     <item row="0" column="0">
-      <widget class="JPEGFrameView" name="input1_display"/>
-     </item>
-     <item row="1" column="0">
-      <widget class="JPEGFrameView" name="input3_display"/>
-     </item>
-     <item row="1" column="1">
-      <widget class="JPEGFrameView" name="input4_display"/>
-     </item>
-    </layout>
-   </widget>
-   <widget class="QLabel" name="label">
-    <property name="geometry">
-     <rect>
-      <x>70</x>
-      <y>320</y>
-      <width>261</width>
-      <height>17</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Current inputs</string>
-    </property>
-    <property name="alignment">
-     <set>Qt::AlignCenter</set>
-    </property>
-   </widget>
-   <widget class="QGraphicsView" name="preview_display">
-    <property name="geometry">
-     <rect>
-      <x>430</x>
-      <y>20</y>
-      <width>281</width>
-      <height>192</height>
-     </rect>
-    </property>
-   </widget>
-   <widget class="QGraphicsView" name="live_display">
-    <property name="geometry">
-     <rect>
-      <x>730</x>
-      <y>20</y>
-      <width>291</width>
-      <height>192</height>
-     </rect>
-    </property>
-   </widget>
-   <widget class="QLabel" name="label_2">
-    <property name="geometry">
-     <rect>
-      <x>470</x>
-      <y>230</y>
-      <width>191</width>
-      <height>17</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Preview output</string>
-    </property>
-    <property name="alignment">
-     <set>Qt::AlignCenter</set>
-    </property>
-   </widget>
-   <widget class="QLabel" name="label_3">
-    <property name="geometry">
-     <rect>
-      <x>770</x>
-      <y>230</y>
-      <width>191</width>
-      <height>17</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Current output</string>
-    </property>
-    <property name="alignment">
-     <set>Qt::AlignCenter</set>
-    </property>
-   </widget>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <widget class="QWidget" name="horizontalLayoutWidget">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <layout class="QGridLayout" name="gridLayout_2">
+            <item row="1" column="0">
+             <widget class="JPEGFrameView" name="input3_display"/>
+            </item>
+            <item row="0" column="1">
+             <widget class="JPEGFrameView" name="input2_display"/>
+            </item>
+            <item row="1" column="1">
+             <widget class="JPEGFrameView" name="input4_display"/>
+            </item>
+            <item row="0" column="0">
+             <widget class="JPEGFrameView" name="input1_display"/>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="label">
+            <property name="text">
+             <string>Current inputs</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <item>
+           <widget class="QGraphicsView" name="preview_display"/>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_2">
+            <property name="text">
+             <string>Preview output</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <item>
+           <widget class="QGraphicsView" name="live_display"/>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_3">
+            <property name="text">
+             <string>Current output</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="verticalLayoutWidget_4">
+       <layout class="QVBoxLayout" name="verticalLayout_4">
+        <item>
+         <widget class="QTableView" name="tableView"/>
+        </item>
+        <item>
+         <widget class="QTableView" name="tableView_2"/>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
   </widget>
  </widget>
  <customwidgets>
