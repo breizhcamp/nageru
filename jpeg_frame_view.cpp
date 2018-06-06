@@ -1,5 +1,7 @@
 #include "jpeg_frame_view.h"
 
+#include "post_to_main_thread.h"
+
 #include <QGraphicsPixmapItem>
 #include <QPixmap>
 
@@ -15,13 +17,26 @@ JPEGFrameView::JPEGFrameView(QWidget *parent)
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 }
 
-void JPEGFrameView::update()
+void JPEGFrameView::update_frame()
 {
-	item.setPixmap(QPixmap(QString::fromStdString(filename_for_frame(stream_idx, pts))));
-	fitInView(&item, Qt::KeepAspectRatio);
+	dirty = true;
+	post_to_main_thread([this]{
+		hide();
+		show();
+	});
 }
 
 void JPEGFrameView::resizeEvent(QResizeEvent *event)
 {
 	fitInView(&item, Qt::KeepAspectRatio);
+}
+
+void JPEGFrameView::paintEvent(QPaintEvent *event)
+{
+	if (dirty) {
+		dirty = false;
+		item.setPixmap(QPixmap(QString::fromStdString(filename_for_frame(stream_idx, pts))));
+		fitInView(&item, Qt::KeepAspectRatio);
+	}
+	QGraphicsView::paintEvent(event);
 }
