@@ -53,11 +53,13 @@ int main(int argc, char **argv)
 
 int thread_func()
 {
-	auto format_ctx = avformat_open_input_unique("example.mp4", nullptr, nullptr);
+	auto format_ctx = avformat_open_input_unique("multiangle.mp4", nullptr, nullptr);
 	if (format_ctx == nullptr) {
 		fprintf(stderr, "%s: Error opening file\n", "example.mp4");
 		return 1;
 	}
+
+	int64_t last_pts = -1;
 
 	for ( ;; ) {
 		AVPacket pkt;
@@ -85,13 +87,19 @@ int thread_func()
 				global_mainwindow->ui->input1_display->setFrame(pkt.stream_index, pkt.pts);
 			} else if (pkt.stream_index == 1) {
 				global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, pkt.pts);
+			} else if (pkt.stream_index == 2) {
+				global_mainwindow->ui->input3_display->setFrame(pkt.stream_index, pkt.pts);
 			}
 		});
 
 		assert(pkt.stream_index < MAX_STREAMS);
 		frames[pkt.stream_index].push_back(pkt.pts);
 
-		this_thread::sleep_for(milliseconds(1000) / 120);
+		// Hack. Assumes a given timebase.
+		if (last_pts != -1) {
+			this_thread::sleep_for(microseconds((pkt.pts - last_pts) * 1000000 / 12800));
+		}
+		last_pts = pkt.pts;
 	}
 
 	return 0;

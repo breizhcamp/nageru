@@ -91,10 +91,72 @@
       <widget class="QWidget" name="verticalLayoutWidget_4">
        <layout class="QVBoxLayout" name="verticalLayout_4">
         <item>
-         <widget class="QTableView" name="tableView"/>
+         <widget class="QTableWidget" name="clip_list">
+          <column>
+           <property name="text">
+            <string>In</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Out</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Duration</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Camera 1</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Camera 2</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Camera 3</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Camera 4</string>
+           </property>
+          </column>
+         </widget>
         </item>
         <item>
-         <widget class="QTableView" name="tableView_2"/>
+         <widget class="QTableWidget" name="playlist">
+          <column>
+           <property name="text">
+            <string>In</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Out</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Duration</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Camera</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Description</string>
+           </property>
+          </column>
+         </widget>
         </item>
        </layout>
       </widget>
