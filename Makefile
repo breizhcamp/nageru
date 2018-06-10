@@ -6,7 +6,7 @@ CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthr
 LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lavformat -lavcodec -lavutil -lswscale
 
 # Qt objects
-OBJS_WITH_MOC = mainwindow.o jpeg_frame_view.o
+OBJS_WITH_MOC = mainwindow.o jpeg_frame_view.o clip_list.o
 OBJS += $(OBJS_WITH_MOC)
 OBJS += $(OBJS_WITH_MOC:.o=.moc.o) 
 

@@ -91,43 +91,7 @@
       <widget class="QWidget" name="verticalLayoutWidget_4">
        <layout class="QVBoxLayout" name="verticalLayout_4">
         <item>
-         <widget class="QTableWidget" name="clip_list">
-          <column>
-           <property name="text">
-            <string>In</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Out</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Duration</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Camera 1</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Camera 2</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Camera 3</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Camera 4</string>
-           </property>
-          </column>
-         </widget>
+         <widget class="QTableView" name="clip_list"/>
         </item>
         <item>
          <widget class="QTableWidget" name="playlist">
