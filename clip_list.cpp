@@ -37,6 +37,12 @@ QVariant ClipList::data(const QModelIndex &parent, int role) const {
 		} else {
 			return QVariant();
 		}
+	case 2:
+		if (clips[row].pts_out >= 0) {
+			return qlonglong(clips[row].pts_out - clips[row].pts_in);
+		} else {
+			return QVariant();
+		}
 	default:
 		return QVariant();
 	}
@@ -68,12 +74,14 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 	}
 }
 
-void ClipList::add_clip(int64_t pts_in)
+void ClipList::add_clip(const Clip &clip)
 {
-	Clip clip;
-	clip.pts_in = pts_in;
-
 	beginInsertRows(QModelIndex(), clips.size(), clips.size());
 	clips.push_back(clip);
 	endInsertRows();
+}
+
+void ClipList::emit_data_changed(size_t row)
+{
+	emit dataChanged(index(row, 0), index(row, 6));
 }

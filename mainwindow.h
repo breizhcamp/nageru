@@ -18,6 +18,9 @@ public:
 
 //private:
 	Ui::MainWindow *ui;
+
+private:
+	void preview_clicked();
 };
 
 extern MainWindow *global_mainwindow;

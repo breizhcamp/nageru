@@ -25,6 +25,9 @@ extern "C" {
 using namespace std;
 using namespace std::chrono;
 
+// TODO: Replace by some sort of GUI control, I guess.
+int64_t current_pts = 0;
+
 string filename_for_frame(unsigned stream_idx, int64_t pts)
 {
 	char filename[256];
@@ -100,6 +103,7 @@ int thread_func()
 			this_thread::sleep_for(microseconds((pkt.pts - last_pts) * 1000000 / 12800));
 		}
 		last_pts = pkt.pts;
+		current_pts = pkt.pts;
 	}
 
 	return 0;
