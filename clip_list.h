@@ -17,6 +17,17 @@ class ClipList : public QAbstractTableModel {
 	Q_OBJECT
 
 public:
+	enum Column {
+		IN,
+		OUT,
+		DURATION,
+		CAMERA_1,
+		CAMERA_2,
+		CAMERA_3,
+		CAMERA_4,
+		NUM_COLUMNS
+	};
+
 	int rowCount(const QModelIndex &parent) const override;
 	int columnCount(const QModelIndex &parent) const override;
 	QVariant data(const QModelIndex &parent, int role) const override;

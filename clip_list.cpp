@@ -15,7 +15,7 @@ int ClipList::rowCount(const QModelIndex &parent) const {
 
 int ClipList::columnCount(const QModelIndex &parent) const {
 	if (parent.isValid()) return 0;
-	return 7;
+	return Column::NUM_COLUMNS;
 }
 
 QVariant ClipList::data(const QModelIndex &parent, int role) const {
@@ -55,19 +55,19 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 		return QVariant();
 
 	switch (section) {
-	case 0:
+	case Column::IN:
 		return "In";
-	case 1:
+	case Column::OUT:
 		return "Out";
-	case 2:
+	case Column::DURATION:
 		return "Duration";
-	case 3:
+	case Column::CAMERA_1:
 		return "Camera 1";
-	case 4:
+	case Column::CAMERA_2:
 		return "Camera 2";
-	case 5:
+	case Column::CAMERA_3:
 		return "Camera 3";
-	case 6:
+	case Column::CAMERA_4:
 		return "Camera 4";
 	default:
 		return "";
