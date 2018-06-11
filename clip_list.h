@@ -37,6 +37,7 @@ public:
 			}
 		}
 		Clip *operator->() { return &clip; }
+		Clip &operator*() { return clip; }
 
 	private:
 		Clip &clip;

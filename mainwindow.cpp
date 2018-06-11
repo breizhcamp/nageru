@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "clip_list.h"
+#include "player.h"
 #include "ui_mainwindow.h"
 
 #include <string>
@@ -12,6 +13,7 @@ using namespace std;
 
 MainWindow *global_mainwindow = nullptr;
 extern int64_t current_pts;
+ClipList *clips;
 
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow)
@@ -19,13 +21,13 @@ MainWindow::MainWindow()
 	global_mainwindow = this;
 	ui->setupUi(this);
 
-	ClipList *clips = new ClipList;
+	clips = new ClipList;
 	ui->clip_list->setModel(clips);
 
 	// TODO: Make these into buttons.
 	// TODO: These are too big for lambdas.
 	QShortcut *cue_in = new QShortcut(QKeySequence(Qt::Key_A), this);
-	connect(cue_in, &QShortcut::activated, [clips]{
+	connect(cue_in, &QShortcut::activated, []{
 		if (!clips->empty() && clips->back()->pts_out < 0) {
 			clips->back()->pts_in = current_pts;
 			return;
@@ -36,7 +38,7 @@ MainWindow::MainWindow()
 	});
 
 	QShortcut *cue_out = new QShortcut(QKeySequence(Qt::Key_S), this);
-	connect(cue_out, &QShortcut::activated, [clips]{
+	connect(cue_out, &QShortcut::activated, []{
 		if (!clips->empty()) {
 			clips->back()->pts_out = current_pts;
 			// TODO: select the row in the clip list?
@@ -49,5 +51,5 @@ MainWindow::MainWindow()
 
 void MainWindow::preview_clicked()
 {
-	printf("preview\n");
+	play_clip(*clips->back(), 0);
 }

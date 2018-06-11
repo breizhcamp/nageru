@@ -55,7 +55,7 @@
         <item>
          <layout class="QVBoxLayout" name="verticalLayout">
           <item>
-           <widget class="QGraphicsView" name="preview_display"/>
+           <widget class="JPEGFrameView" name="preview_display"/>
           </item>
           <item>
            <widget class="QLabel" name="label_2">
@@ -72,7 +72,7 @@
         <item>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
-           <widget class="QGraphicsView" name="live_display"/>
+           <widget class="JPEGFrameView" name="live_display"/>
           </item>
           <item>
            <widget class="QLabel" name="label_3">

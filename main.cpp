@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include <chrono>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -15,12 +16,13 @@ extern "C" {
 
 #include <QApplication>
 
+#include "clip_list.h"
+#include "defs.h"
 #include "mainwindow.h"
 #include "ffmpeg_raii.h"
+#include "player.h"
 #include "post_to_main_thread.h"
 #include "ui_mainwindow.h"
-
-#define MAX_STREAMS 16
 
 using namespace std;
 using namespace std::chrono;
@@ -38,7 +40,7 @@ string filename_for_frame(unsigned stream_idx, int64_t pts)
 mutex frame_mu;
 vector<int64_t> frames[MAX_STREAMS];
 
-int thread_func();
+int record_thread_func();
 
 int main(int argc, char **argv)
 {
@@ -49,12 +51,13 @@ int main(int argc, char **argv)
 	MainWindow mainWindow;
 	mainWindow.show();
 
-	thread(thread_func).detach();
+	thread(record_thread_func).detach();
+	start_player_thread();
 
 	return app.exec();
 }
 
-int thread_func()
+int record_thread_func()
 {
 	auto format_ctx = avformat_open_input_unique("multiangle.mp4", nullptr, nullptr);
 	if (format_ctx == nullptr) {
