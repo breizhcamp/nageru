@@ -51,5 +51,16 @@ MainWindow::MainWindow()
 
 void MainWindow::preview_clicked()
 {
-	play_clip(*clips->back(), 0);
+	QItemSelectionModel *selected = ui->clip_list->selectionModel();
+	if (!selected->hasSelection()) {
+		play_clip(*clips->back(), 0);
+		return;
+	}
+
+	QModelIndex index = selected->currentIndex();
+	if (index.column() >= ClipList::Column::CAMERA_1 &&
+	    index.column() <= ClipList::Column::CAMERA_4) {
+		unsigned stream_idx = index.column() - ClipList::Column::CAMERA_1;
+		play_clip(*clips->clip(index.row()), stream_idx);
+	}
 }
