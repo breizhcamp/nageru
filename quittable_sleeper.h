@@ -9,6 +9,7 @@
 // All member functions on this class are thread-safe.
 
 #include <chrono>
+#include <condition_variable>
 #include <mutex>
 
 class QuittableSleeper {
