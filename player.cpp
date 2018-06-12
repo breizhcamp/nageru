@@ -7,10 +7,8 @@
 
 #include "clip_list.h"
 #include "defs.h"
-#include "mainwindow.h"
-#include "ffmpeg_raii.h"
-#include "post_to_main_thread.h"
-#include "ui_mainwindow.h"
+#include "jpeg_frame_view.h"
+#include "player.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -18,38 +16,27 @@ using namespace std::chrono;
 extern mutex frame_mu;
 extern vector<int64_t> frames[MAX_STREAMS];
 
-struct PlaylistClip {
-	Clip clip;
-	unsigned stream_idx;
-};
-vector<PlaylistClip> current_cue_playlist;
-mutex playlist_mu;
-
-enum { PAUSED, PLAYING } cue_state = PAUSED;
-mutex cue_state_mu;
-condition_variable cue_is_playing;
-//int cue_playlist_index = -1;
-//int64_t cue_playlist_pos = 0;
-
-int preview_thread_func()
+void Player::thread_func()
 {
 	for ( ;; ) {
 		// Wait until we're supposed to play something.
 		{
 			unique_lock<mutex> lock(cue_state_mu);
-			cue_is_playing.wait(lock, []{
+			cue_is_playing.wait(lock, [this]{
 				return cue_state == PLAYING;
 				//return current_cue_status.origin != steady_clock::time_point::max();
 			});
 		}
 
-		PlaylistClip clip;
+		Clip clip;
+		unsigned stream_idx;
 		{
-			lock_guard<mutex> lock2(playlist_mu);
-			clip = current_cue_playlist[0];
+			lock_guard<mutex> lock2(mu);
+			clip = current_clip;
+			stream_idx = current_stream_idx;
 		}
 		steady_clock::time_point origin = steady_clock::now();
-		int64_t pts_origin = clip.clip.pts_in;
+		int64_t pts_origin = clip.pts_in;
 
 		int64_t next_pts = pts_origin;
 
@@ -60,19 +47,19 @@ int preview_thread_func()
 			steady_clock::time_point next_frame_start =
 				origin + microseconds((next_pts - pts_origin) * int(1000000 / speed) / 12800);
 			this_thread::sleep_until(next_frame_start);
-			global_mainwindow->ui->preview_display->setFrame(clip.stream_idx, next_pts);
+			destination->setFrame(stream_idx, next_pts);
 
 			// Find the next frame.
 			{
 				lock_guard<mutex> lock2(frame_mu);
-				auto it = upper_bound(frames[clip.stream_idx].begin(),
-					frames[clip.stream_idx].end(),
+				auto it = upper_bound(frames[stream_idx].begin(),
+					frames[stream_idx].end(),
 					next_pts);
-				if (it == frames[clip.stream_idx].end()) {
+				if (it == frames[stream_idx].end()) {
 					eof = true;
 				} else {
 					next_pts = *it;
-					if (next_pts >= clip.clip.pts_out) {
+					if (next_pts >= clip.pts_out) {
 						eof = true;
 					}
 				}
@@ -80,7 +67,7 @@ int preview_thread_func()
 			if (eof) break;
 		}
 
-		// TODO: advance the playlist and look for the next element.
+		// TODO: callback so that the next playlist item can be cued.
 		{
 			unique_lock<mutex> lock(cue_state_mu);
 			cue_state = PAUSED;
@@ -88,17 +75,18 @@ int preview_thread_func()
 	}
 }
 
-void start_player_thread()
+Player::Player(JPEGFrameView *destination)
+	: destination(destination)
 {
-	thread(preview_thread_func).detach();
+	thread(&Player::thread_func, this).detach();
 }
 
-void play_clip(const Clip &clip, unsigned stream_idx)
+void Player::play_clip(const Clip &clip, unsigned stream_idx)
 {
 	{
-		lock_guard<mutex> lock(playlist_mu);
-		current_cue_playlist.clear();
-		current_cue_playlist.push_back(PlaylistClip{ clip, stream_idx });
+		lock_guard<mutex> lock(mu);
+		current_clip = clip;
+		current_stream_idx = stream_idx;
 	}
 
 	{

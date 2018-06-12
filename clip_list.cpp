@@ -15,7 +15,11 @@ int ClipList::rowCount(const QModelIndex &parent) const {
 
 int ClipList::columnCount(const QModelIndex &parent) const {
 	if (parent.isValid()) return 0;
-	return Column::NUM_COLUMNS;
+	if (display_type == ListDisplay::CLIP_LIST) {
+		return int(ClipListColumn::NUM_COLUMNS);
+	} else {
+		return int(PlayListColumn::NUM_COLUMNS);
+	}
 }
 
 QVariant ClipList::data(const QModelIndex &parent, int role) const {
@@ -54,23 +58,40 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 	if (orientation != Qt::Horizontal)
 		return QVariant();
 
-	switch (section) {
-	case Column::IN:
-		return "In";
-	case Column::OUT:
-		return "Out";
-	case Column::DURATION:
-		return "Duration";
-	case Column::CAMERA_1:
-		return "Camera 1";
-	case Column::CAMERA_2:
-		return "Camera 2";
-	case Column::CAMERA_3:
-		return "Camera 3";
-	case Column::CAMERA_4:
-		return "Camera 4";
-	default:
-		return "";
+	if (display_type == ListDisplay::CLIP_LIST) {
+		switch (ClipListColumn(section)) {
+		case ClipListColumn::IN:
+			return "In";
+		case ClipListColumn::OUT:
+			return "Out";
+		case ClipListColumn::DURATION:
+			return "Duration";
+		case ClipListColumn::CAMERA_1:
+			return "Camera 1";
+		case ClipListColumn::CAMERA_2:
+			return "Camera 2";
+		case ClipListColumn::CAMERA_3:
+			return "Camera 3";
+		case ClipListColumn::CAMERA_4:
+			return "Camera 4";
+		default:
+			return "";
+		}
+	} else {
+		switch (PlayListColumn(section)) {
+		case PlayListColumn::IN:
+			return "In";
+		case PlayListColumn::OUT:
+			return "Out";
+		case PlayListColumn::DURATION:
+			return "Duration";
+		case PlayListColumn::CAMERA:
+			return "Camera";
+		case PlayListColumn::DESCRIPTION:
+			return "Description";
+		default:
+			return "";
+		}
 	}
 }
 
@@ -83,5 +104,9 @@ void ClipList::add_clip(const Clip &clip)
 
 void ClipList::emit_data_changed(size_t row)
 {
-	emit dataChanged(index(row, 0), index(row, 6));
+	if (display_type == ListDisplay::CLIP_LIST) {
+		emit dataChanged(index(row, 0), index(row, int(ClipListColumn::NUM_COLUMNS)));
+	} else {
+		emit dataChanged(index(row, 0), index(row, int(PlayListColumn::NUM_COLUMNS)));
+	}
 }

@@ -11,13 +11,21 @@
 struct Clip {
 	int64_t pts_in = -1, pts_out = -1;
 	std::vector<std::string> descriptions;  // One per camera.
+	unsigned stream_idx = 0;  // For the playlist only.
 };
 
+// FIXME: This should be split into a separate clip list and play list model.
 class ClipList : public QAbstractTableModel {
 	Q_OBJECT
 
 public:
-	enum Column {
+	enum class ListDisplay {
+		CLIP_LIST,
+		PLAY_LIST
+	};
+	ClipList(ListDisplay display_type) : display_type(display_type) {}
+
+	enum class ClipListColumn {
 		IN,
 		OUT,
 		DURATION,
@@ -25,6 +33,14 @@ public:
 		CAMERA_2,
 		CAMERA_3,
 		CAMERA_4,
+		NUM_COLUMNS
+	};
+	enum class PlayListColumn {
+		IN,
+		OUT,
+		DURATION,
+		CAMERA,
+		DESCRIPTION,
 		NUM_COLUMNS
 	};
 
@@ -66,6 +82,7 @@ public:
 
 private:
 	std::vector<Clip> clips;
+	ListDisplay display_type;
 };
 
 #endif  // !defined (_CLIP_LIST_H)
