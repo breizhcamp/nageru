@@ -27,6 +27,7 @@ private:
 	void queue_clicked();
 	void preview_clicked();
 	void play_clicked();
+	void live_player_clip_done();
 };
 
 extern MainWindow *global_mainwindow;

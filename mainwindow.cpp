@@ -2,6 +2,7 @@
 
 #include "clip_list.h"
 #include "player.h"
+#include "post_to_main_thread.h"
 #include "ui_mainwindow.h"
 
 #include <string>
@@ -63,6 +64,11 @@ MainWindow::MainWindow()
 
 	preview_player = new Player(ui->preview_display);
 	live_player = new Player(ui->live_display);
+	live_player->set_done_callback([this]{
+		post_to_main_thread([this]{
+			live_player_clip_done();
+		});
+	});
 }
 
 void MainWindow::queue_clicked()
@@ -110,7 +116,20 @@ void MainWindow::play_clicked()
 		row = selected->selectedRows(0)[0].row();
 	}
 
-	const Clip &clip = *cliplist_clips->clip(row);
+	const Clip &clip = *playlist_clips->clip(row);
 	live_player->play_clip(clip, clip.stream_idx);
 	playlist_clips->set_currently_playing(row);
+}
+
+void MainWindow::live_player_clip_done()
+{
+	int row = playlist_clips->get_currently_playing();
+	if (row != -1 && row < int(playlist_clips->size()) - 1) {
+		++row;
+		const Clip &clip = *playlist_clips->clip(row);
+		live_player->play_clip(clip, clip.stream_idx);
+		playlist_clips->set_currently_playing(row);
+	} else {
+		playlist_clips->set_currently_playing(-1);
+	}
 }

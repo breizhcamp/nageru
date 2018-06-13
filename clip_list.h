@@ -80,6 +80,7 @@ public:
 	const Clip *back() const { return clip(size() - 1); }
 
 	void set_currently_playing(int index);  // -1 = none. Only makes sense for the playlist.
+	int get_currently_playing() const { return currently_playing_index; }
 
 	void emit_data_changed(size_t row);
 

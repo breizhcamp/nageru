@@ -67,10 +67,13 @@ void Player::thread_func()
 			if (eof) break;
 		}
 
-		// TODO: callback so that the next playlist item can be cued.
 		{
 			unique_lock<mutex> lock(cue_state_mu);
 			cue_state = PAUSED;
+		}
+
+		if (done_callback != nullptr) {
+			done_callback();
 		}
 	}
 }
