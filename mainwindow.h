@@ -22,7 +22,7 @@ public:
 	Ui::MainWindow *ui;
 
 private:
-	Player *preview_player;
+	Player *preview_player, *live_player;
 
 	void queue_clicked();
 	void preview_clicked();

@@ -62,6 +62,7 @@ MainWindow::MainWindow()
 	connect(ui->play_btn, &QPushButton::clicked, this, &MainWindow::play_clicked);
 
 	preview_player = new Player(ui->preview_display);
+	live_player = new Player(ui->live_display);
 }
 
 void MainWindow::queue_clicked()
@@ -102,8 +103,14 @@ void MainWindow::preview_clicked()
 void MainWindow::play_clicked()
 {
 	QItemSelectionModel *selected = ui->playlist->selectionModel();
+	int row;
 	if (!selected->hasSelection()) {
-		ui->playlist->selectRow(0);
-		return;
+		row = 0;
+	} else {
+		row = selected->selectedRows(0)[0].row();
 	}
+
+	const Clip &clip = *cliplist_clips->clip(row);
+	live_player->play_clip(clip, clip.stream_idx);
+	playlist_clips->set_currently_playing(row);
 }

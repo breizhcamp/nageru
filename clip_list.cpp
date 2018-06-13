@@ -32,23 +32,48 @@ QVariant ClipList::data(const QModelIndex &parent, int role) const {
 	if (size_t(row) >= clips.size())
 		return QVariant();
 
-	switch (column) {
-	case 0:
-		return qlonglong(clips[row].pts_in);
-	case 1:
-		if (clips[row].pts_out >= 0) {
-			return qlonglong(clips[row].pts_out);
-		} else {
-			return QVariant();
+	if (display_type == ListDisplay::CLIP_LIST) {
+		switch (ClipListColumn(column)) {
+		case ClipListColumn::IN:
+			return qlonglong(clips[row].pts_in);
+		case ClipListColumn::OUT:
+			if (clips[row].pts_out >= 0) {
+				return qlonglong(clips[row].pts_out);
+			} else {
+				return QVariant();
+			}
+		case ClipListColumn::DURATION:
+			if (clips[row].pts_out >= 0) {
+				return qlonglong(clips[row].pts_out - clips[row].pts_in);
+			} else {
+				return QVariant();
+			}
+		default:
+			return "";
 		}
-	case 2:
-		if (clips[row].pts_out >= 0) {
-			return qlonglong(clips[row].pts_out - clips[row].pts_in);
-		} else {
-			return QVariant();
+	} else {
+		switch (PlayListColumn(column)) {
+		case PlayListColumn::PLAYING:
+			return (row == currently_playing_index) ? "→" : "";
+		case PlayListColumn::IN:
+			return qlonglong(clips[row].pts_in);
+		case PlayListColumn::OUT:
+			if (clips[row].pts_out >= 0) {
+				return qlonglong(clips[row].pts_out);
+			} else {
+				return QVariant();
+			}
+		case PlayListColumn::DURATION:
+			if (clips[row].pts_out >= 0) {
+				return qlonglong(clips[row].pts_out - clips[row].pts_in);
+			} else {
+				return QVariant();
+			}
+		case PlayListColumn::CAMERA:
+			return qlonglong(clips[row].stream_idx + 1);
+		default:
+			return "";
 		}
-	default:
-		return QVariant();
 	}
 }
 
@@ -79,6 +104,8 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 		}
 	} else {
 		switch (PlayListColumn(section)) {
+		case PlayListColumn::PLAYING:
+			return "";
 		case PlayListColumn::IN:
 			return "In";
 		case PlayListColumn::OUT:
@@ -108,5 +135,19 @@ void ClipList::emit_data_changed(size_t row)
 		emit dataChanged(index(row, 0), index(row, int(ClipListColumn::NUM_COLUMNS)));
 	} else {
 		emit dataChanged(index(row, 0), index(row, int(PlayListColumn::NUM_COLUMNS)));
+	}
+}
+
+void ClipList::set_currently_playing(int index)
+{
+	int old_index = currently_playing_index;
+	if (index != old_index) {
+		currently_playing_index = index;
+		if (old_index != -1) {
+			emit_data_changed(old_index);
+		}
+		if (index != -1) {
+			emit_data_changed(index);
+		}
 	}
 }

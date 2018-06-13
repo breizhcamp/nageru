@@ -36,6 +36,7 @@ public:
 		NUM_COLUMNS
 	};
 	enum class PlayListColumn {
+		PLAYING,
 		IN,
 		OUT,
 		DURATION,
@@ -78,11 +79,14 @@ public:
 	ClipProxy back() { return clip(size() - 1); }
 	const Clip *back() const { return clip(size() - 1); }
 
+	void set_currently_playing(int index);  // -1 = none. Only makes sense for the playlist.
+
 	void emit_data_changed(size_t row);
 
 private:
 	std::vector<Clip> clips;
 	ListDisplay display_type;
+	int currently_playing_index = -1;
 };
 
 #endif  // !defined (_CLIP_LIST_H)
