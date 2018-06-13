@@ -94,6 +94,8 @@ int record_thread_func()
 				global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, pkt.pts);
 			} else if (pkt.stream_index == 2) {
 				global_mainwindow->ui->input3_display->setFrame(pkt.stream_index, pkt.pts);
+			} else if (pkt.stream_index == 3) {
+				global_mainwindow->ui->input4_display->setFrame(pkt.stream_index, pkt.pts);
 			}
 		});
 
