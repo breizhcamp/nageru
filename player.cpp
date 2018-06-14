@@ -21,17 +21,17 @@ void Player::thread_func()
 	for ( ;; ) {
 		// Wait until we're supposed to play something.
 		{
-			unique_lock<mutex> lock(cue_state_mu);
-			cue_is_playing.wait(lock, [this]{
-				return cue_state == PLAYING;
-				//return current_cue_status.origin != steady_clock::time_point::max();
+			unique_lock<mutex> lock(queue_state_mu);
+			new_clip_changed.wait(lock, [this]{
+				return new_clip_ready && current_clip.pts_in != -1;
 			});
+			new_clip_ready = false;
 		}
 
 		Clip clip;
 		unsigned stream_idx;
 		{
-			lock_guard<mutex> lock2(mu);
+			lock_guard<mutex> lock(mu);
 			clip = current_clip;
 			stream_idx = current_stream_idx;
 		}
@@ -40,18 +40,27 @@ void Player::thread_func()
 
 		int64_t next_pts = pts_origin;
 
-		bool eof = false;
-		while (!eof) {  // TODO: check for abort
+		bool eof = false, aborted = false;
+		while (!eof) {
 			// FIXME: assumes a given timebase.
 			double speed = 0.5;
 			steady_clock::time_point next_frame_start =
 				origin + microseconds((next_pts - pts_origin) * int(1000000 / speed) / 12800);
-			this_thread::sleep_until(next_frame_start);
+
+			// Sleep until the next frame start, or until there's a new clip we're supposed to play.
+			{
+				unique_lock<mutex> lock(queue_state_mu);
+				aborted = new_clip_changed.wait_until(lock, next_frame_start, [this]{
+					return new_clip_ready;
+				});
+				eof |= aborted;
+			}
+
 			destination->setFrame(stream_idx, next_pts);
 
 			// Find the next frame.
 			{
-				lock_guard<mutex> lock2(frame_mu);
+				lock_guard<mutex> lock(frame_mu);
 				auto it = upper_bound(frames[stream_idx].begin(),
 					frames[stream_idx].end(),
 					next_pts);
@@ -64,15 +73,9 @@ void Player::thread_func()
 					}
 				}
 			}
-			if (eof) break;
 		}
 
-		{
-			unique_lock<mutex> lock(cue_state_mu);
-			cue_state = PAUSED;
-		}
-
-		if (done_callback != nullptr) {
+		if (done_callback != nullptr && !aborted) {
 			done_callback();
 		}
 	}
@@ -93,8 +96,8 @@ void Player::play_clip(const Clip &clip, unsigned stream_idx)
 	}
 
 	{
-		lock_guard<mutex> lock(cue_state_mu);
-		cue_state = PLAYING;
-		cue_is_playing.notify_all();
+		lock_guard<mutex> lock(queue_state_mu);
+		new_clip_ready = true;
+		new_clip_changed.notify_all();
 	}
 }

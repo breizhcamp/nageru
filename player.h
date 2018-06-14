@@ -27,12 +27,12 @@ private:
 	done_callback_func done_callback;
 
 	std::mutex mu;
-	Clip current_clip;  // Under mu.
+	Clip current_clip;  // Under mu. Can have pts_in = -1 for no clip.
 	unsigned current_stream_idx;  // Under mu.
 
-	enum { PAUSED, PLAYING } cue_state = PAUSED;  // Under cue_state_mu.
-	std::mutex cue_state_mu;
-	std::condition_variable cue_is_playing;
+	bool new_clip_ready = false;  // Under queue_state_mu.
+	std::mutex queue_state_mu;
+	std::condition_variable new_clip_changed;
 };
 
 #endif  // !defined(_PLAYER_H)
