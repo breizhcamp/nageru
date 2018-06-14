@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 
+#include <memory>
+
 class JPEGFrameView : public QGraphicsView {
 	Q_OBJECT
 
@@ -20,9 +22,10 @@ public:
 		update_frame();
 	}
 
+	void setPixmap(std::shared_ptr<QPixmap> pixmap);
+
 protected:
 	void resizeEvent(QResizeEvent *event) override;
-	void paintEvent(QPaintEvent *event) override;
 
 private:
 	void update_frame();
