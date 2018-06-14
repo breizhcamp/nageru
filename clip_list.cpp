@@ -1,12 +1,45 @@
 #include "mainwindow.h"
 
-#include "clip_list.h"
-#include "ui_mainwindow.h"
-
+#include <math.h>
 #include <string>
 #include <vector>
 
+#include "clip_list.h"
+#include "ui_mainwindow.h"
+
 using namespace std;
+
+string pts_to_string(int64_t pts)
+{
+	// FIXME: This depends on a fixed timebase.
+	int64_t t = lrint((pts / 12800.0) * 1e3);  // In milliseconds.
+	int ms = t % 1000;
+	t /= 1000;
+	int sec = t % 60;
+	t /= 60;
+	int min = t % 60;
+	t /= 60;
+	int hour = t;
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "%d:%02d:%02d.%03d", hour, min, sec, ms);
+	return buf;
+}
+
+string duration_to_string(int64_t pts_diff)
+{
+	// FIXME: This depends on a fixed timebase.
+	int64_t t = lrint((pts_diff / 12800.0) * 1e3);  // In milliseconds.
+	int ms = t % 1000;
+	t /= 1000;
+	int sec = t % 60;
+	t /= 60;
+	int min = t;
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "%d:%02d.%03d", min, sec, ms);
+	return buf;
+}
 
 int ClipList::rowCount(const QModelIndex &parent) const {
 	if (parent.isValid()) return 0;
@@ -25,26 +58,52 @@ int ClipList::columnCount(const QModelIndex &parent) const {
 QVariant ClipList::data(const QModelIndex &parent, int role) const {
 	if (!parent.isValid())
 		return QVariant();
-	if (role != Qt::DisplayRole)
-		return QVariant();
-
 	const int row = parent.row(), column = parent.column();
 	if (size_t(row) >= clips.size())
+		return QVariant();
+
+	if (role == Qt::TextAlignmentRole) {
+		if (display_type == ListDisplay::CLIP_LIST) {
+			switch (ClipListColumn(column)) {
+			case ClipListColumn::IN:
+			case ClipListColumn::OUT:
+			case ClipListColumn::DURATION:
+				return Qt::AlignRight + Qt::AlignVCenter;
+			default:
+				return Qt::AlignLeft + Qt::AlignVCenter;
+			}
+		} else {
+			switch (PlayListColumn(column)) {
+			case PlayListColumn::PLAYING:
+				return Qt::AlignCenter;
+			case PlayListColumn::IN:
+			case PlayListColumn::OUT:
+			case PlayListColumn::DURATION:
+				return Qt::AlignRight + Qt::AlignVCenter;
+			case PlayListColumn::CAMERA:
+				return Qt::AlignCenter;
+			default:
+				return Qt::AlignLeft + Qt::AlignVCenter;
+			}
+		}
+	}
+
+	if (role != Qt::DisplayRole)
 		return QVariant();
 
 	if (display_type == ListDisplay::CLIP_LIST) {
 		switch (ClipListColumn(column)) {
 		case ClipListColumn::IN:
-			return qlonglong(clips[row].pts_in);
+			return QString::fromStdString(pts_to_string(clips[row].pts_in));
 		case ClipListColumn::OUT:
 			if (clips[row].pts_out >= 0) {
-				return qlonglong(clips[row].pts_out);
+				return QString::fromStdString(pts_to_string(clips[row].pts_out));
 			} else {
 				return QVariant();
 			}
 		case ClipListColumn::DURATION:
 			if (clips[row].pts_out >= 0) {
-				return qlonglong(clips[row].pts_out - clips[row].pts_in);
+				return QString::fromStdString(duration_to_string(clips[row].pts_out - clips[row].pts_in));
 			} else {
 				return QVariant();
 			}
@@ -56,16 +115,16 @@ QVariant ClipList::data(const QModelIndex &parent, int role) const {
 		case PlayListColumn::PLAYING:
 			return (row == currently_playing_index) ? "→" : "";
 		case PlayListColumn::IN:
-			return qlonglong(clips[row].pts_in);
+			return QString::fromStdString(pts_to_string(clips[row].pts_in));
 		case PlayListColumn::OUT:
 			if (clips[row].pts_out >= 0) {
-				return qlonglong(clips[row].pts_out);
+				return QString::fromStdString(pts_to_string(clips[row].pts_out));
 			} else {
 				return QVariant();
 			}
 		case PlayListColumn::DURATION:
 			if (clips[row].pts_out >= 0) {
-				return qlonglong(clips[row].pts_out - clips[row].pts_in);
+				return QString::fromStdString(duration_to_string(clips[row].pts_out - clips[row].pts_in));
 			} else {
 				return QVariant();
 			}
