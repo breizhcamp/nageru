@@ -59,6 +59,8 @@ void prune_cache()
 
 void jpeg_decoder_thread()
 {
+	size_t num_decoded = 0, num_dropped = 0;
+
 	pthread_setname_np(pthread_self(), "JPEGDecoder");
 	for ( ;; ) {
 		JPEGID id;
@@ -91,6 +93,7 @@ void jpeg_decoder_thread()
 				}
 			}
 			if (num_pending > 3) {
+				++num_dropped;
 				continue;
 			}
 
@@ -102,6 +105,11 @@ void jpeg_decoder_thread()
 
 			if (cache.size() > CACHE_SIZE) {
 				prune_cache();
+			}
+			++num_decoded;
+			if (num_decoded % 1000 == 0) {
+				fprintf(stderr, "Decoded %zu images, dropped %zu (%.2f%% dropped)\n",
+					num_decoded, num_dropped, (100.0 * num_dropped) / (num_decoded + num_dropped));
 			}
 		}
 

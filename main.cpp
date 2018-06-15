@@ -76,8 +76,8 @@ int record_thread_func()
 		if (av_read_frame(format_ctx.get(), &pkt) != 0) {
 			break;
 		}
-		fprintf(stderr, "Got a frame from camera %d, pts = %ld, size = %d\n",
-			pkt.stream_index, pkt.pts, pkt.size);
+		//fprintf(stderr, "Got a frame from camera %d, pts = %ld, size = %d\n",
+		//	pkt.stream_index, pkt.pts, pkt.size);
 		string filename = filename_for_frame(pkt.stream_index, pkt.pts);
 		FILE *fp = fopen(filename.c_str(), "wb");
 		if (fp == nullptr) {
