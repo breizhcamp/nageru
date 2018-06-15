@@ -40,8 +40,20 @@ void Player::thread_func()
 
 		int64_t next_pts = pts_origin;
 
-		bool eof = false, aborted = false;
-		while (!eof) {
+		bool aborted = false;
+		for ( ;; ) {
+			// Find the next frame.
+			{
+				lock_guard<mutex> lock(frame_mu);
+				auto it = upper_bound(frames[stream_idx].begin(),
+					frames[stream_idx].end(),
+					next_pts);
+				if (it == frames[stream_idx].end() || *it >= clip.pts_out) {
+					break;
+				}
+				next_pts = *it;
+			}
+
 			// FIXME: assumes a given timebase.
 			double speed = 0.5;
 			steady_clock::time_point next_frame_start =
@@ -53,26 +65,11 @@ void Player::thread_func()
 				aborted = new_clip_changed.wait_until(lock, next_frame_start, [this]{
 					return new_clip_ready;
 				});
-				eof |= aborted;
+				if (aborted) break;
 			}
 
 			destination->setFrame(stream_idx, next_pts);
 
-			// Find the next frame.
-			{
-				lock_guard<mutex> lock(frame_mu);
-				auto it = upper_bound(frames[stream_idx].begin(),
-					frames[stream_idx].end(),
-					next_pts);
-				if (it == frames[stream_idx].end()) {
-					eof = true;
-				} else {
-					next_pts = *it;
-					if (next_pts >= clip.pts_out) {
-						eof = true;
-					}
-				}
-			}
 		}
 
 		if (done_callback != nullptr && !aborted) {
