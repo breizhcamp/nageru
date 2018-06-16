@@ -39,6 +39,7 @@ string filename_for_frame(unsigned stream_idx, int64_t pts)
 
 mutex frame_mu;
 vector<int64_t> frames[MAX_STREAMS];
+QGLWidget *global_share_widget;
 
 int record_thread_func();
 
@@ -47,7 +48,29 @@ int main(int argc, char **argv)
 	av_register_all();
 	avformat_network_init();
 
+	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
+
+	QSurfaceFormat fmt;
+	fmt.setDepthBufferSize(0);
+	fmt.setStencilBufferSize(0);
+	fmt.setProfile(QSurfaceFormat::CoreProfile);
+	fmt.setMajorVersion(3);
+	fmt.setMinorVersion(1);
+
+	// Turn off vsync, since Qt generally gives us at most frame rate
+	// (display frequency) / (number of QGLWidgets active).
+	fmt.setSwapInterval(0);
+
+	QSurfaceFormat::setDefaultFormat(fmt);
+
+	QGLFormat::setDefaultFormat(QGLFormat::fromSurfaceFormat(fmt));
+
 	QApplication app(argc, argv);
+	global_share_widget = new QGLWidget();
+	if (!global_share_widget->isValid()) {
+		fprintf(stderr, "Failed to initialize OpenGL. Futatabi needs at least OpenGL 3.1 to function properly.\n");
+		exit(1);
+	}
 	MainWindow mainWindow;
 	mainWindow.show();
 

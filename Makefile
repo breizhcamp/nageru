@@ -1,9 +1,9 @@
 CXX=g++
-PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5PrintSupport libjpeg
+PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL Qt5PrintSupport libjpeg movit
 CXXFLAGS ?= -O2 -g -Wall  # Will be overridden by environment.
-CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -pthread
+CXXFLAGS += -std=gnu++11 -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -pthread
 
-LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lavformat -lavcodec -lavutil -lswscale
+LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lavformat -lavcodec -lavutil -lswscale -lGL
 
 # Qt objects
 OBJS_WITH_MOC = mainwindow.o jpeg_frame_view.o clip_list.o

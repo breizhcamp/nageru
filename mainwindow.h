@@ -28,6 +28,11 @@ private:
 	void preview_clicked();
 	void play_clicked();
 	void live_player_clip_done();
+
+	void resizeEvent(QResizeEvent *event) override;
+
+private slots:
+	void relayout();
 };
 
 extern MainWindow *global_mainwindow;

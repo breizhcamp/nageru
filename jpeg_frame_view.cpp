@@ -1,5 +1,6 @@
 #include "jpeg_frame_view.h"
 
+#include <jpeglib.h>
 #include <stdint.h>
 
 #include <atomic>
@@ -8,12 +9,15 @@
 #include <mutex>
 #include <thread>
 #include <utility>
-#include <QGraphicsPixmapItem>
-#include <QPixmap>
+
+#include <movit/resource_pool.h>
+#include <movit/init.h>
+#include <movit/util.h>
 
 #include "defs.h"
 #include "post_to_main_thread.h"
 
+using namespace movit;
 using namespace std;
 
 string filename_for_frame(unsigned stream_idx, int64_t pts);
@@ -26,16 +30,85 @@ bool operator< (const JPEGID &a, const JPEGID &b) {
 	return make_pair(a.stream_idx, a.pts) < make_pair(b.stream_idx, b.pts);
 }
 
-struct LRUPixmap {
-	shared_ptr<QPixmap> pixmap;
+struct LRUFrame {
+	shared_ptr<Frame> frame;
 	size_t last_used;
 };
 
 mutex cache_mu;
-map<JPEGID, LRUPixmap> cache;  // Under cache_mu.
+map<JPEGID, LRUFrame> cache;  // Under cache_mu.
 condition_variable any_pending_decodes;
 deque<pair<JPEGID, JPEGFrameView *>> pending_decodes;  // Under cache_mu.
 atomic<size_t> event_counter{0};
+extern QGLWidget *global_share_widget;
+
+// TODO: Decode using VA-API if available.
+shared_ptr<Frame> decode_jpeg(const string &filename)
+{
+	shared_ptr<Frame> frame(new Frame);
+
+	jpeg_decompress_struct dinfo;
+	jpeg_error_mgr jerr;
+	dinfo.err = jpeg_std_error(&jerr);
+	jpeg_create_decompress(&dinfo);
+
+	FILE *fp = fopen(filename.c_str(), "rb");
+	if (fp == nullptr) {
+		perror(filename.c_str());
+		exit(1);
+	}
+	jpeg_stdio_src(&dinfo, fp);
+
+	jpeg_read_header(&dinfo, true);
+
+	if (dinfo.num_components != 3 ||
+            dinfo.comp_info[0].h_samp_factor != 2 ||
+            dinfo.comp_info[0].v_samp_factor != 2 ||
+            dinfo.comp_info[1].h_samp_factor != 1 ||
+            dinfo.comp_info[1].v_samp_factor != 2 ||
+            dinfo.comp_info[2].h_samp_factor != 1 ||
+            dinfo.comp_info[2].v_samp_factor != 2) {
+		fprintf(stderr, "Not 4:2:2 JPEG! (%d components, Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
+			dinfo.num_components,
+			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
+			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
+			dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
+		exit(1);
+	}
+	dinfo.raw_data_out = true;
+
+	jpeg_start_decompress(&dinfo);
+
+	frame->width = dinfo.output_width;
+	frame->height = dinfo.output_height;
+
+	unsigned chroma_width_blocks = (dinfo.output_width + 15) / 16;
+	unsigned width_blocks = chroma_width_blocks * 2;
+	unsigned height_blocks = (dinfo.output_height + 15) / 16;
+
+	// TODO: Decode into a PBO.
+	frame->y.reset(new uint8_t[width_blocks * (height_blocks * 2) * DCTSIZE2]);
+	frame->cb.reset(new uint8_t[chroma_width_blocks * (height_blocks * 2) * DCTSIZE2]);
+	frame->cr.reset(new uint8_t[chroma_width_blocks * (height_blocks * 2) * DCTSIZE2]);
+
+	JSAMPROW yptr[16], cbptr[16], crptr[16];
+	JSAMPARRAY data[3] = { yptr, cbptr, crptr };
+	for (unsigned y = 0; y < height_blocks; ++y) {
+		for (unsigned yy = 0; yy < DCTSIZE * 2; ++yy) {
+			yptr[yy] = frame->y.get() + (y * DCTSIZE * 2 + yy) * width_blocks * DCTSIZE;
+			cbptr[yy] = frame->cb.get() + (y * DCTSIZE * 2 + yy) * chroma_width_blocks * DCTSIZE;
+			crptr[yy] = frame->cr.get() + (y * DCTSIZE * 2 + yy) * chroma_width_blocks * DCTSIZE;
+		}
+
+		jpeg_read_raw_data(&dinfo, data, /*num_lines=*/16);
+	}
+
+	(void) jpeg_finish_decompress(&dinfo);
+	jpeg_destroy_decompress(&dinfo);
+	fclose(fp);
+
+	return frame;
+}
 
 void prune_cache()
 {
@@ -65,7 +138,7 @@ void jpeg_decoder_thread()
 	for ( ;; ) {
 		JPEGID id;
 		JPEGFrameView *dest;
-		shared_ptr<QPixmap> pixmap;
+		shared_ptr<Frame> frame;
 		{
 			unique_lock<mutex> lock(cache_mu);
 			any_pending_decodes.wait(lock, [] {
@@ -77,12 +150,12 @@ void jpeg_decoder_thread()
 
 			auto it = cache.find(id);
 			if (it != cache.end()) {
-				pixmap = it->second.pixmap;
+				frame = it->second.frame;
 				it->second.last_used = event_counter++;
 			}
 		}
 
-		if (pixmap == nullptr) {
+		if (frame == nullptr) {
 			// Not found in the cache, so we need to do a decode or drop the request.
 			// Prune the queue if there are too many pending for this destination.
 			// TODO: Could we get starvation here?
@@ -97,11 +170,10 @@ void jpeg_decoder_thread()
 				continue;
 			}
 
-			pixmap.reset(
-				new QPixmap(QString::fromStdString(filename_for_frame(id.stream_idx, id.pts))));
+			frame = decode_jpeg(filename_for_frame(id.stream_idx, id.pts));
 
 			unique_lock<mutex> lock(cache_mu);
-			cache[id] = LRUPixmap{ pixmap, event_counter++ };
+			cache[id] = LRUFrame{ frame, event_counter++ };
 
 			if (cache.size() > CACHE_SIZE) {
 				prune_cache();
@@ -113,21 +185,12 @@ void jpeg_decoder_thread()
 			}
 		}
 
-		dest->setPixmap(pixmap);
+		dest->setDecodedFrame(frame);
 	}
 }
 
 JPEGFrameView::JPEGFrameView(QWidget *parent)
-	: QGraphicsView(parent) {
-	scene.addItem(&item);
-	setScene(&scene);
-	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
-	static once_flag once;
-	call_once(once, [] {
-		std::thread(&jpeg_decoder_thread).detach();
-	});
+	: QGLWidget(parent, global_share_widget) {
 }
 
 void JPEGFrameView::update_frame()
@@ -137,15 +200,81 @@ void JPEGFrameView::update_frame()
 	any_pending_decodes.notify_all();
 }
 
-void JPEGFrameView::resizeEvent(QResizeEvent *event)
+ResourcePool *resource_pool = nullptr;
+
+void JPEGFrameView::initializeGL()
 {
-	fitInView(&item, Qt::KeepAspectRatio);
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
+	check_error();
+
+	static once_flag once;
+	call_once(once, [] {
+		CHECK(init_movit(MOVIT_SHADER_DIR, MOVIT_DEBUG_OFF));
+		resource_pool = new ResourcePool;
+
+		std::thread(&jpeg_decoder_thread).detach();
+	});
+
+	chain.reset(new EffectChain(1280, 720, resource_pool));
+	ImageFormat image_format;
+	image_format.color_space = COLORSPACE_sRGB;
+	image_format.gamma_curve = GAMMA_sRGB;
+	YCbCrFormat ycbcr_format;
+	ycbcr_format.luma_coefficients = YCBCR_REC_709;
+	ycbcr_format.full_range = false;
+	ycbcr_format.num_levels = 256;
+	ycbcr_format.chroma_subsampling_x = 2;
+	ycbcr_format.chroma_subsampling_y = 1;
+	ycbcr_format.cb_x_position = 0.0f;  // H.264 -- _not_ JPEG, even though our input is MJPEG-encoded
+	ycbcr_format.cb_y_position = 0.5f;  // Irrelevant.
+	ycbcr_format.cr_x_position = 0.0f;
+	ycbcr_format.cr_y_position = 0.5f;
+	ycbcr_input = (movit::YCbCrInput *)chain->add_input(new YCbCrInput(image_format, ycbcr_format, 1280, 720));
+
+	ImageFormat inout_format;
+        inout_format.color_space = COLORSPACE_sRGB;
+        inout_format.gamma_curve = GAMMA_sRGB;
+
+	check_error();
+	chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
+	check_error();
+	chain->set_dither_bits(8);
+	check_error();
+	chain->finalize();
+	check_error();
 }
 
-void JPEGFrameView::setPixmap(std::shared_ptr<QPixmap> pixmap)
+void JPEGFrameView::resizeGL(int width, int height)
 {
-	post_to_main_thread([this, pixmap] {
-		item.setPixmap(*pixmap);
-		fitInView(&item, Qt::KeepAspectRatio);
+	check_error();
+	glViewport(0, 0, width, height);
+	check_error();
+}
+
+void JPEGFrameView::paintGL()
+{
+	//glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	check_error();
+	chain->render_to_screen();
+}
+
+void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
+{
+	post_to_main_thread([this, frame] {
+		current_frame = frame;
+		int width_blocks = (frame->width + 15) / 16;
+		ycbcr_input->set_width(frame->width);
+		ycbcr_input->set_height(frame->height);
+		ycbcr_input->set_pixel_data(0, frame->y.get());
+		ycbcr_input->set_pixel_data(1, frame->cb.get());
+		ycbcr_input->set_pixel_data(2, frame->cr.get());
+		ycbcr_input->set_pitch(0, width_blocks * 16);
+		ycbcr_input->set_pitch(1, width_blocks * 8);
+		ycbcr_input->set_pitch(2, width_blocks * 8);
+		update();
 	});
 }

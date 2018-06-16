@@ -133,3 +133,17 @@ void MainWindow::live_player_clip_done()
 		playlist_clips->set_currently_playing(-1);
 	}
 }
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+	QMainWindow::resizeEvent(event);
+
+	// Ask for a relayout, but only after the event loop is done doing relayout
+	// on everything else.
+	QMetaObject::invokeMethod(this, "relayout", Qt::QueuedConnection);
+}
+
+void MainWindow::relayout()
+{
+	ui->live_display->setMinimumHeight(ui->live_display->width() * 9 / 16);
+}
