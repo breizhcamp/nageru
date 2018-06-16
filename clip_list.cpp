@@ -46,13 +46,19 @@ int ClipList::rowCount(const QModelIndex &parent) const {
 	return clips.size();
 }
 
+int PlayList::rowCount(const QModelIndex &parent) const {
+	if (parent.isValid()) return 0;
+	return clips.size();
+}
+
 int ClipList::columnCount(const QModelIndex &parent) const {
 	if (parent.isValid()) return 0;
-	if (display_type == ListDisplay::CLIP_LIST) {
-		return int(ClipListColumn::NUM_COLUMNS);
-	} else {
-		return int(PlayListColumn::NUM_COLUMNS);
-	}
+	return int(Column::NUM_COLUMNS);
+}
+
+int PlayList::columnCount(const QModelIndex &parent) const {
+	if (parent.isValid()) return 0;
+	return int(Column::NUM_COLUMNS);
 }
 
 QVariant ClipList::data(const QModelIndex &parent, int role) const {
@@ -63,76 +69,85 @@ QVariant ClipList::data(const QModelIndex &parent, int role) const {
 		return QVariant();
 
 	if (role == Qt::TextAlignmentRole) {
-		if (display_type == ListDisplay::CLIP_LIST) {
-			switch (ClipListColumn(column)) {
-			case ClipListColumn::IN:
-			case ClipListColumn::OUT:
-			case ClipListColumn::DURATION:
-				return Qt::AlignRight + Qt::AlignVCenter;
-			default:
-				return Qt::AlignLeft + Qt::AlignVCenter;
-			}
-		} else {
-			switch (PlayListColumn(column)) {
-			case PlayListColumn::PLAYING:
-				return Qt::AlignCenter;
-			case PlayListColumn::IN:
-			case PlayListColumn::OUT:
-			case PlayListColumn::DURATION:
-				return Qt::AlignRight + Qt::AlignVCenter;
-			case PlayListColumn::CAMERA:
-				return Qt::AlignCenter;
-			default:
-				return Qt::AlignLeft + Qt::AlignVCenter;
-			}
+		switch (Column(column)) {
+		case Column::IN:
+		case Column::OUT:
+		case Column::DURATION:
+			return Qt::AlignRight + Qt::AlignVCenter;
+		default:
+			return Qt::AlignLeft + Qt::AlignVCenter;
 		}
 	}
 
 	if (role != Qt::DisplayRole)
 		return QVariant();
 
-	if (display_type == ListDisplay::CLIP_LIST) {
-		switch (ClipListColumn(column)) {
-		case ClipListColumn::IN:
-			return QString::fromStdString(pts_to_string(clips[row].pts_in));
-		case ClipListColumn::OUT:
-			if (clips[row].pts_out >= 0) {
-				return QString::fromStdString(pts_to_string(clips[row].pts_out));
-			} else {
-				return QVariant();
-			}
-		case ClipListColumn::DURATION:
-			if (clips[row].pts_out >= 0) {
-				return QString::fromStdString(duration_to_string(clips[row].pts_out - clips[row].pts_in));
-			} else {
-				return QVariant();
-			}
-		default:
-			return "";
+	switch (Column(column)) {
+	case Column::IN:
+		return QString::fromStdString(pts_to_string(clips[row].pts_in));
+	case Column::OUT:
+		if (clips[row].pts_out >= 0) {
+			return QString::fromStdString(pts_to_string(clips[row].pts_out));
+		} else {
+			return QVariant();
 		}
-	} else {
-		switch (PlayListColumn(column)) {
-		case PlayListColumn::PLAYING:
-			return (row == currently_playing_index) ? "→" : "";
-		case PlayListColumn::IN:
-			return QString::fromStdString(pts_to_string(clips[row].pts_in));
-		case PlayListColumn::OUT:
-			if (clips[row].pts_out >= 0) {
-				return QString::fromStdString(pts_to_string(clips[row].pts_out));
-			} else {
-				return QVariant();
-			}
-		case PlayListColumn::DURATION:
-			if (clips[row].pts_out >= 0) {
-				return QString::fromStdString(duration_to_string(clips[row].pts_out - clips[row].pts_in));
-			} else {
-				return QVariant();
-			}
-		case PlayListColumn::CAMERA:
-			return qlonglong(clips[row].stream_idx + 1);
-		default:
-			return "";
+	case Column::DURATION:
+		if (clips[row].pts_out >= 0) {
+			return QString::fromStdString(duration_to_string(clips[row].pts_out - clips[row].pts_in));
+		} else {
+			return QVariant();
 		}
+	default:
+		return "";
+	}
+}
+
+QVariant PlayList::data(const QModelIndex &parent, int role) const {
+	if (!parent.isValid())
+		return QVariant();
+	const int row = parent.row(), column = parent.column();
+	if (size_t(row) >= clips.size())
+		return QVariant();
+
+	if (role == Qt::TextAlignmentRole) {
+		switch (Column(column)) {
+		case Column::PLAYING:
+			return Qt::AlignCenter;
+		case Column::IN:
+		case Column::OUT:
+		case Column::DURATION:
+			return Qt::AlignRight + Qt::AlignVCenter;
+		case Column::CAMERA:
+			return Qt::AlignCenter;
+		default:
+			return Qt::AlignLeft + Qt::AlignVCenter;
+		}
+	}
+
+	if (role != Qt::DisplayRole)
+		return QVariant();
+
+	switch (Column(column)) {
+	case Column::PLAYING:
+		return (row == currently_playing_index) ? "→" : "";
+	case Column::IN:
+		return QString::fromStdString(pts_to_string(clips[row].pts_in));
+	case Column::OUT:
+		if (clips[row].pts_out >= 0) {
+			return QString::fromStdString(pts_to_string(clips[row].pts_out));
+		} else {
+			return QVariant();
+		}
+	case Column::DURATION:
+		if (clips[row].pts_out >= 0) {
+			return QString::fromStdString(duration_to_string(clips[row].pts_out - clips[row].pts_in));
+		} else {
+			return QVariant();
+		}
+	case Column::CAMERA:
+		return qlonglong(clips[row].stream_idx + 1);
+	default:
+		return "";
 	}
 }
 
@@ -142,42 +157,47 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 	if (orientation != Qt::Horizontal)
 		return QVariant();
 
-	if (display_type == ListDisplay::CLIP_LIST) {
-		switch (ClipListColumn(section)) {
-		case ClipListColumn::IN:
-			return "In";
-		case ClipListColumn::OUT:
-			return "Out";
-		case ClipListColumn::DURATION:
-			return "Duration";
-		case ClipListColumn::CAMERA_1:
-			return "Camera 1";
-		case ClipListColumn::CAMERA_2:
-			return "Camera 2";
-		case ClipListColumn::CAMERA_3:
-			return "Camera 3";
-		case ClipListColumn::CAMERA_4:
-			return "Camera 4";
-		default:
-			return "";
-		}
-	} else {
-		switch (PlayListColumn(section)) {
-		case PlayListColumn::PLAYING:
-			return "";
-		case PlayListColumn::IN:
-			return "In";
-		case PlayListColumn::OUT:
-			return "Out";
-		case PlayListColumn::DURATION:
-			return "Duration";
-		case PlayListColumn::CAMERA:
-			return "Camera";
-		case PlayListColumn::DESCRIPTION:
-			return "Description";
-		default:
-			return "";
-		}
+	switch (Column(section)) {
+	case Column::IN:
+		return "In";
+	case Column::OUT:
+		return "Out";
+	case Column::DURATION:
+		return "Duration";
+	case Column::CAMERA_1:
+		return "Camera 1";
+	case Column::CAMERA_2:
+		return "Camera 2";
+	case Column::CAMERA_3:
+		return "Camera 3";
+	case Column::CAMERA_4:
+		return "Camera 4";
+	default:
+		return "";
+	}
+}
+
+QVariant PlayList::headerData(int section, Qt::Orientation orientation, int role) const {
+	if (role != Qt::DisplayRole)
+		return QVariant();
+	if (orientation != Qt::Horizontal)
+		return QVariant();
+
+	switch (Column(section)) {
+	case Column::PLAYING:
+		return "";
+	case Column::IN:
+		return "In";
+	case Column::OUT:
+		return "Out";
+	case Column::DURATION:
+		return "Duration";
+	case Column::CAMERA:
+		return "Camera";
+	case Column::DESCRIPTION:
+		return "Description";
+	default:
+		return "";
 	}
 }
 
@@ -188,16 +208,24 @@ void ClipList::add_clip(const Clip &clip)
 	endInsertRows();
 }
 
-void ClipList::emit_data_changed(size_t row)
+void PlayList::add_clip(const Clip &clip)
 {
-	if (display_type == ListDisplay::CLIP_LIST) {
-		emit dataChanged(index(row, 0), index(row, int(ClipListColumn::NUM_COLUMNS)));
-	} else {
-		emit dataChanged(index(row, 0), index(row, int(PlayListColumn::NUM_COLUMNS)));
-	}
+	beginInsertRows(QModelIndex(), clips.size(), clips.size());
+	clips.push_back(clip);
+	endInsertRows();
 }
 
-void ClipList::set_currently_playing(int index)
+void ClipList::emit_data_changed(size_t row)
+{
+	emit dataChanged(index(row, 0), index(row, int(Column::NUM_COLUMNS)));
+}
+
+void PlayList::emit_data_changed(size_t row)
+{
+	emit dataChanged(index(row, 0), index(row, int(Column::NUM_COLUMNS)));
+}
+
+void PlayList::set_currently_playing(int index)
 {
 	int old_index = currently_playing_index;
 	if (index != old_index) {

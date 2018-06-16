@@ -14,7 +14,8 @@ using namespace std;
 
 MainWindow *global_mainwindow = nullptr;
 extern int64_t current_pts;
-ClipList *cliplist_clips, *playlist_clips;
+ClipList *cliplist_clips;
+PlayList *playlist_clips;
 
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow)
@@ -22,10 +23,10 @@ MainWindow::MainWindow()
 	global_mainwindow = this;
 	ui->setupUi(this);
 
-	cliplist_clips = new ClipList(ClipList::ListDisplay::CLIP_LIST);
+	cliplist_clips = new ClipList();
 	ui->clip_list->setModel(cliplist_clips);
 
-	playlist_clips = new ClipList(ClipList::ListDisplay::PLAY_LIST);
+	playlist_clips = new PlayList();
 	ui->playlist->setModel(playlist_clips);
 
 	// TODO: These are too big for lambdas.
@@ -82,10 +83,10 @@ void MainWindow::queue_clicked()
 	}
 
 	QModelIndex index = selected->currentIndex();
-	if (index.column() >= int(ClipList::ClipListColumn::CAMERA_1) &&
-	    index.column() <= int(ClipList::ClipListColumn::CAMERA_4)) {
+	if (index.column() >= int(ClipList::Column::CAMERA_1) &&
+	    index.column() <= int(ClipList::Column::CAMERA_4)) {
 		Clip clip = *cliplist_clips->clip(index.row());
-		clip.stream_idx = index.column() - int(ClipList::ClipListColumn::CAMERA_1);
+		clip.stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 		playlist_clips->add_clip(clip);
 	}
 }
@@ -101,9 +102,9 @@ void MainWindow::preview_clicked()
 	}
 
 	QModelIndex index = selected->currentIndex();
-	if (index.column() >= int(ClipList::ClipListColumn::CAMERA_1) &&
-	    index.column() <= int(ClipList::ClipListColumn::CAMERA_4)) {
-		unsigned stream_idx = index.column() - int(ClipList::ClipListColumn::CAMERA_1);
+	if (index.column() >= int(ClipList::Column::CAMERA_1) &&
+	    index.column() <= int(ClipList::Column::CAMERA_4)) {
+		unsigned stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 		preview_player->play_clip(*cliplist_clips->clip(index.row()), stream_idx);
 	}
 }
