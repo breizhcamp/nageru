@@ -271,8 +271,11 @@ void JPEGFrameView::resizeGL(int width, int height)
 
 void JPEGFrameView::paintGL()
 {
-	//glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	if (current_frame == nullptr) {
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		return;
+	}
 
 	check_error();
 	chain->render_to_screen();
@@ -282,6 +285,9 @@ void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
 {
 	post_to_main_thread([this, frame] {
 		current_frame = frame;
+		ycbcr_format.chroma_subsampling_x = frame->chroma_subsampling_x;
+		ycbcr_format.chroma_subsampling_y = frame->chroma_subsampling_y;
+		ycbcr_input->change_ycbcr_format(ycbcr_format);
 		ycbcr_input->set_width(frame->width);
 		ycbcr_input->set_height(frame->height);
 		ycbcr_input->set_pixel_data(0, frame->y.get());
@@ -290,9 +296,6 @@ void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
 		ycbcr_input->set_pitch(0, frame->pitch_y);
 		ycbcr_input->set_pitch(1, frame->pitch_chroma);
 		ycbcr_input->set_pitch(2, frame->pitch_chroma);
-		ycbcr_format.chroma_subsampling_x = frame->chroma_subsampling_x;
-		ycbcr_format.chroma_subsampling_y = frame->chroma_subsampling_y;
-		ycbcr_input->change_ycbcr_format(ycbcr_format);
 		update();
 	});
 }
