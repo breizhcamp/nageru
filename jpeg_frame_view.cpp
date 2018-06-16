@@ -61,15 +61,21 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 
 	jpeg_read_header(&dinfo, true);
 
-	if (dinfo.num_components != 3 ||
-            dinfo.comp_info[0].h_samp_factor != 2 ||
-            dinfo.comp_info[0].v_samp_factor != 2 ||
-            dinfo.comp_info[1].h_samp_factor != 1 ||
-            dinfo.comp_info[1].v_samp_factor != 2 ||
-            dinfo.comp_info[2].h_samp_factor != 1 ||
-            dinfo.comp_info[2].v_samp_factor != 2) {
-		fprintf(stderr, "Not 4:2:2 JPEG! (%d components, Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
+	if (dinfo.num_components != 3) {
+		fprintf(stderr, "Not a color JPEG. (%d components, Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
 			dinfo.num_components,
+			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
+			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
+			dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
+		exit(1);
+	}
+	if (dinfo.comp_info[0].h_samp_factor != dinfo.max_h_samp_factor ||
+	    dinfo.comp_info[0].v_samp_factor != dinfo.max_v_samp_factor ||  // Y' must not be subsampled.
+	    dinfo.comp_info[1].h_samp_factor != dinfo.comp_info[2].h_samp_factor ||
+	    dinfo.comp_info[1].v_samp_factor != dinfo.comp_info[2].v_samp_factor ||  // Cb and Cr must be identically subsampled.
+	    (dinfo.max_h_samp_factor % dinfo.comp_info[1].h_samp_factor) != 0 ||
+	    (dinfo.max_v_samp_factor % dinfo.comp_info[1].v_samp_factor) != 0) {  // No 2:3 subsampling or other weirdness.
+		fprintf(stderr, "Unsupported subsampling scheme. (Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
 			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
 			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
 			dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
@@ -81,26 +87,32 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 
 	frame->width = dinfo.output_width;
 	frame->height = dinfo.output_height;
+	frame->chroma_subsampling_x = dinfo.max_h_samp_factor / dinfo.comp_info[1].h_samp_factor;
+	frame->chroma_subsampling_y = dinfo.max_v_samp_factor / dinfo.comp_info[1].v_samp_factor;
 
-	unsigned chroma_width_blocks = (dinfo.output_width + 15) / 16;
-	unsigned width_blocks = chroma_width_blocks * 2;
-	unsigned height_blocks = (dinfo.output_height + 15) / 16;
+	unsigned h_mcu_size = DCTSIZE * dinfo.max_h_samp_factor;
+	unsigned v_mcu_size = DCTSIZE * dinfo.max_v_samp_factor;
+	unsigned chroma_width_blocks = (dinfo.output_width + h_mcu_size - 1) / h_mcu_size;
+	unsigned width_blocks = chroma_width_blocks * dinfo.max_h_samp_factor;
+	unsigned chroma_height_blocks = (dinfo.output_height + v_mcu_size - 1) / v_mcu_size;
+	unsigned height_blocks = chroma_height_blocks * dinfo.max_v_samp_factor;
 
 	// TODO: Decode into a PBO.
-	frame->y.reset(new uint8_t[width_blocks * (height_blocks * 2) * DCTSIZE2]);
-	frame->cb.reset(new uint8_t[chroma_width_blocks * (height_blocks * 2) * DCTSIZE2]);
-	frame->cr.reset(new uint8_t[chroma_width_blocks * (height_blocks * 2) * DCTSIZE2]);
+	frame->y.reset(new uint8_t[width_blocks * height_blocks * DCTSIZE2]);
+	frame->cb.reset(new uint8_t[chroma_width_blocks * chroma_height_blocks * DCTSIZE2]);
+	frame->cr.reset(new uint8_t[chroma_width_blocks * chroma_height_blocks * DCTSIZE2]);
 
-	JSAMPROW yptr[16], cbptr[16], crptr[16];
+	JSAMPROW yptr[v_mcu_size], cbptr[v_mcu_size], crptr[v_mcu_size];
 	JSAMPARRAY data[3] = { yptr, cbptr, crptr };
-	for (unsigned y = 0; y < height_blocks; ++y) {
-		for (unsigned yy = 0; yy < DCTSIZE * 2; ++yy) {
-			yptr[yy] = frame->y.get() + (y * DCTSIZE * 2 + yy) * width_blocks * DCTSIZE;
-			cbptr[yy] = frame->cb.get() + (y * DCTSIZE * 2 + yy) * chroma_width_blocks * DCTSIZE;
-			crptr[yy] = frame->cr.get() + (y * DCTSIZE * 2 + yy) * chroma_width_blocks * DCTSIZE;
+	for (unsigned y = 0; y < chroma_height_blocks; ++y) {
+		// NOTE: The last elements of cbptr/crptr will be unused for vertically subsampled chroma.
+		for (unsigned yy = 0; yy < v_mcu_size; ++yy) {
+			yptr[yy] = frame->y.get() + (y * DCTSIZE * dinfo.max_v_samp_factor + yy) * width_blocks * DCTSIZE;
+			cbptr[yy] = frame->cb.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * chroma_width_blocks * DCTSIZE;
+			crptr[yy] = frame->cr.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * chroma_width_blocks * DCTSIZE;
 		}
 
-		jpeg_read_raw_data(&dinfo, data, /*num_lines=*/16);
+		jpeg_read_raw_data(&dinfo, data, v_mcu_size);
 	}
 
 	(void) jpeg_finish_decompress(&dinfo);
@@ -221,7 +233,6 @@ void JPEGFrameView::initializeGL()
 	ImageFormat image_format;
 	image_format.color_space = COLORSPACE_sRGB;
 	image_format.gamma_curve = GAMMA_sRGB;
-	YCbCrFormat ycbcr_format;
 	ycbcr_format.luma_coefficients = YCBCR_REC_709;
 	ycbcr_format.full_range = false;
 	ycbcr_format.num_levels = 256;
@@ -275,6 +286,9 @@ void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
 		ycbcr_input->set_pitch(0, width_blocks * 16);
 		ycbcr_input->set_pitch(1, width_blocks * 8);
 		ycbcr_input->set_pitch(2, width_blocks * 8);
+		ycbcr_format.chroma_subsampling_x = frame->chroma_subsampling_x;
+		ycbcr_format.chroma_subsampling_y = frame->chroma_subsampling_y;
+		ycbcr_input->change_ycbcr_format(ycbcr_format);
 		update();
 	});
 }

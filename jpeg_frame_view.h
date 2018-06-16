@@ -14,6 +14,7 @@
 struct Frame {
 	std::unique_ptr<uint8_t[]> y, cb, cr;
 	unsigned width, height;
+	unsigned chroma_subsampling_x, chroma_subsampling_y;
 };
 
 class JPEGFrameView : public QGLWidget {
@@ -45,6 +46,7 @@ private:
 	std::unique_ptr<movit::EffectChain> chain;
 	std::shared_ptr<Frame> current_frame;  // So that we hold on to the pixels.
 	movit::YCbCrInput *ycbcr_input;
+	movit::YCbCrFormat ycbcr_format;
 };
 
 #endif  // !defined(_JPEG_FRAME_VIEW_H)
