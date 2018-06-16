@@ -92,24 +92,29 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 
 	unsigned h_mcu_size = DCTSIZE * dinfo.max_h_samp_factor;
 	unsigned v_mcu_size = DCTSIZE * dinfo.max_v_samp_factor;
-	unsigned chroma_width_blocks = (dinfo.output_width + h_mcu_size - 1) / h_mcu_size;
-	unsigned width_blocks = chroma_width_blocks * dinfo.max_h_samp_factor;
-	unsigned chroma_height_blocks = (dinfo.output_height + v_mcu_size - 1) / v_mcu_size;
-	unsigned height_blocks = chroma_height_blocks * dinfo.max_v_samp_factor;
+	unsigned mcu_width_blocks = (dinfo.output_width + h_mcu_size - 1) / h_mcu_size;
+	unsigned mcu_height_blocks = (dinfo.output_height + v_mcu_size - 1) / v_mcu_size;
+
+	unsigned luma_width_blocks = mcu_width_blocks * dinfo.comp_info[0].h_samp_factor;
+	unsigned chroma_width_blocks = mcu_width_blocks * dinfo.comp_info[1].h_samp_factor;
+	unsigned luma_height_blocks = mcu_height_blocks * dinfo.comp_info[0].v_samp_factor;
+	unsigned chroma_height_blocks = mcu_height_blocks * dinfo.comp_info[1].v_samp_factor;
 
 	// TODO: Decode into a PBO.
-	frame->y.reset(new uint8_t[width_blocks * height_blocks * DCTSIZE2]);
+	frame->y.reset(new uint8_t[luma_width_blocks * luma_height_blocks * DCTSIZE2]);
 	frame->cb.reset(new uint8_t[chroma_width_blocks * chroma_height_blocks * DCTSIZE2]);
 	frame->cr.reset(new uint8_t[chroma_width_blocks * chroma_height_blocks * DCTSIZE2]);
+	frame->pitch_y = luma_width_blocks * DCTSIZE;
+	frame->pitch_chroma = chroma_width_blocks * DCTSIZE;
 
 	JSAMPROW yptr[v_mcu_size], cbptr[v_mcu_size], crptr[v_mcu_size];
 	JSAMPARRAY data[3] = { yptr, cbptr, crptr };
-	for (unsigned y = 0; y < chroma_height_blocks; ++y) {
+	for (unsigned y = 0; y < mcu_height_blocks; ++y) {
 		// NOTE: The last elements of cbptr/crptr will be unused for vertically subsampled chroma.
 		for (unsigned yy = 0; yy < v_mcu_size; ++yy) {
-			yptr[yy] = frame->y.get() + (y * DCTSIZE * dinfo.max_v_samp_factor + yy) * width_blocks * DCTSIZE;
-			cbptr[yy] = frame->cb.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * chroma_width_blocks * DCTSIZE;
-			crptr[yy] = frame->cr.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * chroma_width_blocks * DCTSIZE;
+			yptr[yy] = frame->y.get() + (y * DCTSIZE * dinfo.max_v_samp_factor + yy) * frame->pitch_y;
+			cbptr[yy] = frame->cb.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
+			crptr[yy] = frame->cr.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
 		}
 
 		jpeg_read_raw_data(&dinfo, data, v_mcu_size);
@@ -277,15 +282,14 @@ void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
 {
 	post_to_main_thread([this, frame] {
 		current_frame = frame;
-		int width_blocks = (frame->width + 15) / 16;
 		ycbcr_input->set_width(frame->width);
 		ycbcr_input->set_height(frame->height);
 		ycbcr_input->set_pixel_data(0, frame->y.get());
 		ycbcr_input->set_pixel_data(1, frame->cb.get());
 		ycbcr_input->set_pixel_data(2, frame->cr.get());
-		ycbcr_input->set_pitch(0, width_blocks * 16);
-		ycbcr_input->set_pitch(1, width_blocks * 8);
-		ycbcr_input->set_pitch(2, width_blocks * 8);
+		ycbcr_input->set_pitch(0, frame->pitch_y);
+		ycbcr_input->set_pitch(1, frame->pitch_chroma);
+		ycbcr_input->set_pitch(2, frame->pitch_chroma);
 		ycbcr_format.chroma_subsampling_x = frame->chroma_subsampling_x;
 		ycbcr_format.chroma_subsampling_y = frame->chroma_subsampling_y;
 		ycbcr_input->change_ycbcr_format(ycbcr_format);

@@ -15,6 +15,7 @@ struct Frame {
 	std::unique_ptr<uint8_t[]> y, cb, cr;
 	unsigned width, height;
 	unsigned chroma_subsampling_x, chroma_subsampling_y;
+	unsigned pitch_y, pitch_chroma;
 };
 
 class JPEGFrameView : public QGLWidget {
