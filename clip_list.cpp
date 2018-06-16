@@ -97,6 +97,13 @@ QVariant ClipList::data(const QModelIndex &parent, int role) const {
 		} else {
 			return QVariant();
 		}
+	case Column::CAMERA_1:
+	case Column::CAMERA_2:
+	case Column::CAMERA_3:
+	case Column::CAMERA_4: {
+		unsigned stream_idx = column - int(Column::CAMERA_1);
+		return QString::fromStdString(clips[row].descriptions[stream_idx]);
+	}
 	default:
 		return "";
 	}
@@ -146,6 +153,8 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const {
 		}
 	case Column::CAMERA:
 		return qlonglong(clips[row].stream_idx + 1);
+	case Column::DESCRIPTION:
+		return QString::fromStdString(clips[row].descriptions[clips[row].stream_idx]);
 	default:
 		return "";
 	}
@@ -198,6 +207,50 @@ QVariant PlayList::headerData(int section, Qt::Orientation orientation, int role
 		return "Description";
 	default:
 		return "";
+	}
+}
+
+Qt::ItemFlags ClipList::flags(const QModelIndex &index) const
+{
+	if (!index.isValid())
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+	const int row = index.row(), column = index.column();
+	if (size_t(row) >= clips.size())
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+
+	switch (Column(column)) {
+	case Column::CAMERA_1:
+	case Column::CAMERA_2:
+	case Column::CAMERA_3:
+	case Column::CAMERA_4:
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable | Qt::ItemIsDragEnabled;
+	default:
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+	}
+}
+
+bool ClipList::setData(const QModelIndex &index, const QVariant &value, int role)
+{
+	if (!index.isValid() || role != Qt::EditRole) {
+		return false;
+	}
+
+	const int row = index.row(), column = index.column();
+	if (size_t(row) >= clips.size())
+		return false;
+
+	switch (Column(column)) {
+	case Column::CAMERA_1:
+	case Column::CAMERA_2:
+	case Column::CAMERA_3:
+	case Column::CAMERA_4: {
+		unsigned stream_idx = column - int(Column::CAMERA_1);
+		clips[row].descriptions[stream_idx] = value.toString().toStdString();
+		emit_data_changed(row);
+		return true;
+	}
+	default:
+		return false;
 	}
 }
 
