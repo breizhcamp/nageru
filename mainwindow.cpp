@@ -92,6 +92,8 @@ void MainWindow::queue_clicked()
 
 void MainWindow::preview_clicked()
 {
+	if (cliplist_clips->empty()) return;
+
 	QItemSelectionModel *selected = ui->clip_list->selectionModel();
 	if (!selected->hasSelection()) {
 		preview_player->play_clip(*cliplist_clips->back(), 0);
@@ -108,6 +110,8 @@ void MainWindow::preview_clicked()
 
 void MainWindow::play_clicked()
 {
+	if (playlist_clips->empty()) return;
+
 	QItemSelectionModel *selected = ui->playlist->selectionModel();
 	int row;
 	if (!selected->hasSelection()) {
