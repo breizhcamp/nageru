@@ -229,6 +229,22 @@ Qt::ItemFlags ClipList::flags(const QModelIndex &index) const
 	}
 }
 
+Qt::ItemFlags PlayList::flags(const QModelIndex &index) const
+{
+	if (!index.isValid())
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+	const int row = index.row(), column = index.column();
+	if (size_t(row) >= clips.size())
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+
+	switch (Column(column)) {
+	case Column::DESCRIPTION:
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable;
+	default:
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+	}
+}
+
 bool ClipList::setData(const QModelIndex &index, const QVariant &value, int role)
 {
 	if (!index.isValid() || role != Qt::EditRole) {
@@ -249,6 +265,26 @@ bool ClipList::setData(const QModelIndex &index, const QVariant &value, int role
 		emit_data_changed(row);
 		return true;
 	}
+	default:
+		return false;
+	}
+}
+
+bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role)
+{
+	if (!index.isValid() || role != Qt::EditRole) {
+		return false;
+	}
+
+	const int row = index.row(), column = index.column();
+	if (size_t(row) >= clips.size())
+		return false;
+
+	switch (Column(column)) {
+	case Column::DESCRIPTION:
+		clips[row].descriptions[clips[row].stream_idx] = value.toString().toStdString();
+		emit_data_changed(row);
+		return true;
 	default:
 		return false;
 	}
