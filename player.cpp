@@ -38,7 +38,7 @@ void Player::thread_func()
 		steady_clock::time_point origin = steady_clock::now();
 		int64_t pts_origin = clip.pts_in;
 
-		int64_t next_pts = pts_origin;
+		int64_t next_pts = pts_origin - 1;  // Make sure we play the frame at clip.pts_in if it exists.
 
 		bool aborted = false;
 		for ( ;; ) {

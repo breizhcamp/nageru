@@ -8,14 +8,19 @@
 #include <string>
 #include <vector>
 
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include <QShortcut>
 
 using namespace std;
 
 MainWindow *global_mainwindow = nullptr;
-extern int64_t current_pts;
 ClipList *cliplist_clips;
 PlayList *playlist_clips;
+
+extern int64_t current_pts;
+extern mutex frame_mu;
+extern vector<int64_t> frames[MAX_STREAMS];
 
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow)
@@ -25,6 +30,9 @@ MainWindow::MainWindow()
 
 	cliplist_clips = new ClipList();
 	ui->clip_list->setModel(cliplist_clips);
+
+	// For scrubbing in the pts columns.
+	ui->clip_list->viewport()->installEventFilter(this);
 
 	playlist_clips = new PlayList();
 	ui->playlist->setModel(playlist_clips);
@@ -151,4 +159,120 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 void MainWindow::relayout()
 {
 	ui->live_display->setMinimumHeight(ui->live_display->width() * 9 / 16);
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+	constexpr int dead_zone_pixels = 3;  // To avoid that simple clicks get misinterpreted.
+	constexpr int scrub_sensitivity = 100;  // pts units per pixel.
+	constexpr int wheel_sensitivity = 100;  // pts units per degree.
+
+	if (event->type() == QEvent::MouseButtonPress) {
+		QMouseEvent *mouse = (QMouseEvent *)event;
+
+		int column = ui->clip_list->columnAt(mouse->x());
+		int row = ui->clip_list->rowAt(mouse->y());
+		if (column == -1 || row == -1) return false;
+
+		if (ClipList::Column(column) == ClipList::Column::IN) {
+			scrubbing = true;
+			scrub_row = row;
+			scrub_column = ClipList::Column::IN;
+			scrub_x_origin = mouse->x();
+			scrub_pts_origin = cliplist_clips->clip(scrub_row)->pts_in;
+
+			unsigned stream_idx = ui->preview_display->get_stream_idx();
+			preview_single_frame(scrub_pts_origin, stream_idx, FIRST_AT_OR_AFTER);
+		} else if (ClipList::Column(column) == ClipList::Column::OUT) {
+			scrubbing = true;
+			scrub_row = row;
+			scrub_column = ClipList::Column::OUT;
+			scrub_x_origin = mouse->x();
+			scrub_pts_origin = cliplist_clips->clip(scrub_row)->pts_out;
+
+			unsigned stream_idx = ui->preview_display->get_stream_idx();
+			preview_single_frame(scrub_pts_origin, stream_idx, LAST_BEFORE);
+		}
+	} else if (event->type() == QEvent::MouseMove) {
+		if (scrubbing) {
+			QMouseEvent *mouse = (QMouseEvent *)event;
+			int offset = mouse->x() - scrub_x_origin;
+			int adjusted_offset;
+			if (offset >= dead_zone_pixels) {
+				adjusted_offset = offset - dead_zone_pixels;
+			} else if (offset < -dead_zone_pixels) {
+				adjusted_offset = offset + dead_zone_pixels;
+			} else {
+				adjusted_offset = 0;
+			}
+
+			unsigned stream_idx = ui->preview_display->get_stream_idx();
+			int64_t pts = scrub_pts_origin + adjusted_offset * scrub_sensitivity;
+
+			if (scrub_column == ClipList::Column::IN) {
+				pts = std::max<int64_t>(pts, 0);
+				pts = std::min(pts, cliplist_clips->clip(scrub_row)->pts_out);
+				cliplist_clips->clip(scrub_row)->pts_in = pts;
+				preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
+			} else {
+				pts = std::max(pts, cliplist_clips->clip(scrub_row)->pts_in);
+				pts = std::min(pts, current_pts);
+				cliplist_clips->clip(scrub_row)->pts_out = pts;
+				preview_single_frame(pts, stream_idx, LAST_BEFORE);
+			}
+
+			return true;  // Don't use this mouse movement for selecting things.
+		}
+	} else if (event->type() == QEvent::Wheel) {
+		QWheelEvent *wheel = (QWheelEvent *)event;
+
+		int column = ui->clip_list->columnAt(wheel->x());
+		int row = ui->clip_list->rowAt(wheel->y());
+		if (column == -1 || row == -1) return false;
+
+		ClipProxy clip = cliplist_clips->clip(scrub_row);
+		unsigned stream_idx = ui->preview_display->get_stream_idx();
+
+		if (ClipList::Column(column) == ClipList::Column::IN) {
+			int64_t pts = clip->pts_in + wheel->angleDelta().y() * wheel_sensitivity;
+			pts = std::max<int64_t>(pts, 0);
+			pts = std::min(pts, clip->pts_out);
+			clip->pts_in = pts;
+			preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
+		} else if (ClipList::Column(column) == ClipList::Column::OUT) {
+			int64_t pts = clip->pts_out + wheel->angleDelta().y() * wheel_sensitivity;
+			pts = std::max(pts, clip->pts_in);
+			pts = std::min(pts, current_pts);
+			clip->pts_out = pts;
+			preview_single_frame(pts, stream_idx, LAST_BEFORE);
+		}
+	} else if (event->type() == QEvent::MouseButtonRelease) {
+		scrubbing = false;
+	}
+	return false;
+}
+
+void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWindow::Rounding rounding)
+{
+	if (rounding == LAST_BEFORE) {
+		lock_guard<mutex> lock(frame_mu);
+		if (frames[stream_idx].empty()) return;
+		auto it = lower_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts);
+		if (it != frames[stream_idx].end()) {
+			pts = *it;
+		}
+	} else {
+		assert(rounding == FIRST_AT_OR_AFTER);
+		lock_guard<mutex> lock(frame_mu);
+		if (frames[stream_idx].empty()) return;
+		auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts - 1);
+		if (it != frames[stream_idx].end()) {
+			pts = *it;
+		}
+	}
+
+	Clip fake_clip;
+	fake_clip.pts_in = pts;
+	fake_clip.pts_out = pts + 1;
+	preview_player->play_clip(fake_clip, stream_idx);
 }

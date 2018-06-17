@@ -31,6 +31,8 @@ public:
 		update_frame();
 	}
 
+	unsigned get_stream_idx() const { return stream_idx; }
+
 	void setDecodedFrame(std::shared_ptr<Frame> frame);
 
 protected:

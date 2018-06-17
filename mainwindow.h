@@ -5,6 +5,8 @@
 #include <sys/types.h>
 #include <QMainWindow>
 
+#include "clip_list.h"
+
 namespace Ui {
 class MainWindow;
 }  // namespace Ui
@@ -24,12 +26,25 @@ public:
 private:
 	Player *preview_player, *live_player;
 
+	// State when doing a scrub operation on a timestamp with the mouse.
+	bool scrubbing = false;
+	int scrub_x_origin;  // In pixels on the viewport.
+	int64_t scrub_pts_origin;
+
+	// Which element (e.g. pts_in on clip 4) we are scrubbing.
+	int scrub_row;
+	ClipList::Column scrub_column;
+
 	void queue_clicked();
 	void preview_clicked();
 	void play_clicked();
 	void live_player_clip_done();
 
+	enum Rounding { FIRST_AT_OR_AFTER, LAST_BEFORE };
+	void preview_single_frame(int64_t pts, unsigned stream_idx, Rounding rounding);
+
 	void resizeEvent(QResizeEvent *event) override;
+	bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
 	void relayout();
