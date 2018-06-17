@@ -38,27 +38,13 @@ MainWindow::MainWindow()
 	ui->clip_list->viewport()->installEventFilter(this);
 	ui->playlist->viewport()->installEventFilter(this);
 
-	// TODO: These are too big for lambdas.
 	QShortcut *cue_in = new QShortcut(QKeySequence(Qt::Key_A), this);
 	connect(cue_in, &QShortcut::activated, ui->cue_in_btn, &QPushButton::click);
-	connect(ui->cue_in_btn, &QPushButton::clicked, []{
-		if (!cliplist_clips->empty() && cliplist_clips->back()->pts_out < 0) {
-			cliplist_clips->back()->pts_in = current_pts;
-			return;
-		}
-		Clip clip;
-		clip.pts_in = current_pts;
-		cliplist_clips->add_clip(clip);
-	});
+	connect(ui->cue_in_btn, &QPushButton::clicked, this, &MainWindow::cue_in_clicked);
 
 	QShortcut *cue_out = new QShortcut(QKeySequence(Qt::Key_S), this);
 	connect(cue_out, &QShortcut::activated, ui->cue_out_btn, &QPushButton::click);
-	connect(ui->cue_out_btn, &QPushButton::clicked, []{
-		if (!cliplist_clips->empty()) {
-			cliplist_clips->back()->pts_out = current_pts;
-			// TODO: select the row in the clip list?
-		}
-	});
+	connect(ui->cue_out_btn, &QPushButton::clicked, this, &MainWindow::cue_out_clicked);
 
 	QShortcut *queue = new QShortcut(QKeySequence(Qt::Key_Q), this);
 	connect(queue, &QShortcut::activated, ui->queue_btn, &QPushButton::click);
@@ -79,6 +65,25 @@ MainWindow::MainWindow()
 			live_player_clip_done();
 		});
 	});
+}
+
+void MainWindow::cue_in_clicked()
+{
+	if (!cliplist_clips->empty() && cliplist_clips->back()->pts_out < 0) {
+		cliplist_clips->back()->pts_in = current_pts;
+		return;
+	}
+	Clip clip;
+	clip.pts_in = current_pts;
+	cliplist_clips->add_clip(clip);
+}
+
+void MainWindow::cue_out_clicked()
+{
+	if (!cliplist_clips->empty()) {
+		cliplist_clips->back()->pts_out = current_pts;
+		// TODO: select the row in the clip list?
+	}
 }
 
 void MainWindow::queue_clicked()

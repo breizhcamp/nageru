@@ -36,6 +36,8 @@ private:
 	int scrub_row;
 	int scrub_column;
 
+	void cue_in_clicked();
+	void cue_out_clicked();
 	void queue_clicked();
 	void preview_clicked();
 	void play_clicked();
