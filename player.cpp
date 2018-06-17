@@ -26,6 +26,7 @@ void Player::thread_func()
 				return new_clip_ready && current_clip.pts_in != -1;
 			});
 			new_clip_ready = false;
+			playing = true;
 		}
 
 		Clip clip;
@@ -62,16 +63,25 @@ void Player::thread_func()
 			// Sleep until the next frame start, or until there's a new clip we're supposed to play.
 			{
 				unique_lock<mutex> lock(queue_state_mu);
-				aborted = new_clip_changed.wait_until(lock, next_frame_start, [this]{
-					return new_clip_ready;
+				new_clip_changed.wait_until(lock, next_frame_start, [this]{
+					return new_clip_ready || override_stream_idx != -1;
 				});
-				if (aborted) break;
+				if (new_clip_ready) break;
+				if (override_stream_idx != -1) {
+					stream_idx = override_stream_idx;
+					override_stream_idx = -1;
+					continue;
+				}
 			}
 
 			destination->setFrame(stream_idx, next_pts);
 
 		}
 
+		{
+			unique_lock<mutex> lock(queue_state_mu);
+			playing = false;
+		}
 		if (done_callback != nullptr && !aborted) {
 			done_callback();
 		}
@@ -95,6 +105,49 @@ void Player::play_clip(const Clip &clip, unsigned stream_idx)
 	{
 		lock_guard<mutex> lock(queue_state_mu);
 		new_clip_ready = true;
+		override_stream_idx = -1;
 		new_clip_changed.notify_all();
 	}
+}
+
+void Player::override_angle(unsigned stream_idx)
+{
+	// Corner case: If a new clip is waiting to be played, change its stream and then we're done. 
+	{
+		unique_lock<mutex> lock(queue_state_mu);
+		if (new_clip_ready) {
+			lock_guard<mutex> lock2(mu);
+			current_stream_idx = stream_idx;
+			return;
+		}
+	}
+
+	// If we are playing a clip, set override_stream_idx, and the player thread will
+	// pick it up and change its internal index.
+	{
+		unique_lock<mutex> lock(queue_state_mu);
+		if (playing) {
+			override_stream_idx = stream_idx;
+			new_clip_changed.notify_all();
+		}
+	}
+
+	// OK, so we're standing still, presumably at the end of a clip.
+	// Look at the current pts_out (if it exists), and show the closest
+	// thing we've got.
+	int64_t pts_out;
+	{
+		lock_guard<mutex> lock(mu);
+		if (current_clip.pts_out < 0) {
+			return;
+		}
+		pts_out = current_clip.pts_out;
+	}
+			
+	lock_guard<mutex> lock(frame_mu);
+	auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts_out);
+	if (it == frames[stream_idx].end()) {
+		return;
+	}
+	destination->setFrame(stream_idx, *it);
 }

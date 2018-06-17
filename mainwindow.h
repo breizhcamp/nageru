@@ -40,6 +40,7 @@ private:
 	void cue_out_clicked();
 	void queue_clicked();
 	void preview_clicked();
+	void preview_angle_clicked(unsigned stream_idx);
 	void play_clicked();
 	void live_player_clip_done();
 

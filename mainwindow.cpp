@@ -58,6 +58,22 @@ MainWindow::MainWindow()
 	connect(play, &QShortcut::activated, ui->play_btn, &QPushButton::click);
 	connect(ui->play_btn, &QPushButton::clicked, this, &MainWindow::play_clicked);
 
+	QShortcut *preview_1 = new QShortcut(QKeySequence(Qt::Key_1), this);
+	connect(preview_1, &QShortcut::activated, ui->preview_1_btn, &QPushButton::click);
+	connect(ui->preview_1_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(0); });
+
+	QShortcut *preview_2 = new QShortcut(QKeySequence(Qt::Key_2), this);
+	connect(preview_2, &QShortcut::activated, ui->preview_2_btn, &QPushButton::click);
+	connect(ui->preview_2_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(1); });
+
+	QShortcut *preview_3 = new QShortcut(QKeySequence(Qt::Key_3), this);
+	connect(preview_3, &QShortcut::activated, ui->preview_3_btn, &QPushButton::click);
+	connect(ui->preview_3_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(2); });
+
+	QShortcut *preview_4 = new QShortcut(QKeySequence(Qt::Key_4), this);
+	connect(preview_4, &QShortcut::activated, ui->preview_4_btn, &QPushButton::click);
+	connect(ui->preview_4_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(3); });
+
 	preview_player = new Player(ui->preview_display);
 	live_player = new Player(ui->live_display);
 	live_player->set_done_callback([this]{
@@ -120,6 +136,21 @@ void MainWindow::preview_clicked()
 	    index.column() <= int(ClipList::Column::CAMERA_4)) {
 		unsigned stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 		preview_player->play_clip(*cliplist_clips->clip(index.row()), stream_idx);
+	}
+}
+
+void MainWindow::preview_angle_clicked(unsigned stream_idx)
+{
+	preview_player->override_angle(stream_idx);
+
+	// Change the selection if we were previewing a clip from the clip list.
+	// (The only other thing we could be showing is a pts scrub, and if so,
+	// that would be selected.)
+	QItemSelectionModel *selected = ui->clip_list->selectionModel();
+	if (selected->hasSelection()) {
+		QModelIndex cell = selected->selectedIndexes()[0];
+		int column = int(ClipList::Column::CAMERA_1) + stream_idx;
+		selected->setCurrentIndex(cell.sibling(cell.row(), column), QItemSelectionModel::ClearAndSelect);
 	}
 }
 

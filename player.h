@@ -14,6 +14,7 @@ public:
 	Player(JPEGFrameView *destination);
 
 	void play_clip(const Clip &clip, unsigned stream_idx);
+	void override_angle(unsigned stream_idx);  // For the current clip only.
 
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
@@ -30,9 +31,11 @@ private:
 	Clip current_clip;  // Under mu. Can have pts_in = -1 for no clip.
 	unsigned current_stream_idx;  // Under mu.
 
-	bool new_clip_ready = false;  // Under queue_state_mu.
 	std::mutex queue_state_mu;
 	std::condition_variable new_clip_changed;
+	bool new_clip_ready = false;  // Under queue_state_mu.
+	bool playing = false;  // Under queue_state_mu.
+	int override_stream_idx = -1;  // Under queue_state_mu.
 };
 
 #endif  // !defined(_PLAYER_H)
