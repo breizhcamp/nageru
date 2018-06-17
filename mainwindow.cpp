@@ -31,11 +31,12 @@ MainWindow::MainWindow()
 	cliplist_clips = new ClipList();
 	ui->clip_list->setModel(cliplist_clips);
 
-	// For scrubbing in the pts columns.
-	ui->clip_list->viewport()->installEventFilter(this);
-
 	playlist_clips = new PlayList();
 	ui->playlist->setModel(playlist_clips);
+
+	// For scrubbing in the pts columns.
+	ui->clip_list->viewport()->installEventFilter(this);
+	ui->playlist->viewport()->installEventFilter(this);
 
 	// TODO: These are too big for lambdas.
 	QShortcut *cue_in = new QShortcut(QKeySequence(Qt::Key_A), this);
@@ -167,32 +168,54 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 	constexpr int scrub_sensitivity = 100;  // pts units per pixel.
 	constexpr int wheel_sensitivity = 100;  // pts units per degree.
 
+	unsigned stream_idx = ui->preview_display->get_stream_idx();
+
 	if (event->type() == QEvent::MouseButtonPress) {
 		QMouseEvent *mouse = (QMouseEvent *)event;
 
-		int column = ui->clip_list->columnAt(mouse->x());
-		int row = ui->clip_list->rowAt(mouse->y());
+		QTableView *destination;
+		ScrubType type;
+
+		if (watched == ui->clip_list->viewport()) {
+			destination = ui->clip_list;
+			type = SCRUBBING_CLIP_LIST;
+		} else if (watched == ui->playlist->viewport()) {
+			destination = ui->playlist;
+			type = SCRUBBING_PLAYLIST;
+		} else {
+			return false;
+		}
+		int column = destination->columnAt(mouse->x());
+		int row = destination->rowAt(mouse->y());
 		if (column == -1 || row == -1) return false;
 
-		if (ClipList::Column(column) == ClipList::Column::IN) {
-			scrubbing = true;
-			scrub_row = row;
-			scrub_column = ClipList::Column::IN;
-			scrub_x_origin = mouse->x();
-			scrub_pts_origin = cliplist_clips->clip(scrub_row)->pts_in;
-
-			unsigned stream_idx = ui->preview_display->get_stream_idx();
-			preview_single_frame(scrub_pts_origin, stream_idx, FIRST_AT_OR_AFTER);
-		} else if (ClipList::Column(column) == ClipList::Column::OUT) {
-			scrubbing = true;
-			scrub_row = row;
-			scrub_column = ClipList::Column::OUT;
-			scrub_x_origin = mouse->x();
-			scrub_pts_origin = cliplist_clips->clip(scrub_row)->pts_out;
-
-			unsigned stream_idx = ui->preview_display->get_stream_idx();
-			preview_single_frame(scrub_pts_origin, stream_idx, LAST_BEFORE);
+		if (type == SCRUBBING_CLIP_LIST) {
+			if (ClipList::Column(column) == ClipList::Column::IN) {
+				scrub_pts_origin = cliplist_clips->clip(row)->pts_in;
+				preview_single_frame(scrub_pts_origin, stream_idx, FIRST_AT_OR_AFTER);
+			} else if (ClipList::Column(column) == ClipList::Column::OUT) {
+				scrub_pts_origin = cliplist_clips->clip(row)->pts_out;
+				preview_single_frame(scrub_pts_origin, stream_idx, LAST_BEFORE);
+			} else {
+				return false;
+			}
+		} else {
+			if (PlayList::Column(column) == PlayList::Column::IN) {
+				scrub_pts_origin = playlist_clips->clip(row)->pts_in;
+				preview_single_frame(scrub_pts_origin, stream_idx, FIRST_AT_OR_AFTER);
+			} else if (PlayList::Column(column) == PlayList::Column::OUT) {
+				scrub_pts_origin = playlist_clips->clip(row)->pts_out;
+				preview_single_frame(scrub_pts_origin, stream_idx, LAST_BEFORE);
+			} else {
+				return false;
+			}
 		}
+
+		scrubbing = true;
+		scrub_row = row;
+		scrub_column = column;
+		scrub_x_origin = mouse->x();
+		scrub_type = type;
 	} else if (event->type() == QEvent::MouseMove) {
 		if (scrubbing) {
 			QMouseEvent *mouse = (QMouseEvent *)event;
@@ -206,19 +229,32 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 				adjusted_offset = 0;
 			}
 
-			unsigned stream_idx = ui->preview_display->get_stream_idx();
 			int64_t pts = scrub_pts_origin + adjusted_offset * scrub_sensitivity;
 
-			if (scrub_column == ClipList::Column::IN) {
-				pts = std::max<int64_t>(pts, 0);
-				pts = std::min(pts, cliplist_clips->clip(scrub_row)->pts_out);
-				cliplist_clips->clip(scrub_row)->pts_in = pts;
-				preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
+			if (scrub_type == SCRUBBING_CLIP_LIST) {
+				if (scrub_column == int(ClipList::Column::IN)) {
+					pts = std::max<int64_t>(pts, 0);
+					pts = std::min(pts, cliplist_clips->clip(scrub_row)->pts_out);
+					cliplist_clips->clip(scrub_row)->pts_in = pts;
+					preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
+				} else {
+					pts = std::max(pts, cliplist_clips->clip(scrub_row)->pts_in);
+					pts = std::min(pts, current_pts);
+					cliplist_clips->clip(scrub_row)->pts_out = pts;
+					preview_single_frame(pts, stream_idx, LAST_BEFORE);
+				}
 			} else {
-				pts = std::max(pts, cliplist_clips->clip(scrub_row)->pts_in);
-				pts = std::min(pts, current_pts);
-				cliplist_clips->clip(scrub_row)->pts_out = pts;
-				preview_single_frame(pts, stream_idx, LAST_BEFORE);
+				if (scrub_column == int(PlayList::Column::IN)) {
+					pts = std::max<int64_t>(pts, 0);
+					pts = std::min(pts, playlist_clips->clip(scrub_row)->pts_out);
+					playlist_clips->clip(scrub_row)->pts_in = pts;
+					preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
+				} else {
+					pts = std::max(pts, playlist_clips->clip(scrub_row)->pts_in);
+					pts = std::min(pts, current_pts);
+					playlist_clips->clip(scrub_row)->pts_out = pts;
+					preview_single_frame(pts, stream_idx, LAST_BEFORE);
+				}
 			}
 
 			return true;  // Don't use this mouse movement for selecting things.
@@ -226,20 +262,33 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 	} else if (event->type() == QEvent::Wheel) {
 		QWheelEvent *wheel = (QWheelEvent *)event;
 
-		int column = ui->clip_list->columnAt(wheel->x());
-		int row = ui->clip_list->rowAt(wheel->y());
+		QTableView *destination;
+		int in_column, out_column;
+		if (watched == ui->clip_list->viewport()) {
+			destination = ui->clip_list;
+			in_column = int(ClipList::Column::IN);
+			out_column = int(ClipList::Column::OUT);
+		} else if (watched == ui->playlist->viewport()) {
+			destination = ui->playlist;
+			in_column = int(PlayList::Column::IN);
+			out_column = int(PlayList::Column::OUT);
+		} else {
+			return false;
+		}
+		int column = destination->columnAt(wheel->x());
+		int row = destination->rowAt(wheel->y());
 		if (column == -1 || row == -1) return false;
 
-		ClipProxy clip = cliplist_clips->clip(scrub_row);
-		unsigned stream_idx = ui->preview_display->get_stream_idx();
+		ClipProxy clip = (watched == ui->clip_list->viewport()) ?
+			cliplist_clips->clip(row) : playlist_clips->clip(row);
 
-		if (ClipList::Column(column) == ClipList::Column::IN) {
+		if (column == in_column) {
 			int64_t pts = clip->pts_in + wheel->angleDelta().y() * wheel_sensitivity;
 			pts = std::max<int64_t>(pts, 0);
 			pts = std::min(pts, clip->pts_out);
 			clip->pts_in = pts;
 			preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
-		} else if (ClipList::Column(column) == ClipList::Column::OUT) {
+		} else if (column == out_column) {
 			int64_t pts = clip->pts_out + wheel->angleDelta().y() * wheel_sensitivity;
 			pts = std::max(pts, clip->pts_in);
 			pts = std::min(pts, current_pts);

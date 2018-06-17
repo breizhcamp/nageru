@@ -32,8 +32,9 @@ private:
 	int64_t scrub_pts_origin;
 
 	// Which element (e.g. pts_in on clip 4) we are scrubbing.
+	enum ScrubType { SCRUBBING_CLIP_LIST, SCRUBBING_PLAYLIST } scrub_type;
 	int scrub_row;
-	ClipList::Column scrub_column;
+	int scrub_column;
 
 	void queue_clicked();
 	void preview_clicked();
