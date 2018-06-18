@@ -104,6 +104,10 @@ void MainWindow::cue_out_clicked()
 
 void MainWindow::queue_clicked()
 {
+	if (cliplist_clips->empty()) {
+		return;
+	}
+
 	QItemSelectionModel *selected = ui->clip_list->selectionModel();
 	if (!selected->hasSelection()) {
 		Clip clip = *cliplist_clips->back();
