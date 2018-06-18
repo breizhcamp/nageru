@@ -43,9 +43,15 @@ private:
 	void preview_angle_clicked(unsigned stream_idx);
 	void play_clicked();
 	void live_player_clip_done();
+	void playlist_duplicate();
+	void playlist_remove();
+	void playlist_move(int delta);
 
 	enum Rounding { FIRST_AT_OR_AFTER, LAST_BEFORE };
 	void preview_single_frame(int64_t pts, unsigned stream_idx, Rounding rounding);
+
+	// Also covers when the playlist itself changes.
+	void playlist_selection_changed();
 
 	void resizeEvent(QResizeEvent *event) override;
 	bool eventFilter(QObject *watched, QEvent *event) override;

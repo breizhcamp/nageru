@@ -162,11 +162,17 @@
       <widget class="QWidget" name="verticalLayoutWidget_4">
        <layout class="QVBoxLayout" name="verticalLayout_4">
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <widget class="QTableView" name="clip_list"/>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="clip_list_buttons">
           <item>
            <widget class="QPushButton" name="queue_btn">
             <property name="text">
              <string>Queue (&amp;Q)</string>
+            </property>
+            <property name="icon">
+             <iconset theme="list-add"/>
             </property>
            </widget>
           </item>
@@ -174,6 +180,9 @@
            <widget class="QPushButton" name="preview_btn">
             <property name="text">
              <string>Preview (&amp;W)</string>
+            </property>
+            <property name="icon">
+             <iconset theme="media-playback-start"/>
             </property>
            </widget>
           </item>
@@ -192,26 +201,102 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="play_btn">
-            <property name="text">
-             <string>Play (space)</string>
+           <spacer name="horizontalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
             </property>
-           </widget>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
           </item>
          </layout>
         </item>
         <item>
-         <widget class="QTableView" name="clip_list"/>
-        </item>
-        <item>
          <widget class="QTableView" name="playlist">
           <property name="selectionMode">
-           <enum>QAbstractItemView::SingleSelection</enum>
+           <enum>QAbstractItemView::ContiguousSelection</enum>
           </property>
           <property name="selectionBehavior">
            <enum>QAbstractItemView::SelectRows</enum>
           </property>
          </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="playlist_buttons">
+          <item>
+           <widget class="QPushButton" name="playlist_duplicate_btn">
+            <property name="text">
+             <string>Duplicate</string>
+            </property>
+            <property name="icon">
+             <iconset theme="list-add"/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="playlist_remove_btn">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Remove</string>
+            </property>
+            <property name="icon">
+             <iconset theme="list-remove"/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="playlist_move_up_btn">
+            <property name="text">
+             <string>Move up</string>
+            </property>
+            <property name="icon">
+             <iconset theme="go-up"/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="playlist_move_down_btn">
+            <property name="text">
+             <string>Move down</string>
+            </property>
+            <property name="icon">
+             <iconset theme="go-down"/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="play_btn">
+            <property name="text">
+             <string>Play (space)</string>
+            </property>
+            <property name="icon">
+             <iconset theme="media-playback-start"/>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
        </layout>
       </widget>

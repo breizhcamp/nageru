@@ -104,6 +104,13 @@ public:
 	bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
 
 	void add_clip(const Clip &clip);
+
+	// <last> is inclusive in all of these.
+	void duplicate_clips(size_t first, size_t last);
+	void erase_clips(size_t first, size_t last);
+	// <delta> is -1 to move upwards, +1 to move downwards.
+	void move_clips(size_t first, size_t last, int delta);
+
 	size_t size() const { return clips.size(); }
 	bool empty() const { return clips.empty(); }
 

@@ -304,6 +304,34 @@ void PlayList::add_clip(const Clip &clip)
 	endInsertRows();
 }
 
+void PlayList::duplicate_clips(size_t first, size_t last)
+{
+	beginInsertRows(QModelIndex(), first, last);
+	clips.insert(clips.begin() + first, clips.begin() + first, clips.begin() + last + 1);
+	endInsertRows();
+}
+
+void PlayList::erase_clips(size_t first, size_t last)
+{
+	beginRemoveRows(QModelIndex(), first, last);
+	clips.erase(clips.begin() + first, clips.begin() + last + 1);
+	endRemoveRows();
+}
+
+void PlayList::move_clips(size_t first, size_t last, int delta)
+{
+	if (delta == -1) {
+		beginMoveRows(QModelIndex(), first, last, QModelIndex(), first - 1);
+		rotate(clips.begin() + first - 1, clips.begin() + first, clips.begin() + last + 1);
+	} else {
+		beginMoveRows(QModelIndex(), first, last, QModelIndex(), first + (last-first+1) + 1);
+		first = clips.size() - first - 1;
+		last = clips.size() - last - 1;
+		rotate(clips.rbegin() + last - 1, clips.rbegin() + last, clips.rbegin() + first + 1);
+	}
+	endMoveRows();
+}
+
 void ClipList::emit_data_changed(size_t row)
 {
 	emit dataChanged(index(row, 0), index(row, int(Column::NUM_COLUMNS)));

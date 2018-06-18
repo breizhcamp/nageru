@@ -74,6 +74,19 @@ MainWindow::MainWindow()
 	connect(preview_4, &QShortcut::activated, ui->preview_4_btn, &QPushButton::click);
 	connect(ui->preview_4_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(3); });
 
+	connect(ui->playlist_duplicate_btn, &QPushButton::clicked, this, &MainWindow::playlist_duplicate);
+
+	// TODO: support the delete key iff the widget has focus?
+	connect(ui->playlist_remove_btn, &QPushButton::clicked, this, &MainWindow::playlist_remove);
+
+	// TODO: support drag-and-drop.
+	connect(ui->playlist_move_up_btn, &QPushButton::clicked, [this]{ playlist_move(-1); });
+	connect(ui->playlist_move_down_btn, &QPushButton::clicked, [this]{ playlist_move(1); });
+
+	connect(ui->playlist->selectionModel(), &QItemSelectionModel::selectionChanged,
+		this, &MainWindow::playlist_selection_changed);
+	playlist_selection_changed();  // First time set-up.
+
 	preview_player = new Player(ui->preview_display);
 	live_player = new Player(ui->live_display);
 	live_player->set_done_callback([this]{
@@ -92,6 +105,7 @@ void MainWindow::cue_in_clicked()
 	Clip clip;
 	clip.pts_in = current_pts;
 	cliplist_clips->add_clip(clip);
+	playlist_selection_changed();
 }
 
 void MainWindow::cue_out_clicked()
@@ -122,6 +136,7 @@ void MainWindow::queue_clicked()
 		Clip clip = *cliplist_clips->clip(index.row());
 		clip.stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 		playlist_clips->add_clip(clip);
+		playlist_selection_changed();
 	}
 }
 
@@ -158,6 +173,55 @@ void MainWindow::preview_angle_clicked(unsigned stream_idx)
 	}
 }
 
+void MainWindow::playlist_duplicate()
+{
+	QItemSelectionModel *selected = ui->playlist->selectionModel();
+	if (!selected->hasSelection()) {
+		// Should have been grayed out, but OK.
+		return;
+	}
+	QModelIndexList rows = selected->selectedRows();
+	int first = rows.front().row(), last = rows.back().row();
+	playlist_clips->duplicate_clips(first, last);
+	playlist_selection_changed();
+}
+
+void MainWindow::playlist_remove()
+{
+	QItemSelectionModel *selected = ui->playlist->selectionModel();
+	if (!selected->hasSelection()) {
+		// Should have been grayed out, but OK.
+		return;
+	}
+	QModelIndexList rows = selected->selectedRows();
+	int first = rows.front().row(), last = rows.back().row();
+	playlist_clips->erase_clips(first, last);
+
+	// TODO: select the next one in the list?
+
+	playlist_selection_changed();
+}
+
+void MainWindow::playlist_move(int delta)
+{
+	QItemSelectionModel *selected = ui->playlist->selectionModel();
+	if (!selected->hasSelection()) {
+		// Should have been grayed out, but OK.
+		return;
+	}
+
+	QModelIndexList rows = selected->selectedRows();
+	int first = rows.front().row(), last = rows.back().row();
+	if ((delta == -1 && first == 0) ||
+	    (delta == 1 && size_t(last) == playlist_clips->size() - 1)) {
+		// Should have been grayed out, but OK.
+		return;
+	}
+
+	playlist_clips->move_clips(first, last, delta);
+	playlist_selection_changed();
+}
+
 void MainWindow::play_clicked()
 {
 	if (playlist_clips->empty()) return;
@@ -173,6 +237,7 @@ void MainWindow::play_clicked()
 	const Clip &clip = *playlist_clips->clip(row);
 	live_player->play_clip(clip, clip.stream_idx);
 	playlist_clips->set_currently_playing(row);
+	playlist_selection_changed();
 }
 
 void MainWindow::live_player_clip_done()
@@ -364,4 +429,17 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 	fake_clip.pts_in = pts;
 	fake_clip.pts_out = pts + 1;
 	preview_player->play_clip(fake_clip, stream_idx);
+}
+
+void MainWindow::playlist_selection_changed()
+{
+	QItemSelectionModel *selected = ui->playlist->selectionModel();
+	bool any_selected = selected->hasSelection();
+	ui->playlist_duplicate_btn->setEnabled(any_selected);
+	ui->playlist_remove_btn->setEnabled(any_selected);
+	ui->playlist_move_up_btn->setEnabled(
+		any_selected && selected->selectedRows().front().row() > 0);
+	ui->playlist_move_down_btn->setEnabled(
+		any_selected && selected->selectedRows().back().row() < int(playlist_clips->size()) - 1);
+	ui->play_btn->setEnabled(!playlist_clips->empty());
 }
