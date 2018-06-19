@@ -337,28 +337,30 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			int64_t pts = scrub_pts_origin + adjusted_offset * scrub_sensitivity;
 
 			if (scrub_type == SCRUBBING_CLIP_LIST) {
+				ClipProxy clip = cliplist_clips->clip(scrub_row);
 				if (scrub_column == int(ClipList::Column::IN)) {
 					pts = std::max<int64_t>(pts, 0);
-					pts = std::min(pts, cliplist_clips->clip(scrub_row)->pts_out);
-					cliplist_clips->clip(scrub_row)->pts_in = pts;
+					pts = std::min(pts, clip->pts_out);
+					clip->pts_in = pts;
 					preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
 				} else {
-					pts = std::max(pts, cliplist_clips->clip(scrub_row)->pts_in);
+					pts = std::max(pts, clip->pts_in);
 					pts = std::min(pts, current_pts);
-					cliplist_clips->clip(scrub_row)->pts_out = pts;
+					clip->pts_out = pts;
 					preview_single_frame(pts, stream_idx, LAST_BEFORE);
 				}
 			} else {
+				ClipProxy clip = playlist_clips->clip(scrub_row);
 				if (scrub_column == int(PlayList::Column::IN)) {
 					pts = std::max<int64_t>(pts, 0);
-					pts = std::min(pts, playlist_clips->clip(scrub_row)->pts_out);
-					playlist_clips->clip(scrub_row)->pts_in = pts;
-					preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
+					pts = std::min(pts, clip->pts_out);
+					clip->pts_in = pts;
+					preview_single_frame(pts, clip->stream_idx, FIRST_AT_OR_AFTER);
 				} else {
-					pts = std::max(pts, playlist_clips->clip(scrub_row)->pts_in);
+					pts = std::max(pts, clip->pts_in);
 					pts = std::min(pts, current_pts);
-					playlist_clips->clip(scrub_row)->pts_out = pts;
-					preview_single_frame(pts, stream_idx, LAST_BEFORE);
+					clip->pts_out = pts;
+					preview_single_frame(pts, clip->stream_idx, LAST_BEFORE);
 				}
 			}
 
@@ -386,6 +388,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 		ClipProxy clip = (watched == ui->clip_list->viewport()) ?
 			cliplist_clips->clip(row) : playlist_clips->clip(row);
+		if (watched == ui->playlist->viewport()) {
+			stream_idx = clip->stream_idx;
+		}
 
 		if (column == in_column) {
 			int64_t pts = clip->pts_in + wheel->angleDelta().y() * wheel_sensitivity;
