@@ -272,8 +272,13 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 	constexpr int dead_zone_pixels = 3;  // To avoid that simple clicks get misinterpreted.
 	constexpr int scrub_sensitivity = 100;  // pts units per pixel.
 	constexpr int wheel_sensitivity = 100;  // pts units per degree.
+	constexpr int camera_degrees_per_pixel = 15;  // One click of most mice.
 
 	unsigned stream_idx = ui->preview_display->get_stream_idx();
+
+	if (event->type() != QEvent::Wheel) {
+		last_mousewheel_camera_row = -1;
+	}
 
 	if (event->type() == QEvent::MouseButtonPress) {
 		QMouseEvent *mouse = (QMouseEvent *)event;
@@ -370,16 +375,20 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		QWheelEvent *wheel = (QWheelEvent *)event;
 
 		QTableView *destination;
-		int in_column, out_column;
+		int in_column, out_column, camera_column;
 		if (watched == ui->clip_list->viewport()) {
 			destination = ui->clip_list;
 			in_column = int(ClipList::Column::IN);
 			out_column = int(ClipList::Column::OUT);
+			camera_column = -1;
+			last_mousewheel_camera_row = -1;
 		} else if (watched == ui->playlist->viewport()) {
 			destination = ui->playlist;
 			in_column = int(PlayList::Column::IN);
 			out_column = int(PlayList::Column::OUT);
+			camera_column = int(PlayList::Column::CAMERA);
 		} else {
+			last_mousewheel_camera_row = -1;
 			return false;
 		}
 		int column = destination->columnAt(wheel->x());
@@ -392,6 +401,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			stream_idx = clip->stream_idx;
 		}
 
+		if (column != camera_column) {
+			last_mousewheel_camera_row = -1;
+		}
 		if (column == in_column) {
 			int64_t pts = clip->pts_in + wheel->angleDelta().y() * wheel_sensitivity;
 			pts = std::max<int64_t>(pts, 0);
@@ -404,6 +416,21 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			pts = std::min(pts, current_pts);
 			clip->pts_out = pts;
 			preview_single_frame(pts, stream_idx, LAST_BEFORE);
+		} else if (column == camera_column) {
+			int angle_degrees = wheel->angleDelta().y();
+			if (last_mousewheel_camera_row == row) {
+				angle_degrees += leftover_angle_degrees;
+			}
+
+			int stream_idx = clip->stream_idx + angle_degrees / camera_degrees_per_pixel;
+			stream_idx = std::max(stream_idx, 0);
+			stream_idx = std::min(stream_idx, NUM_CAMERAS - 1);
+			clip->stream_idx = stream_idx;
+
+			last_mousewheel_camera_row = row;
+			leftover_angle_degrees = angle_degrees % camera_degrees_per_pixel;
+
+			// Don't update the live view, that's rarely what the operator wants.
 		}
 	} else if (event->type() == QEvent::MouseButtonRelease) {
 		scrubbing = false;

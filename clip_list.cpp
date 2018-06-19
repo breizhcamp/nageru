@@ -239,6 +239,8 @@ Qt::ItemFlags PlayList::flags(const QModelIndex &index) const
 
 	switch (Column(column)) {
 	case Column::DESCRIPTION:
+	case Column::CAMERA:
+		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable;
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable;
 	default:
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
@@ -285,6 +287,16 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 		clips[row].descriptions[clips[row].stream_idx] = value.toString().toStdString();
 		emit_data_changed(row);
 		return true;
+	case Column::CAMERA: {
+		bool ok;
+		int camera_idx = value.toInt(&ok);
+		if (!ok || camera_idx < 1 || camera_idx > NUM_CAMERAS) {
+			return false;
+		}
+		clips[row].stream_idx = camera_idx - 1;
+		emit_data_changed(row);
+		return true;
+	}
 	default:
 		return false;
 	}

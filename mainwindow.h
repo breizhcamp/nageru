@@ -36,6 +36,10 @@ private:
 	int scrub_row;
 	int scrub_column;
 
+	// Used to keep track of small mouse wheel motions on the camera index in the playlist.
+	int last_mousewheel_camera_row = -1;
+	int leftover_angle_degrees = 0;
+
 	void cue_in_clicked();
 	void cue_out_clicked();
 	void queue_clicked();
