@@ -79,7 +79,7 @@ QVariant ClipList::data(const QModelIndex &parent, int role) const {
 		}
 	}
 
-	if (role != Qt::DisplayRole)
+	if (role != Qt::DisplayRole && role != Qt::EditRole)
 		return QVariant();
 
 	switch (Column(column)) {
@@ -131,7 +131,7 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const {
 		}
 	}
 
-	if (role != Qt::DisplayRole)
+	if (role != Qt::DisplayRole && role != Qt::EditRole)
 		return QVariant();
 
 	switch (Column(column)) {
