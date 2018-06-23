@@ -284,9 +284,9 @@ void MIDIMappingDialog::save_clicked()
 {
 #if HAVE_CEF
 	// The native file dialog uses GTK+, which interferes with CEF's use of the GLib main loop.
-	QFileDialog::Option options(QFileDialog::DontUseNativeDialog);
+	QFileDialog::Options options(QFileDialog::DontUseNativeDialog);
 #else
-	QFileDialog::Option options;
+	QFileDialog::Options options;
 #endif
 	unique_ptr<MIDIMappingProto> new_mapping = construct_mapping_proto_from_ui();
 	QString filename = QFileDialog::getSaveFileName(this,
@@ -305,9 +305,9 @@ void MIDIMappingDialog::load_clicked()
 {
 #if HAVE_CEF
 	// The native file dialog uses GTK+, which interferes with CEF's use of the GLib main loop.
-	QFileDialog::Option options(QFileDialog::DontUseNativeDialog);
+	QFileDialog::Options options(QFileDialog::DontUseNativeDialog);
 #else
-	QFileDialog::Option options;
+	QFileDialog::Options options;
 #endif
 	QString filename = QFileDialog::getOpenFileName(this,
 		"Load MIDI mapping", QString(), tr("Mapping files (*.midimapping)"), /*selectedFilter=*/nullptr, options);
