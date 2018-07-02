@@ -1,5 +1,5 @@
 #define NO_SDL_GLEXT 1
-  
+
 #define WIDTH 1280
 #define HEIGHT 720
 
@@ -185,7 +185,19 @@ GLuint fill_vertex_attribute(GLuint vao, GLuint glsl_program_num, const string &
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	return vbo;
-}      
+}
+
+void bind_sampler(GLuint program, const char *uniform_name, GLuint texture_unit, GLuint tex, GLuint sampler)
+{
+	GLint location = glGetUniformLocation(program, uniform_name);
+	if (location == -1) {
+		return;
+	}
+
+	glBindTextureUnit(texture_unit, tex);
+	glBindSampler(texture_unit, sampler);
+	glProgramUniform1i(program, location, texture_unit);
+}
 
 int main(void)
 {
@@ -215,7 +227,7 @@ int main(void)
 	GLuint tex1 = load_texture("test1500.pgm", WIDTH, HEIGHT);
 
 	// Load shaders.
-	GLuint motion_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	GLuint motion_vs_obj = compile_shader(read_file("motion_search.vert"), GL_VERTEX_SHADER);
 	GLuint motion_fs_obj = compile_shader(read_file("motion_search.frag"), GL_FRAGMENT_SHADER);
 	GLuint motion_search_program = link_program(motion_vs_obj, motion_fs_obj);
 
@@ -223,12 +235,44 @@ int main(void)
 	GLuint sobel_fs_obj = compile_shader(read_file("sobel.frag"), GL_FRAGMENT_SHADER);
 	GLuint sobel_program = link_program(sobel_vs_obj, sobel_fs_obj);
 
+	// Make some samplers.
+	GLuint nearest_sampler;
+	glCreateSamplers(1, &nearest_sampler);
+	glSamplerParameteri(nearest_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glSamplerParameteri(nearest_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glSamplerParameteri(nearest_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glSamplerParameteri(nearest_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	GLuint linear_sampler;
+	glCreateSamplers(1, &linear_sampler);
+	glSamplerParameteri(linear_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glSamplerParameteri(linear_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glSamplerParameteri(linear_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glSamplerParameteri(linear_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	GLuint mipmap_sampler;
+	glCreateSamplers(1, &mipmap_sampler);
+	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 	// Coarsest level.
-	int level_width = WIDTH >> coarsest_level;
-	int level_height = HEIGHT >> coarsest_level;
+	int level = coarsest_level;
+	int level_width = WIDTH >> level;
+	int level_height = HEIGHT >> level;
 	float patch_spacing_pixels = patch_size_pixels * (1.0f - patch_overlap_ratio);
 	int width_patches = 1 + lrintf((level_width - patch_size_pixels) / patch_spacing_pixels);
 	int height_patches = 1 + lrintf((level_height - patch_size_pixels) / patch_spacing_pixels);
+
+	// Make sure we always read from the correct level; the chosen
+	// mipmapping could otherwise be rather unpredictable, especially
+	// during motion search.
+	GLuint tex0_view, tex1_view;
+	glGenTextures(1, &tex0_view);
+	glTextureView(tex0_view, GL_TEXTURE_2D, tex0, GL_R8, level, 1, 0, 1);
+	glGenTextures(1, &tex1_view);
+	glTextureView(tex1_view, GL_TEXTURE_2D, tex1, GL_R8, level, 1, 0, 1);
 
 	// Compute gradients in every point, used for the motion search.
 	// The DIS paper doesn't actually mention how these are computed,
@@ -241,16 +285,17 @@ int main(void)
 
 	// Create a new texture; we could be fancy and render use a multi-level
 	// texture, but meh.
-	GLuint grad_tex;
-	glCreateTextures(GL_TEXTURE_2D, 1, &grad_tex);
-	glTextureStorage2D(grad_tex, 1, GL_RG16F, level_width, level_height);
+	GLuint grad0_tex;
+	glCreateTextures(GL_TEXTURE_2D, 1, &grad0_tex);
+	glTextureStorage2D(grad0_tex, 1, GL_RG16F, level_width, level_height);
 
-	GLuint grad_fbo;
-	glCreateFramebuffers(1, &grad_fbo);
-	glNamedFramebufferTexture(grad_fbo, GL_COLOR_ATTACHMENT0, grad_tex, 0);
+	GLuint grad0_fbo;
+	glCreateFramebuffers(1, &grad0_fbo);
+	glNamedFramebufferTexture(grad0_fbo, GL_COLOR_ATTACHMENT0, grad0_tex, 0);
 
 	glUseProgram(sobel_program);
-	glBindTextureUnit(0, tex0);
+	glBindTextureUnit(0, tex0_view);
+	glBindSampler(0, nearest_sampler);
 	glProgramUniform1i(sobel_program, glGetUniformLocation(sobel_program, "tex"), 0);
 	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_width"), 1.0f / level_width);
 	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_height"), 1.0f / level_height);
@@ -282,16 +327,62 @@ int main(void)
 
 	// Now finally draw.
 	glViewport(0, 0, level_width, level_height);
-	glBindFramebuffer(GL_FRAMEBUFFER, grad_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, grad0_fbo);
 	glUseProgram(sobel_program);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	glUseProgram(0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glBindVertexArray(0);
 
+	// Motion search to find the initial flow.
+
+	// Create a flow texture, initialized to zero.
 	GLuint flow_tex;
 	glCreateTextures(GL_TEXTURE_2D, 1, &flow_tex);
 	glTextureStorage2D(flow_tex, 1, GL_RG16F, width_patches, height_patches);
 
+	// And an output flow texture. (Well, we could have used texture barriers,
+	// but I don't feel lucky today.)
+	GLuint flow_out_tex;
+	glCreateTextures(GL_TEXTURE_2D, 1, &flow_out_tex);
+	glTextureStorage2D(flow_out_tex, 1, GL_RG16F, width_patches, height_patches);
+
+	GLuint flow_fbo;
+	glCreateFramebuffers(1, &flow_fbo);
+	glNamedFramebufferTexture(flow_fbo, GL_COLOR_ATTACHMENT0, flow_out_tex, 0);
+
+	glUseProgram(motion_search_program);
+
+	bind_sampler(motion_search_program, "image0_tex", 0, tex0_view, nearest_sampler);
+	bind_sampler(motion_search_program, "image1_tex", 1, tex1_view, linear_sampler);
+	bind_sampler(motion_search_program, "grad0_tex", 2, grad0_tex, nearest_sampler);
+	bind_sampler(motion_search_program, "flow_tex", 3, flow_tex, nearest_sampler);
+
+	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_width"), level_width);
+	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_height"), level_height);
+	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_width"), 1.0f / level_width);
+	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_height"), 1.0f / level_height);
+
 //	printf("%d x %d patches on this level\n", width_patches, height_patches);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	GLuint motion_search_vao;
+        glCreateVertexArrays(1, &motion_search_vao);
+        glBindVertexArray(motion_search_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	position_attrib = glGetAttribLocation(motion_search_program, "position");
+	glEnableVertexArrayAttrib(motion_search_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	texcoord_attrib = glGetAttribLocation(motion_search_program, "texcoord");
+	glEnableVertexArrayAttrib(motion_search_vao, texcoord_attrib);
+	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	// And draw.
+	glViewport(0, 0, width_patches, height_patches);
+	glBindFramebuffer(GL_FRAMEBUFFER, flow_fbo);
+	glUseProgram(motion_search_program);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	fprintf(stderr, "err = %d\n", glGetError());
 }
