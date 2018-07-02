@@ -251,9 +251,9 @@ int main(void)
 
 	glUseProgram(sobel_program);
 	glBindTextureUnit(0, tex0);
-	glUniform1i(glGetUniformLocation(sobel_program, "tex"), 0);
-	glUniform1f(glGetUniformLocation(sobel_program, "inv_width"), 1.0f / level_width);
-	glUniform1f(glGetUniformLocation(sobel_program, "inv_height"), 1.0f / level_height);
+	glProgramUniform1i(sobel_program, glGetUniformLocation(sobel_program, "tex"), 0);
+	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_width"), 1.0f / level_width);
+	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_height"), 1.0f / level_height);
 
 	// Set up the VAO containing all the required position/texcoord data.
 	GLuint sobel_vao;
