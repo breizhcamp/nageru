@@ -25,8 +25,8 @@ using namespace std;
 
 // Operating point 3 (10 Hz on CPU, excluding preprocessing).
 constexpr float patch_overlap_ratio = 0.75f;
-constexpr unsigned coarsest_level = 0;
-constexpr unsigned finest_level = 0;
+constexpr unsigned coarsest_level = 5;
+constexpr unsigned finest_level = 1;
 constexpr unsigned patch_size_pixels = 12;
 
 // Some global OpenGL objects.
@@ -303,7 +303,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 	bind_sampler(motion_search_program, "image0_tex", 0, tex0_view, nearest_sampler);
 	bind_sampler(motion_search_program, "image1_tex", 1, tex1_view, linear_sampler);
 	bind_sampler(motion_search_program, "grad0_tex", 2, grad0_tex, nearest_sampler);
-	bind_sampler(motion_search_program, "flow_tex", 3, flow_tex, nearest_sampler);
+	bind_sampler(motion_search_program, "flow_tex", 3, flow_tex, linear_sampler);
 
 	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_width"), level_width);
 	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_height"), level_height);
@@ -444,72 +444,80 @@ int main(void)
 	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
 
-	// Coarsest level.
-	int level = coarsest_level;
-	int level_width = WIDTH >> level;
-	int level_height = HEIGHT >> level;
-	float patch_spacing_pixels = patch_size_pixels * (1.0f - patch_overlap_ratio);
-	int width_patches = 1 + lrintf((level_width - patch_size_pixels) / patch_spacing_pixels);
-	int height_patches = 1 + lrintf((level_height - patch_size_pixels) / patch_spacing_pixels);
+	// Initial flow is zero, 1x1.
+	GLuint initial_flow_tex;
+	glCreateTextures(GL_TEXTURE_2D, 1, &initial_flow_tex);
+	glTextureStorage2D(initial_flow_tex, 1, GL_RGB32F, 1, 1);
 
-	// Make sure we always read from the correct level; the chosen
-	// mipmapping could otherwise be rather unpredictable, especially
-	// during motion search.
-	GLuint tex0_view, tex1_view;
-	glGenTextures(1, &tex0_view);
-	glTextureView(tex0_view, GL_TEXTURE_2D, tex0, GL_R8, level, 1, 0, 1);
-	glGenTextures(1, &tex1_view);
-	glTextureView(tex1_view, GL_TEXTURE_2D, tex1, GL_R8, level, 1, 0, 1);
+	GLuint prev_level_flow_tex = initial_flow_tex;
 
 	Sobel sobel;
-
-	// Create a new texture; we could be fancy and render use a multi-level
-	// texture, but meh.
-	GLuint grad0_tex;
-	glCreateTextures(GL_TEXTURE_2D, 1, &grad0_tex);
-	glTextureStorage2D(grad0_tex, 1, GL_RG16F, level_width, level_height);
-
-	sobel.exec(tex0_view, grad0_tex, level_width, level_height);
-
-	// Motion search to find the initial flow.
 	MotionSearch motion_search;
-
-	// Create a flow texture, initialized to zero.
-	GLuint flow_tex;
-	glCreateTextures(GL_TEXTURE_2D, 1, &flow_tex);
-	glTextureStorage2D(flow_tex, 1, GL_RG16F, width_patches, height_patches);
-
-	// And an output flow texture. (Well, we could have used texture barriers,
-	// but I don't feel lucky today.)
-	GLuint flow_out_tex;
-	glCreateTextures(GL_TEXTURE_2D, 1, &flow_out_tex);
-	glTextureStorage2D(flow_out_tex, 1, GL_RG16F, width_patches, height_patches);
-
-	// And draw.
-	motion_search.exec(tex0_view, tex1_view, grad0_tex, flow_tex, flow_out_tex, level_width, level_height, width_patches, height_patches);
-
-	// Densification.
 	Densify densify;
 
-	// Set up an output texture.
-	GLuint dense_flow_tex;
-	glCreateTextures(GL_TEXTURE_2D, 1, &dense_flow_tex);
-	//glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
-	glTextureStorage2D(dense_flow_tex, 1, GL_RGBA32F, level_width, level_height);
+	for (int level = coarsest_level; level >= int(finest_level); --level) {
+		int level_width = WIDTH >> level;
+		int level_height = HEIGHT >> level;
+		float patch_spacing_pixels = patch_size_pixels * (1.0f - patch_overlap_ratio);
+		int width_patches = 1 + lrintf((level_width - patch_size_pixels) / patch_spacing_pixels);
+		int height_patches = 1 + lrintf((level_height - patch_size_pixels) / patch_spacing_pixels);
 
-	// And draw.
-	densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
+		// Make sure we always read from the correct level; the chosen
+		// mipmapping could otherwise be rather unpredictable, especially
+		// during motion search.
+		// TODO: create these beforehand, and stop leaking them.
+		GLuint tex0_view, tex1_view;
+		glGenTextures(1, &tex0_view);
+		glTextureView(tex0_view, GL_TEXTURE_2D, tex0, GL_R8, level, 1, 0, 1);
+		glGenTextures(1, &tex1_view);
+		glTextureView(tex1_view, GL_TEXTURE_2D, tex1, GL_R8, level, 1, 0, 1);
 
-	// TODO: Variational refinement.
+		// Create a new texture; we could be fancy and render use a multi-level
+		// texture, but meh.
+		GLuint grad0_tex;
+		glCreateTextures(GL_TEXTURE_2D, 1, &grad0_tex);
+		glTextureStorage2D(grad0_tex, 1, GL_RG16F, level_width, level_height);
 
+		// Find the derivative.
+		sobel.exec(tex0_view, grad0_tex, level_width, level_height);
+
+		// Motion search to find the initial flow. We use the flow from the previous
+		// level (sampled bilinearly; no fancy tricks) as a guide, then search from there.
+
+		// Create an output flow texture.
+		GLuint flow_out_tex;
+		glCreateTextures(GL_TEXTURE_2D, 1, &flow_out_tex);
+		glTextureStorage2D(flow_out_tex, 1, GL_RG16F, width_patches, height_patches);
+
+		// And draw.
+		motion_search.exec(tex0_view, tex1_view, grad0_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, width_patches, height_patches);
+
+		// Densification.
+
+		// Set up an output texture.
+		GLuint dense_flow_tex;
+		glCreateTextures(GL_TEXTURE_2D, 1, &dense_flow_tex);
+		//glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
+		glTextureStorage2D(dense_flow_tex, 1, GL_RGBA32F, level_width, level_height);
+
+		// And draw.
+		densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
+
+		// TODO: Variational refinement.
+
+		prev_level_flow_tex = dense_flow_tex;
+	}
+
+	int level_width = WIDTH >> finest_level;
+	int level_height = HEIGHT >> finest_level;
 	unique_ptr<float[]> dense_flow(new float[level_width * level_height * 3]);
-	glGetTextureImage(dense_flow_tex, 0, GL_RGB, GL_FLOAT, level_width * level_height * 3 * sizeof(float), dense_flow.get());
+	glGetTextureImage(prev_level_flow_tex, 0, GL_RGB, GL_FLOAT, level_width * level_height * 3 * sizeof(float), dense_flow.get());
 
 	FILE *fp = fopen("flow.ppm", "wb");
 	fprintf(fp, "P6\n%d %d\n255\n", level_width, level_height);
-	for (unsigned y = 0; y < level_height; ++y) {
+	for (unsigned y = 0; y < unsigned(level_height); ++y) {
 		int yy = level_height - y - 1;
-		for (unsigned x = 0; x < level_width; ++x) {
+		for (unsigned x = 0; x < unsigned(level_width); ++x) {
 			float du = dense_flow[(yy * level_width + x) * 3 + 0];
 			float dv = dense_flow[(yy * level_width + x) * 3 + 1];
 			float w = dense_flow[(yy * level_width + x) * 3 + 2];

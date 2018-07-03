@@ -87,8 +87,16 @@ void main()
 
 	mat2 H_inv = inverse(H);
 
-	// Fetch the initial guess for the flow.
-	vec2 initial_u = texture(flow_tex, flow_tc).xy;
+	// Fetch the initial guess for the flow. (We need the normalization step
+	// because densification works by accumulating; see the comments on the
+	// Densify class.)
+	vec3 prev_flow = texture(flow_tex, flow_tc).xyz;
+	vec2 initial_u;
+	if (prev_flow.z < 1e-3) {
+		initial_u = vec2(0.0, 0.0);
+	} else {
+		initial_u = prev_flow.xy / prev_flow.z;
+	}
 	vec2 u = initial_u;
 
 	for (uint i = 0; i < num_iterations; ++i) {
