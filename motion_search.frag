@@ -104,7 +104,7 @@ void main()
 				du += grad * (warped - t);
 			}
 		}
-		u += H_inv * du * vec2(inv_image_width, inv_image_height);
+		u += (H_inv * du) * vec2(inv_image_width, inv_image_height);
 	}
 
 	// Reject if we moved too far.

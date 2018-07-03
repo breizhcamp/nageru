@@ -452,21 +452,22 @@ int main(void)
 	FILE *fp = fopen("flow.ppm", "wb");
 	fprintf(fp, "P6\n%d %d\n255\n", level_width, level_height);
 	for (unsigned y = 0; y < level_height; ++y) {
+		int yy = level_height - y - 1;
 		for (unsigned x = 0; x < level_width; ++x) {
-			float du = dense_flow[(y * level_width + x) * 3 + 0];
-			float dv = dense_flow[(y * level_width + x) * 3 + 1];
-			float w = dense_flow[(y * level_width + x) * 3 + 2];
+			float du = dense_flow[(yy * level_width + x) * 3 + 0];
+			float dv = dense_flow[(yy * level_width + x) * 3 + 1];
+			float w = dense_flow[(yy * level_width + x) * 3 + 2];
 
 			du /= w;
 			dv /= w;
 
-			float angle = atan2(dv, du);
+			float angle = atan2(dv * level_width, du * level_height);
 			float magnitude = min(hypot(du * level_width, dv * level_height) / 20.0, 1.0);
 			
 			// HSV to RGB (from Wikipedia). Saturation is 1.
 			float c = magnitude;
-			float h = angle * 6.0 / (2.0 * M_PI);
-			float X = c * (1.0 - (fmod(h, 2.0) - 1.0));
+			float h = (angle + M_PI) * 6.0 / (2.0 * M_PI);
+			float X = c * (1.0 - fabs(fmod(h, 2.0) - 1.0));
 			float r = 0.0f, g = 0.0f, b = 0.0f;
 			if (h < 1.0f) {
 				r = c; g = X;
@@ -484,7 +485,7 @@ int main(void)
 				// h is NaN, so black is fine.
 			}
 			float m = magnitude - c;
-			r += m, g += m, b += m;
+			r += m; g += m; b += m;
 			r = max(min(r, 1.0f), 0.0f);
 			g = max(min(g, 1.0f), 0.0f);
 			b = max(min(b, 1.0f), 0.0f);
