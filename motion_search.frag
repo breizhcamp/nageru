@@ -107,7 +107,10 @@ void main()
 		u += H_inv * du * vec2(inv_image_width, inv_image_height);
 	}
 
-	// TODO: reject if moving too far
+	// Reject if we moved too far.
+	if (length((u - initial_u) * vec2(image_width, image_height)) > patch_size) {
+		u = initial_u;
+	}
 
 	out_flow = u;
 }

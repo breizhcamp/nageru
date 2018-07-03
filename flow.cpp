@@ -235,6 +235,10 @@ int main(void)
 	GLuint sobel_fs_obj = compile_shader(read_file("sobel.frag"), GL_FRAGMENT_SHADER);
 	GLuint sobel_program = link_program(sobel_vs_obj, sobel_fs_obj);
 
+	GLuint densify_vs_obj = compile_shader(read_file("densify.vert"), GL_VERTEX_SHADER);
+	GLuint densify_fs_obj = compile_shader(read_file("densify.frag"), GL_FRAGMENT_SHADER);
+	GLuint densify_program = link_program(densify_vs_obj, densify_fs_obj);
+
 	// Make some samplers.
 	GLuint nearest_sampler;
 	glCreateSamplers(1, &nearest_sampler);
@@ -329,6 +333,7 @@ int main(void)
 	glViewport(0, 0, level_width, level_height);
 	glBindFramebuffer(GL_FRAMEBUFFER, grad0_fbo);
 	glUseProgram(sobel_program);
+	glDisable(GL_BLEND);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	// Motion search to find the initial flow.
@@ -383,6 +388,112 @@ int main(void)
 	glBindFramebuffer(GL_FRAMEBUFFER, flow_fbo);
 	glUseProgram(motion_search_program);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	// Do “densification”, ie., upsampling of the flow patches to the flow field
+	// (the same size as the image at this level). We draw one quad per patch
+	// over its entire covered area (using instancing in the vertex shader),
+	// and then weight the contributions in the pixel shader by post-warp difference.
+	// This is equation (3) in the paper.
+	//
+	// We accumulate the flow vectors in the R/G channels (for u/v) and the total
+	// weight in the B channel. Dividing R and G by B gives the normalized values.
+
+	// Set up an output texture.
+	GLuint dense_flow_tex;
+	glCreateTextures(GL_TEXTURE_2D, 1, &dense_flow_tex);
+	//glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
+	glTextureStorage2D(dense_flow_tex, 1, GL_RGBA32F, level_width, level_height);
+
+	GLuint dense_flow_fbo;
+	glCreateFramebuffers(1, &dense_flow_fbo);
+	glNamedFramebufferTexture(dense_flow_fbo, GL_COLOR_ATTACHMENT0, dense_flow_tex, 0);
+
+	glUseProgram(densify_program);
+
+	bind_sampler(densify_program, "image0_tex", 0, tex0_view, nearest_sampler);
+	bind_sampler(densify_program, "image1_tex", 1, tex1_view, linear_sampler);
+	bind_sampler(densify_program, "flow_tex", 2, flow_out_tex, nearest_sampler);
+
+	glProgramUniform1i(densify_program, glGetUniformLocation(densify_program, "width_patches"), width_patches);
+	glProgramUniform2f(densify_program, glGetUniformLocation(densify_program, "patch_size"),
+		float(patch_size_pixels) / level_width,
+		float(patch_size_pixels) / level_height);
+
+	float patch_spacing_x = float(level_width - patch_size_pixels) / (width_patches - 1);
+	float patch_spacing_y = float(level_height - patch_size_pixels) / (height_patches - 1);
+	glProgramUniform2f(densify_program, glGetUniformLocation(densify_program, "patch_spacing"),
+		patch_spacing_x / level_width,
+		patch_spacing_y / level_height);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	GLuint densify_vao;
+        glCreateVertexArrays(1, &densify_vao);
+        glBindVertexArray(densify_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	position_attrib = glGetAttribLocation(densify_program, "position");
+	glEnableVertexArrayAttrib(densify_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	// And draw.
+	glViewport(0, 0, level_width, level_height);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, dense_flow_fbo);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches);
+
+	// TODO: Variational refinement.
+
+	unique_ptr<float[]> dense_flow(new float[level_width * level_height * 3]);
+	glGetTextureImage(dense_flow_tex, 0, GL_RGB, GL_FLOAT, level_width * level_height * 3 * sizeof(float), dense_flow.get());
+
+	FILE *fp = fopen("flow.ppm", "wb");
+	fprintf(fp, "P6\n%d %d\n255\n", level_width, level_height);
+	for (unsigned y = 0; y < level_height; ++y) {
+		for (unsigned x = 0; x < level_width; ++x) {
+			float du = dense_flow[(y * level_width + x) * 3 + 0];
+			float dv = dense_flow[(y * level_width + x) * 3 + 1];
+			float w = dense_flow[(y * level_width + x) * 3 + 2];
+
+			du /= w;
+			dv /= w;
+
+			float angle = atan2(dv, du);
+			float magnitude = min(hypot(du * level_width, dv * level_height) / 20.0, 1.0);
+			
+			// HSV to RGB (from Wikipedia). Saturation is 1.
+			float c = magnitude;
+			float h = angle * 6.0 / (2.0 * M_PI);
+			float X = c * (1.0 - (fmod(h, 2.0) - 1.0));
+			float r = 0.0f, g = 0.0f, b = 0.0f;
+			if (h < 1.0f) {
+				r = c; g = X;
+			} else if (h < 2.0f) {
+				r = X; g = c;
+			} else if (h < 3.0f) {
+				g = c; b = X;
+			} else if (h < 4.0f) {
+				g = X; b = c;
+			} else if (h < 5.0f) {
+				r = X; b = c;
+			} else if (h < 6.0f) {
+				r = c; b = X;
+			} else {
+				// h is NaN, so black is fine.
+			}
+			float m = magnitude - c;
+			r += m, g += m, b += m;
+			r = max(min(r, 1.0f), 0.0f);
+			g = max(min(g, 1.0f), 0.0f);
+			b = max(min(b, 1.0f), 0.0f);
+			putc(lrintf(r * 255.0f), fp);
+			putc(lrintf(g * 255.0f), fp);
+			putc(lrintf(b * 255.0f), fp);
+		}
+	}
+	fclose(fp);
 
 	fprintf(stderr, "err = %d\n", glGetError());
 }
