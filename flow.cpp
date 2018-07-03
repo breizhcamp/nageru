@@ -29,6 +29,10 @@ constexpr unsigned coarsest_level = 0;
 constexpr unsigned finest_level = 0;
 constexpr unsigned patch_size_pixels = 12;
 
+// Some global OpenGL objects.
+GLuint nearest_sampler, linear_sampler, mipmap_sampler;
+GLuint vertex_vbo;
+
 string read_file(const string &filename)
 {
 	FILE *fp = fopen(filename.c_str(), "r");
@@ -199,6 +203,191 @@ void bind_sampler(GLuint program, const char *uniform_name, GLuint texture_unit,
 	glProgramUniform1i(program, location, texture_unit);
 }
 
+// Compute gradients in every point, used for the motion search.
+// The DIS paper doesn't actually mention how these are computed,
+// but seemingly, a 3x3 Sobel operator is used here (at least in
+// later versions of the code), while a [1 -8 0 8 -1] kernel is
+// used for all the derivatives in the variational refinement part
+// (which borrows code from DeepFlow). This is inconsistent,
+// but I guess we're better off with staying with the original
+// decisions until we actually know having different ones would be better.
+class Sobel {
+public:
+	Sobel();
+	void exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_height);
+
+private:
+	GLuint sobel_vs_obj;
+	GLuint sobel_fs_obj;
+	GLuint sobel_program;
+	GLuint sobel_vao;
+};
+
+Sobel::Sobel()
+{
+	sobel_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	sobel_fs_obj = compile_shader(read_file("sobel.frag"), GL_FRAGMENT_SHADER);
+	sobel_program = link_program(sobel_vs_obj, sobel_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+        glCreateVertexArrays(1, &sobel_vao);
+        glBindVertexArray(sobel_vao);
+
+	GLint position_attrib = glGetAttribLocation(sobel_program, "position");
+	glEnableVertexArrayAttrib(sobel_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	GLint texcoord_attrib = glGetAttribLocation(sobel_program, "texcoord");
+	glEnableVertexArrayAttrib(sobel_vao, texcoord_attrib);
+	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+}
+
+void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_height)
+{
+	glUseProgram(sobel_program);
+	glBindTextureUnit(0, tex0_view);
+	glBindSampler(0, nearest_sampler);
+	glProgramUniform1i(sobel_program, glGetUniformLocation(sobel_program, "tex"), 0);
+	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_width"), 1.0f / level_width);
+	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_height"), 1.0f / level_height);
+
+	GLuint grad0_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &grad0_fbo);
+	glNamedFramebufferTexture(grad0_fbo, GL_COLOR_ATTACHMENT0, grad0_tex, 0);
+
+	glViewport(0, 0, level_width, level_height);
+	glBindFramebuffer(GL_FRAMEBUFFER, grad0_fbo);
+        glBindVertexArray(sobel_vao);
+	glUseProgram(sobel_program);
+	glDisable(GL_BLEND);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+// Motion search to find the initial flow. See motion_search.frag for documentation.
+class MotionSearch {
+public:
+	MotionSearch();
+	void exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int width_patches, int height_patches);
+
+private:
+	GLuint motion_vs_obj;
+	GLuint motion_fs_obj;
+	GLuint motion_search_program;
+	GLuint motion_search_vao;
+};
+
+MotionSearch::MotionSearch()
+{
+	motion_vs_obj = compile_shader(read_file("motion_search.vert"), GL_VERTEX_SHADER);
+	motion_fs_obj = compile_shader(read_file("motion_search.frag"), GL_FRAGMENT_SHADER);
+	motion_search_program = link_program(motion_vs_obj, motion_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+        glCreateVertexArrays(1, &motion_search_vao);
+        glBindVertexArray(motion_search_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(motion_search_program, "position");
+	glEnableVertexArrayAttrib(motion_search_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	GLint texcoord_attrib = glGetAttribLocation(motion_search_program, "texcoord");
+	glEnableVertexArrayAttrib(motion_search_vao, texcoord_attrib);
+	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+}
+
+void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int width_patches, int height_patches)
+{
+	glUseProgram(motion_search_program);
+
+	bind_sampler(motion_search_program, "image0_tex", 0, tex0_view, nearest_sampler);
+	bind_sampler(motion_search_program, "image1_tex", 1, tex1_view, linear_sampler);
+	bind_sampler(motion_search_program, "grad0_tex", 2, grad0_tex, nearest_sampler);
+	bind_sampler(motion_search_program, "flow_tex", 3, flow_tex, nearest_sampler);
+
+	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_width"), level_width);
+	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_height"), level_height);
+	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_width"), 1.0f / level_width);
+	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_height"), 1.0f / level_height);
+
+	GLuint flow_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &flow_fbo);
+	glNamedFramebufferTexture(flow_fbo, GL_COLOR_ATTACHMENT0, flow_out_tex, 0);
+
+	glViewport(0, 0, width_patches, height_patches);
+	glBindFramebuffer(GL_FRAMEBUFFER, flow_fbo);
+        glBindVertexArray(motion_search_vao);
+	glUseProgram(motion_search_program);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+// Do “densification”, ie., upsampling of the flow patches to the flow field
+// (the same size as the image at this level). We draw one quad per patch
+// over its entire covered area (using instancing in the vertex shader),
+// and then weight the contributions in the pixel shader by post-warp difference.
+// This is equation (3) in the paper.
+//
+// We accumulate the flow vectors in the R/G channels (for u/v) and the total
+// weight in the B channel. Dividing R and G by B gives the normalized values.
+class Densify {
+public:
+	Densify();
+	void exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches);
+
+private:
+	GLuint densify_vs_obj;
+	GLuint densify_fs_obj;
+	GLuint densify_program;
+	GLuint densify_vao;
+};
+
+Densify::Densify()
+{
+	densify_vs_obj = compile_shader(read_file("densify.vert"), GL_VERTEX_SHADER);
+	densify_fs_obj = compile_shader(read_file("densify.frag"), GL_FRAGMENT_SHADER);
+	densify_program = link_program(densify_vs_obj, densify_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+        glCreateVertexArrays(1, &densify_vao);
+        glBindVertexArray(densify_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(densify_program, "position");
+	glEnableVertexArrayAttrib(densify_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+}
+
+void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches)
+{
+	glUseProgram(densify_program);
+
+	bind_sampler(densify_program, "image0_tex", 0, tex0_view, nearest_sampler);
+	bind_sampler(densify_program, "image1_tex", 1, tex1_view, linear_sampler);
+	bind_sampler(densify_program, "flow_tex", 2, flow_tex, nearest_sampler);
+
+	glProgramUniform1i(densify_program, glGetUniformLocation(densify_program, "width_patches"), width_patches);
+	glProgramUniform2f(densify_program, glGetUniformLocation(densify_program, "patch_size"),
+		float(patch_size_pixels) / level_width,
+		float(patch_size_pixels) / level_height);
+
+	float patch_spacing_x = float(level_width - patch_size_pixels) / (width_patches - 1);
+	float patch_spacing_y = float(level_height - patch_size_pixels) / (height_patches - 1);
+	glProgramUniform2f(densify_program, glGetUniformLocation(densify_program, "patch_spacing"),
+		patch_spacing_x / level_width,
+		patch_spacing_y / level_height);
+
+	GLuint dense_flow_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &dense_flow_fbo);
+	glNamedFramebufferTexture(dense_flow_fbo, GL_COLOR_ATTACHMENT0, dense_flow_tex, 0);
+
+	glViewport(0, 0, level_width, level_height);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+        glBindVertexArray(densify_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, dense_flow_fbo);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches);
+}
+
 int main(void)
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
@@ -226,40 +415,34 @@ int main(void)
 	GLuint tex0 = load_texture("test1499.pgm", WIDTH, HEIGHT);
 	GLuint tex1 = load_texture("test1500.pgm", WIDTH, HEIGHT);
 
-	// Load shaders.
-	GLuint motion_vs_obj = compile_shader(read_file("motion_search.vert"), GL_VERTEX_SHADER);
-	GLuint motion_fs_obj = compile_shader(read_file("motion_search.frag"), GL_FRAGMENT_SHADER);
-	GLuint motion_search_program = link_program(motion_vs_obj, motion_fs_obj);
-
-	GLuint sobel_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	GLuint sobel_fs_obj = compile_shader(read_file("sobel.frag"), GL_FRAGMENT_SHADER);
-	GLuint sobel_program = link_program(sobel_vs_obj, sobel_fs_obj);
-
-	GLuint densify_vs_obj = compile_shader(read_file("densify.vert"), GL_VERTEX_SHADER);
-	GLuint densify_fs_obj = compile_shader(read_file("densify.frag"), GL_FRAGMENT_SHADER);
-	GLuint densify_program = link_program(densify_vs_obj, densify_fs_obj);
-
 	// Make some samplers.
-	GLuint nearest_sampler;
 	glCreateSamplers(1, &nearest_sampler);
 	glSamplerParameteri(nearest_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glSamplerParameteri(nearest_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glSamplerParameteri(nearest_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glSamplerParameteri(nearest_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	GLuint linear_sampler;
 	glCreateSamplers(1, &linear_sampler);
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	GLuint mipmap_sampler;
 	glCreateSamplers(1, &mipmap_sampler);
 	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
 	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	float vertices[] = {
+		0.0f, 1.0f,
+		0.0f, 0.0f,
+		1.0f, 1.0f,
+		1.0f, 0.0f,
+	};
+	glCreateBuffers(1, &vertex_vbo);
+	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
 
 	// Coarsest level.
 	int level = coarsest_level;
@@ -278,14 +461,7 @@ int main(void)
 	glGenTextures(1, &tex1_view);
 	glTextureView(tex1_view, GL_TEXTURE_2D, tex1, GL_R8, level, 1, 0, 1);
 
-	// Compute gradients in every point, used for the motion search.
-	// The DIS paper doesn't actually mention how these are computed,
-	// but seemingly, a 3x3 Sobel operator is used here (at least in
-	// later versions of the code), while a [1 -8 0 8 -1] kernel is
-	// used for all the derivatives in the variational refinement part
-	// (which borrows code from DeepFlow). This is inconsistent,
-	// but I guess we're better off with staying with the original
-	// decisions until we actually know having different ones would be better.
+	Sobel sobel;
 
 	// Create a new texture; we could be fancy and render use a multi-level
 	// texture, but meh.
@@ -293,50 +469,10 @@ int main(void)
 	glCreateTextures(GL_TEXTURE_2D, 1, &grad0_tex);
 	glTextureStorage2D(grad0_tex, 1, GL_RG16F, level_width, level_height);
 
-	GLuint grad0_fbo;
-	glCreateFramebuffers(1, &grad0_fbo);
-	glNamedFramebufferTexture(grad0_fbo, GL_COLOR_ATTACHMENT0, grad0_tex, 0);
-
-	glUseProgram(sobel_program);
-	glBindTextureUnit(0, tex0_view);
-	glBindSampler(0, nearest_sampler);
-	glProgramUniform1i(sobel_program, glGetUniformLocation(sobel_program, "tex"), 0);
-	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_width"), 1.0f / level_width);
-	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_height"), 1.0f / level_height);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	GLuint sobel_vao;
-        glCreateVertexArrays(1, &sobel_vao);
-        glBindVertexArray(sobel_vao);
-	float vertices[] = {
-		0.0f, 1.0f,
-		0.0f, 0.0f,
-		1.0f, 1.0f,
-		1.0f, 0.0f,
-	};
-	GLuint vertex_vbo;
-	glCreateBuffers(1, &vertex_vbo);
-	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	int position_attrib = glGetAttribLocation(sobel_program, "position");
-	glEnableVertexArrayAttrib(sobel_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-
-	int texcoord_attrib = glGetAttribLocation(sobel_program, "texcoord");
-	glEnableVertexArrayAttrib(sobel_vao, texcoord_attrib);
-	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	// Now finally draw.
-	glViewport(0, 0, level_width, level_height);
-	glBindFramebuffer(GL_FRAMEBUFFER, grad0_fbo);
-	glUseProgram(sobel_program);
-	glDisable(GL_BLEND);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	sobel.exec(tex0_view, grad0_tex, level_width, level_height);
 
 	// Motion search to find the initial flow.
+	MotionSearch motion_search;
 
 	// Create a flow texture, initialized to zero.
 	GLuint flow_tex;
@@ -349,54 +485,11 @@ int main(void)
 	glCreateTextures(GL_TEXTURE_2D, 1, &flow_out_tex);
 	glTextureStorage2D(flow_out_tex, 1, GL_RG16F, width_patches, height_patches);
 
-	GLuint flow_fbo;
-	glCreateFramebuffers(1, &flow_fbo);
-	glNamedFramebufferTexture(flow_fbo, GL_COLOR_ATTACHMENT0, flow_out_tex, 0);
-
-	glUseProgram(motion_search_program);
-
-	bind_sampler(motion_search_program, "image0_tex", 0, tex0_view, nearest_sampler);
-	bind_sampler(motion_search_program, "image1_tex", 1, tex1_view, linear_sampler);
-	bind_sampler(motion_search_program, "grad0_tex", 2, grad0_tex, nearest_sampler);
-	bind_sampler(motion_search_program, "flow_tex", 3, flow_tex, nearest_sampler);
-
-	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_width"), level_width);
-	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_height"), level_height);
-	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_width"), 1.0f / level_width);
-	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_height"), 1.0f / level_height);
-
-//	printf("%d x %d patches on this level\n", width_patches, height_patches);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	GLuint motion_search_vao;
-        glCreateVertexArrays(1, &motion_search_vao);
-        glBindVertexArray(motion_search_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	position_attrib = glGetAttribLocation(motion_search_program, "position");
-	glEnableVertexArrayAttrib(motion_search_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-
-	texcoord_attrib = glGetAttribLocation(motion_search_program, "texcoord");
-	glEnableVertexArrayAttrib(motion_search_vao, texcoord_attrib);
-	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
 	// And draw.
-	glViewport(0, 0, width_patches, height_patches);
-	glBindFramebuffer(GL_FRAMEBUFFER, flow_fbo);
-	glUseProgram(motion_search_program);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	motion_search.exec(tex0_view, tex1_view, grad0_tex, flow_tex, flow_out_tex, level_width, level_height, width_patches, height_patches);
 
-	// Do “densification”, ie., upsampling of the flow patches to the flow field
-	// (the same size as the image at this level). We draw one quad per patch
-	// over its entire covered area (using instancing in the vertex shader),
-	// and then weight the contributions in the pixel shader by post-warp difference.
-	// This is equation (3) in the paper.
-	//
-	// We accumulate the flow vectors in the R/G channels (for u/v) and the total
-	// weight in the B channel. Dividing R and G by B gives the normalized values.
+	// Densification.
+	Densify densify;
 
 	// Set up an output texture.
 	GLuint dense_flow_tex;
@@ -404,45 +497,8 @@ int main(void)
 	//glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
 	glTextureStorage2D(dense_flow_tex, 1, GL_RGBA32F, level_width, level_height);
 
-	GLuint dense_flow_fbo;
-	glCreateFramebuffers(1, &dense_flow_fbo);
-	glNamedFramebufferTexture(dense_flow_fbo, GL_COLOR_ATTACHMENT0, dense_flow_tex, 0);
-
-	glUseProgram(densify_program);
-
-	bind_sampler(densify_program, "image0_tex", 0, tex0_view, nearest_sampler);
-	bind_sampler(densify_program, "image1_tex", 1, tex1_view, linear_sampler);
-	bind_sampler(densify_program, "flow_tex", 2, flow_out_tex, nearest_sampler);
-
-	glProgramUniform1i(densify_program, glGetUniformLocation(densify_program, "width_patches"), width_patches);
-	glProgramUniform2f(densify_program, glGetUniformLocation(densify_program, "patch_size"),
-		float(patch_size_pixels) / level_width,
-		float(patch_size_pixels) / level_height);
-
-	float patch_spacing_x = float(level_width - patch_size_pixels) / (width_patches - 1);
-	float patch_spacing_y = float(level_height - patch_size_pixels) / (height_patches - 1);
-	glProgramUniform2f(densify_program, glGetUniformLocation(densify_program, "patch_spacing"),
-		patch_spacing_x / level_width,
-		patch_spacing_y / level_height);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	GLuint densify_vao;
-        glCreateVertexArrays(1, &densify_vao);
-        glBindVertexArray(densify_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	position_attrib = glGetAttribLocation(densify_program, "position");
-	glEnableVertexArrayAttrib(densify_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
 	// And draw.
-	glViewport(0, 0, level_width, level_height);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE);
-	glBindFramebuffer(GL_FRAMEBUFFER, dense_flow_fbo);
-	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches);
+	densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
 
 	// TODO: Variational refinement.
 
