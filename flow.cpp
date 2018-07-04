@@ -248,8 +248,8 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 	glBindTextureUnit(0, tex0_view);
 	glBindSampler(0, nearest_sampler);
 	glProgramUniform1i(sobel_program, glGetUniformLocation(sobel_program, "tex"), 0);
-	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_width"), 1.0f / level_width);
-	glProgramUniform1f(sobel_program, glGetUniformLocation(sobel_program, "inv_height"), 1.0f / level_height);
+	glProgramUniform2f(sobel_program, glGetUniformLocation(sobel_program, "image_size"), level_width, level_height);
+	glProgramUniform2f(sobel_program, glGetUniformLocation(sobel_program, "inv_image_size"), 1.0f / level_width, 1.0f / level_height);
 
 	GLuint grad0_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &grad0_fbo);
@@ -305,10 +305,8 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 	bind_sampler(motion_search_program, "grad0_tex", 2, grad0_tex, nearest_sampler);
 	bind_sampler(motion_search_program, "flow_tex", 3, flow_tex, linear_sampler);
 
-	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_width"), level_width);
-	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "image_height"), level_height);
-	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_width"), 1.0f / level_width);
-	glProgramUniform1f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_height"), 1.0f / level_height);
+	glProgramUniform2f(motion_search_program, glGetUniformLocation(motion_search_program, "image_size"), level_width, level_height);
+	glProgramUniform2f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_size"), 1.0f / level_width, 1.0f / level_height);
 
 	GLuint flow_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &flow_fbo);

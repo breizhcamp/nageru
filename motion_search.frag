@@ -43,14 +43,14 @@ in vec2 patch_bottom_left_texel;  // Center of bottom-left texel of patch.
 out vec2 out_flow;
 
 uniform sampler2D flow_tex, grad0_tex, image0_tex, image1_tex;
-uniform float image_width, image_height, inv_image_width, inv_image_height;
+uniform vec2 image_size, inv_image_size;
 
 void main()
 {
 	// Lock patch_bottom_left_texel to an integer, so that we never get
 	// any bilinear artifacts for the gradient.
-	vec2 base = round(patch_bottom_left_texel * vec2(image_width, image_height))
-		* vec2(inv_image_width, inv_image_height);
+	vec2 base = round(patch_bottom_left_texel * image_size)
+		* inv_image_size;
 
 	// First, precompute the pseudo-Hessian for the template patch.
 	// This is the part where we really save by the inverse search
@@ -65,9 +65,7 @@ void main()
 	mat2 H = mat2(0.0f);
 	for (uint y = 0; y < patch_size; ++y) {
 		for (uint x = 0; x < patch_size; ++x) {
-			vec2 tc;
-			tc.x = base.x + x * inv_image_width;
-			tc.y = base.y + y * inv_image_height;
+			vec2 tc = base + uvec2(x, y) * inv_image_size;
 			vec2 grad = texture(grad0_tex, tc).xy;
 			H[0][0] += grad.x * grad.x;
 			H[1][1] += grad.y * grad.y;
@@ -103,20 +101,18 @@ void main()
 		vec2 du = vec2(0.0, 0.0);
 		for (uint y = 0; y < patch_size; ++y) {
 			for (uint x = 0; x < patch_size; ++x) {
-				vec2 tc;
-				tc.x = base.x + x * inv_image_width;
-				tc.y = base.y + y * inv_image_height;
+				vec2 tc = base + uvec2(x, y) * inv_image_size;
 				vec2 grad = texture(grad0_tex, tc).xy;
 				float t = texture(image0_tex, tc).x;
 				float warped = texture(image1_tex, tc + u).x;
 				du += grad * (warped - t);
 			}
 		}
-		u += (H_inv * du) * vec2(inv_image_width, inv_image_height);
+		u += (H_inv * du) * inv_image_size;
 	}
 
 	// Reject if we moved too far.
-	if (length((u - initial_u) * vec2(image_width, image_height)) > patch_size) {
+	if (length((u - initial_u) * image_size) > patch_size) {
 		u = initial_u;
 	}
 

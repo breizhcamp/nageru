@@ -4,7 +4,7 @@ in vec2 tc;
 out vec2 gradients;
 
 uniform sampler2D tex;
-uniform float inv_width, inv_height;
+uniform vec2 inv_image_size;
 
 void main()
 {
@@ -19,13 +19,13 @@ void main()
 	// Computing both at once allows us to get away with eight
 	// texture samples instead of twelve.
 
-	float x_left   = tc.x - inv_width;
+	float x_left   = tc.x - inv_image_size.x;
 	float x_mid    = tc.x; 
-	float x_right  = tc.x + inv_width;
+	float x_right  = tc.x + inv_image_size.x;
 
-	float y_top    = tc.y + inv_height;  // Note the bottom-left coordinate system.
+	float y_top    = tc.y + inv_image_size.y;  // Note the bottom-left coordinate system.
 	float y_mid    = tc.y;
-	float y_bottom = tc.y - inv_height;
+	float y_bottom = tc.y - inv_image_size.y;
  
 	float top_left     = texture(tex, vec2(x_left,  y_top)).x;
 	float left         = texture(tex, vec2(x_left,  y_mid)).x;
