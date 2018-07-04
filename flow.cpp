@@ -16,6 +16,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+#include "flow2rgb.h"
+
 #include <algorithm>
 #include <memory>
 
@@ -520,40 +522,14 @@ int main(void)
 			float dv = dense_flow[(yy * level_width + x) * 3 + 1];
 			float w = dense_flow[(yy * level_width + x) * 3 + 2];
 
-			du /= w;
-			dv /= w;
+			du = (du / w) * level_width;
+			dv = (dv / w) * level_height;
 
-			float angle = atan2(dv * level_width, du * level_height);
-			float magnitude = min(hypot(du * level_width, dv * level_height) / 20.0, 1.0);
-			
-			// HSV to RGB (from Wikipedia). Saturation is 1.
-			float c = magnitude;
-			float h = (angle + M_PI) * 6.0 / (2.0 * M_PI);
-			float X = c * (1.0 - fabs(fmod(h, 2.0) - 1.0));
-			float r = 0.0f, g = 0.0f, b = 0.0f;
-			if (h < 1.0f) {
-				r = c; g = X;
-			} else if (h < 2.0f) {
-				r = X; g = c;
-			} else if (h < 3.0f) {
-				g = c; b = X;
-			} else if (h < 4.0f) {
-				g = X; b = c;
-			} else if (h < 5.0f) {
-				r = X; b = c;
-			} else if (h < 6.0f) {
-				r = c; b = X;
-			} else {
-				// h is NaN, so black is fine.
-			}
-			float m = magnitude - c;
-			r += m; g += m; b += m;
-			r = max(min(r, 1.0f), 0.0f);
-			g = max(min(g, 1.0f), 0.0f);
-			b = max(min(b, 1.0f), 0.0f);
-			putc(lrintf(r * 255.0f), fp);
-			putc(lrintf(g * 255.0f), fp);
-			putc(lrintf(b * 255.0f), fp);
+			uint8_t r, g, b;
+			flow2rgb(du, dv, &r, &g, &b);
+			putc(r, fp);
+			putc(g, fp);
+			putc(b, fp);
 		}
 	}
 	fclose(fp);
