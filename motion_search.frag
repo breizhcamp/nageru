@@ -95,6 +95,10 @@ void main()
 	} else {
 		initial_u = prev_flow.xy / prev_flow.z;
 	}
+
+	// Note: The flow is in OpenGL coordinates [0..1], but the calculations
+	// generally come out in pixels since the gradient is in pixels,
+	// so we need to convert at the end.
 	vec2 u = initial_u;
 
 	for (uint i = 0; i < num_iterations; ++i) {

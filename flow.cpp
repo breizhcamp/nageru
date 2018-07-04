@@ -494,7 +494,7 @@ int main(void)
 
 		// Densification.
 
-		// Set up an output texture.
+		// Set up an output texture (initially zero).
 		GLuint dense_flow_tex;
 		glCreateTextures(GL_TEXTURE_2D, 1, &dense_flow_tex);
 		//glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);

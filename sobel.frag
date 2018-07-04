@@ -11,12 +11,19 @@ void main()
 	// There are two common Sobel filters, horizontal and vertical
 	// (see e.g. Wikipedia, or the OpenCV documentation):
 	//
-	//  [-1 0 1]     [ 1  2  1]
-	//  [-2 0 2]     [ 0  0  0]
-	//  [-1 0 1]     [-1 -2 -1]
+	//  [1 0 -1]     [-1 -2 -1]
+	//  [2 0 -2]     [ 0  0  0]
+	//  [1 0 -1]     [ 1  2  1]
 	// Horizontal     Vertical
 	//
-	// Computing both at once allows us to get away with eight
+	// Note that Wikipedia and OpenCV gives entirely opposite definitions
+	// with regards to sign! This appears to be an error in the OpenCV
+	// documentation, forgetting that for convolution, the filters must be
+	// flipped. We have to flip the vertical matrix again comparing to
+	// Wikipedia, though, since we have bottom-left origin (y = up)
+	// and they define y as pointing downwards.
+	//
+	// Computing both directions at once allows us to get away with eight
 	// texture samples instead of twelve.
 
 	float x_left   = tc.x - inv_image_size.x;
