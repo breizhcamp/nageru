@@ -47,4 +47,8 @@ void main()
 
 	gradients.x = (top_right + 2.0f * right + bottom_right) - (top_left + 2.0f * left + bottom_left);
 	gradients.y = (top_left + 2.0 * top + top_right) - (bottom_left + 2.0f * bottom + bottom_right);
+
+	// Normalize so that we have a normalized unit of intensity levels per pixel.
+	gradients.x *= 0.125;
+	gradients.y *= 0.125;
 }
