@@ -63,6 +63,8 @@ void main()
 	// this is an outer product, so we get a (symmetric) 2x2 matrix,
 	// not a scalar.
 	mat2 H = mat2(0.0f);
+	vec2 grad_sum = vec2(0.0f);  // Used for patch normalization.
+	float template_sum = 0.0f;
 	for (uint y = 0; y < patch_size; ++y) {
 		for (uint x = 0; x < patch_size; ++x) {
 			vec2 tc = base + uvec2(x, y) * inv_image_size;
@@ -70,6 +72,9 @@ void main()
 			H[0][0] += grad.x * grad.x;
 			H[1][1] += grad.y * grad.y;
 			H[0][1] += grad.x * grad.y;
+
+			template_sum += texture(image0_tex, tc).x;
+			grad_sum += grad;
 		}
 	}
 	H[1][0] = H[0][1];
@@ -103,6 +108,7 @@ void main()
 
 	for (uint i = 0; i < num_iterations; ++i) {
 		vec2 du = vec2(0.0, 0.0);
+		float warped_sum = 0.0f;
 		for (uint y = 0; y < patch_size; ++y) {
 			for (uint x = 0; x < patch_size; ++x) {
 				vec2 tc = base + uvec2(x, y) * inv_image_size;
@@ -110,8 +116,23 @@ void main()
 				float t = texture(image0_tex, tc).x;
 				float warped = texture(image1_tex, tc + u).x;
 				du += grad * (warped - t);
+				warped_sum += warped;
 			}
 		}
+
+		// Subtract the mean for patch normalization. We've done our
+		// sums without subtracting the means (because we didn't know them
+		// beforehand), ie.:
+		//
+		//   sum(S^T * ((x + µ1) - (y + µ2))) = sum(S^T * (x - y)) + (µ1 – µ2) sum(S^T)
+		//
+		// which gives trivially
+		//
+		//   sum(S^T * (x - y)) = [what we calculated] - (µ1 - µ2) sum(S^T)
+		//
+		// so we can just subtract away the mean difference here.
+		du -= grad_sum * (warped_sum - template_sum) * (1.0 / (patch_size * patch_size));
+
 		u += (H_inv * du) * inv_image_size;
 	}
 
