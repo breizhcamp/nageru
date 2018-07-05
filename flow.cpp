@@ -455,6 +455,10 @@ int main(void)
 	MotionSearch motion_search;
 	Densify densify;
 
+	GLuint query;
+	glGenQueries(1, &query);
+	glBeginQuery(GL_TIME_ELAPSED, query);
+
 	for (int level = coarsest_level; level >= int(finest_level); --level) {
 		int level_width = WIDTH >> level;
 		int level_height = HEIGHT >> level;
@@ -507,6 +511,15 @@ int main(void)
 
 		prev_level_flow_tex = dense_flow_tex;
 	}
+	glEndQuery(GL_TIME_ELAPSED);
+
+	GLint available;
+	do {
+		glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &available);
+	} while (!available);
+	GLuint64 time_elapsed;
+	glGetQueryObjectui64v(query, GL_QUERY_RESULT, &time_elapsed);
+	fprintf(stderr, "GPU time used = %.1f ms\n", time_elapsed / 1e6);
 
 	int level_width = WIDTH >> finest_level;
 	int level_height = HEIGHT >> finest_level;
