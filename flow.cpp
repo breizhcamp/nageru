@@ -523,7 +523,7 @@ int main(void)
 			float w = dense_flow[(yy * level_width + x) * 3 + 2];
 
 			du = (du / w) * level_width;
-			dv = (dv / w) * level_height;
+			dv = (-dv / w) * level_height;
 
 			uint8_t r, g, b;
 			flow2rgb(du, dv, &r, &g, &b);
