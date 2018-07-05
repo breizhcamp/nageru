@@ -137,8 +137,14 @@ void main()
 		u -= (H_inv * du) * inv_image_size;
 	}
 
-	// Reject if we moved too far.
-	if (length((u - initial_u) * image_size) > patch_size) {
+	// Reject if we moved too far. Also reject if the patch goes out-of-bounds
+	// (the paper does not mention this, but the code does, and it seems to be
+	// critical to avoid really bad behavior at the edges).
+	if ((length((u - initial_u) * image_size) > patch_size) ||
+	     u.x * image_size.x < -(patch_size * 0.5f) ||
+	     (1.0 - u.x) * image_size.x < -(patch_size * 0.5f) ||
+	     u.y * image_size.y < -(patch_size * 0.5f) ||
+	     (1.0 - u.y) * image_size.y < -(patch_size * 0.5f)) {
 		u = initial_u;
 	}
 
