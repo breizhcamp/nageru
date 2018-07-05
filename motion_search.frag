@@ -133,7 +133,8 @@ void main()
 		// so we can just subtract away the mean difference here.
 		du -= grad_sum * (warped_sum - template_sum) * (1.0 / (patch_size * patch_size));
 
-		u += (H_inv * du) * inv_image_size;
+		// Do the actual update.
+		u -= (H_inv * du) * inv_image_size;
 	}
 
 	// Reject if we moved too far.
