@@ -524,8 +524,7 @@ int main(void)
 		// Set up an output texture (initially zero).
 		GLuint dense_flow_tex;
 		glCreateTextures(GL_TEXTURE_2D, 1, &dense_flow_tex);
-		//glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
-		glTextureStorage2D(dense_flow_tex, 1, GL_RGBA32F, level_width, level_height);
+		glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
 
 		// And draw.
 		densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
