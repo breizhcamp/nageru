@@ -1,10 +1,21 @@
-#ifndef _FLOW2RGB_H
-#define _FLOW2RGB_H 1
+#ifndef _UTIL_H
+#define _UTIL_H 1
 
 #include <math.h>
 #include <stdint.h>
-
 #include <algorithm>
+#include <memory>
+
+struct Vec2 {
+	float du, dv;
+};
+
+struct Flow {
+	uint32_t width, height;
+	std::unique_ptr<Vec2[]> flow;
+};
+
+Flow read_flow(const char *filename);
 
 // du and dv are in pixels.
 inline void flow2rgb(float du, float dv, uint8_t *rr, uint8_t *gg, uint8_t *bb)
@@ -42,4 +53,4 @@ inline void flow2rgb(float du, float dv, uint8_t *rr, uint8_t *gg, uint8_t *bb)
 	*bb = lrintf(b * 255.0f);
 }
 
-#endif  // !defined(_FLOW2RGB_H)
+#endif  // !defined(_UTIL_H)

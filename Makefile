@@ -25,12 +25,18 @@ OBJS += ffmpeg_raii.o main.o player.o
 %.moc.cpp: %.h
 	moc $< -o $@
 
-all: futatabi
+all: futatabi flow vis eval
 
 mainwindow.o: ui_mainwindow.h
 
 futatabi: $(OBJS) $(CEF_LIBS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+flow: flow.o
+	$(CXX) -o $@ $^ -lepoxy -lSDL2
+eval: eval.o util.o
+	$(CXX) -o $@ $^
+vis: vis.o util.o
+	$(CXX) -o $@ $^
 
 DEPS=$(OBJS:.o=.d)
 -include $(DEPS)

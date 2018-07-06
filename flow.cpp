@@ -16,7 +16,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "flow2rgb.h"
+#include "util.h"
 
 #include <algorithm>
 #include <memory>
