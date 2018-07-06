@@ -240,10 +240,6 @@ Sobel::Sobel()
 	glEnableVertexArrayAttrib(sobel_vao, position_attrib);
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
-	GLint texcoord_attrib = glGetAttribLocation(sobel_program, "texcoord");
-	glEnableVertexArrayAttrib(sobel_vao, texcoord_attrib);
-	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-
 	uniform_tex = glGetUniformLocation(sobel_program, "tex");
 	uniform_inv_image_size = glGetUniformLocation(sobel_program, "inv_image_size");
 }
@@ -298,10 +294,6 @@ MotionSearch::MotionSearch()
 	GLint position_attrib = glGetAttribLocation(motion_search_program, "position");
 	glEnableVertexArrayAttrib(motion_search_vao, position_attrib);
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-
-	GLint texcoord_attrib = glGetAttribLocation(motion_search_program, "texcoord");
-	glEnableVertexArrayAttrib(motion_search_vao, texcoord_attrib);
-	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_image_size = glGetUniformLocation(motion_search_program, "image_size");
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
