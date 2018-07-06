@@ -245,7 +245,6 @@ Sobel::Sobel()
 	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_tex = glGetUniformLocation(sobel_program, "tex");
-	uniform_image_size = glGetUniformLocation(sobel_program, "image_size");
 	uniform_inv_image_size = glGetUniformLocation(sobel_program, "inv_image_size");
 }
 
@@ -255,7 +254,6 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 	glBindTextureUnit(0, tex0_view);
 	glBindSampler(0, nearest_sampler);
 	glProgramUniform1i(sobel_program, uniform_tex, 0);
-	glProgramUniform2f(sobel_program, uniform_image_size, level_width, level_height);
 	glProgramUniform2f(sobel_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 
 	GLuint grad0_fbo;  // TODO: cleanup
