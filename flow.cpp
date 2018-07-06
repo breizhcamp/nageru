@@ -527,7 +527,11 @@ int main(void)
 	glGetTextureImage(prev_level_flow_tex, 0, GL_RGB, GL_FLOAT, level_width * level_height * 3 * sizeof(float), dense_flow.get());
 
 	FILE *fp = fopen("flow.ppm", "wb");
+	FILE *flowfp = fopen("flow.flo", "wb");
 	fprintf(fp, "P6\n%d %d\n255\n", level_width, level_height);
+	fprintf(flowfp, "FEIH");
+	fwrite(&level_width, 4, 1, flowfp);
+	fwrite(&level_height, 4, 1, flowfp);
 	for (unsigned y = 0; y < unsigned(level_height); ++y) {
 		int yy = level_height - y - 1;
 		for (unsigned x = 0; x < unsigned(level_width); ++x) {
@@ -538,6 +542,9 @@ int main(void)
 			du = (du / w) * level_width;
 			dv = (-dv / w) * level_height;
 
+			fwrite(&du, 4, 1, flowfp);
+			fwrite(&dv, 4, 1, flowfp);
+
 			uint8_t r, g, b;
 			flow2rgb(du, dv, &r, &g, &b);
 			putc(r, fp);
@@ -546,6 +553,7 @@ int main(void)
 		}
 	}
 	fclose(fp);
+	fclose(flowfp);
 
 	fprintf(stderr, "err = %d\n", glGetError());
 }
