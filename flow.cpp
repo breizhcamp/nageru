@@ -193,9 +193,8 @@ GLuint fill_vertex_attribute(GLuint vao, GLuint glsl_program_num, const string &
 	return vbo;
 }
 
-void bind_sampler(GLuint program, const char *uniform_name, GLuint texture_unit, GLuint tex, GLuint sampler)
+void bind_sampler(GLuint program, GLint location, GLuint texture_unit, GLuint tex, GLuint sampler)
 {
-	GLint location = glGetUniformLocation(program, uniform_name);
 	if (location == -1) {
 		return;
 	}
@@ -223,6 +222,8 @@ private:
 	GLuint sobel_fs_obj;
 	GLuint sobel_program;
 	GLuint sobel_vao;
+
+	GLuint uniform_tex, uniform_image_size, uniform_inv_image_size;
 };
 
 Sobel::Sobel()
@@ -242,6 +243,10 @@ Sobel::Sobel()
 	GLint texcoord_attrib = glGetAttribLocation(sobel_program, "texcoord");
 	glEnableVertexArrayAttrib(sobel_vao, texcoord_attrib);
 	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_tex = glGetUniformLocation(sobel_program, "tex");
+	uniform_image_size = glGetUniformLocation(sobel_program, "image_size");
+	uniform_inv_image_size = glGetUniformLocation(sobel_program, "inv_image_size");
 }
 
 void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_height)
@@ -249,9 +254,9 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 	glUseProgram(sobel_program);
 	glBindTextureUnit(0, tex0_view);
 	glBindSampler(0, nearest_sampler);
-	glProgramUniform1i(sobel_program, glGetUniformLocation(sobel_program, "tex"), 0);
-	glProgramUniform2f(sobel_program, glGetUniformLocation(sobel_program, "image_size"), level_width, level_height);
-	glProgramUniform2f(sobel_program, glGetUniformLocation(sobel_program, "inv_image_size"), 1.0f / level_width, 1.0f / level_height);
+	glProgramUniform1i(sobel_program, uniform_tex, 0);
+	glProgramUniform2f(sobel_program, uniform_image_size, level_width, level_height);
+	glProgramUniform2f(sobel_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 
 	GLuint grad0_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &grad0_fbo);
@@ -276,6 +281,9 @@ private:
 	GLuint motion_fs_obj;
 	GLuint motion_search_program;
 	GLuint motion_search_vao;
+
+	GLuint uniform_image_size, uniform_inv_image_size;
+	GLuint uniform_image0_tex, uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
 };
 
 MotionSearch::MotionSearch()
@@ -296,19 +304,26 @@ MotionSearch::MotionSearch()
 	GLint texcoord_attrib = glGetAttribLocation(motion_search_program, "texcoord");
 	glEnableVertexArrayAttrib(motion_search_vao, texcoord_attrib);
 	glVertexAttribPointer(texcoord_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_image_size = glGetUniformLocation(motion_search_program, "image_size");
+	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
+	uniform_image0_tex = glGetUniformLocation(motion_search_program, "image0_tex");
+	uniform_image1_tex = glGetUniformLocation(motion_search_program, "image1_tex");
+	uniform_grad0_tex = glGetUniformLocation(motion_search_program, "grad0_tex");
+	uniform_flow_tex = glGetUniformLocation(motion_search_program, "flow_tex");
 }
 
 void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int width_patches, int height_patches)
 {
 	glUseProgram(motion_search_program);
 
-	bind_sampler(motion_search_program, "image0_tex", 0, tex0_view, nearest_sampler);
-	bind_sampler(motion_search_program, "image1_tex", 1, tex1_view, linear_sampler);
-	bind_sampler(motion_search_program, "grad0_tex", 2, grad0_tex, nearest_sampler);
-	bind_sampler(motion_search_program, "flow_tex", 3, flow_tex, linear_sampler);
+	bind_sampler(motion_search_program, uniform_image0_tex, 0, tex0_view, nearest_sampler);
+	bind_sampler(motion_search_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
+	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, nearest_sampler);
+	bind_sampler(motion_search_program, uniform_flow_tex, 3, flow_tex, linear_sampler);
 
-	glProgramUniform2f(motion_search_program, glGetUniformLocation(motion_search_program, "image_size"), level_width, level_height);
-	glProgramUniform2f(motion_search_program, glGetUniformLocation(motion_search_program, "inv_image_size"), 1.0f / level_width, 1.0f / level_height);
+	glProgramUniform2f(motion_search_program, uniform_image_size, level_width, level_height);
+	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 
 	GLuint flow_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &flow_fbo);
@@ -339,6 +354,9 @@ private:
 	GLuint densify_fs_obj;
 	GLuint densify_program;
 	GLuint densify_vao;
+
+	GLuint uniform_width_patches, uniform_patch_size, uniform_patch_spacing;
+	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
 };
 
 Densify::Densify()
@@ -355,24 +373,31 @@ Densify::Densify()
 	GLint position_attrib = glGetAttribLocation(densify_program, "position");
 	glEnableVertexArrayAttrib(densify_vao, position_attrib);
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_width_patches = glGetUniformLocation(densify_program, "width_patches");
+	uniform_patch_size = glGetUniformLocation(densify_program, "patch_size");
+	uniform_patch_spacing = glGetUniformLocation(densify_program, "patch_spacing");
+	uniform_image0_tex = glGetUniformLocation(densify_program, "image0_tex");
+	uniform_image1_tex = glGetUniformLocation(densify_program, "image1_tex");
+	uniform_flow_tex = glGetUniformLocation(densify_program, "flow_tex");
 }
 
 void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches)
 {
 	glUseProgram(densify_program);
 
-	bind_sampler(densify_program, "image0_tex", 0, tex0_view, nearest_sampler);
-	bind_sampler(densify_program, "image1_tex", 1, tex1_view, linear_sampler);
-	bind_sampler(densify_program, "flow_tex", 2, flow_tex, nearest_sampler);
+	bind_sampler(densify_program, uniform_image0_tex, 0, tex0_view, nearest_sampler);
+	bind_sampler(densify_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
+	bind_sampler(densify_program, uniform_flow_tex, 2, flow_tex, nearest_sampler);
 
-	glProgramUniform1i(densify_program, glGetUniformLocation(densify_program, "width_patches"), width_patches);
-	glProgramUniform2f(densify_program, glGetUniformLocation(densify_program, "patch_size"),
+	glProgramUniform1i(densify_program, uniform_width_patches, width_patches);
+	glProgramUniform2f(densify_program, uniform_patch_size,
 		float(patch_size_pixels) / level_width,
 		float(patch_size_pixels) / level_height);
 
 	float patch_spacing_x = float(level_width - patch_size_pixels) / (width_patches - 1);
 	float patch_spacing_y = float(level_height - patch_size_pixels) / (height_patches - 1);
-	glProgramUniform2f(densify_program, glGetUniformLocation(densify_program, "patch_spacing"),
+	glProgramUniform2f(densify_program, uniform_patch_spacing,
 		patch_spacing_x / level_width,
 		patch_spacing_y / level_height);
 
