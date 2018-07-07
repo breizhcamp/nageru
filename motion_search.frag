@@ -49,7 +49,7 @@ void main()
 {
 	// Lock patch_bottom_left_texel to an integer, so that we never get
 	// any bilinear artifacts for the gradient.
-	vec2 base = round(patch_bottom_left_texel * image_size)
+	vec2 base = (round(patch_bottom_left_texel * image_size - vec2(0.5, 0.5)) + vec2(0.5, 0.5))
 		* inv_image_size;
 
 	// First, precompute the pseudo-Hessian for the template patch.
