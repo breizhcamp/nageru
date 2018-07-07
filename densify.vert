@@ -19,8 +19,7 @@ void main()
 	image_pos = patch_spacing * ivec2(patch_x, patch_y) + patch_size * position;
 
 	// Find the flow value for this patch, and send it on to the fragment shader.
-	vec2 patch_center = patch_spacing * ivec2(patch_x, patch_y) + patch_size * vec2(0.5, 0.5);
-	flow_du = texture(flow_tex, patch_center).xy;
+	flow_du = texelFetch(flow_tex, ivec2(patch_x, patch_y), 0).xy;
 
 	// The result of glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0) is:
 	//
