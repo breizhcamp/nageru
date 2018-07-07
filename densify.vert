@@ -14,9 +14,18 @@ void main()
 	int patch_x = gl_InstanceID % width_patches;
 	int patch_y = gl_InstanceID / width_patches;
 
-	// TODO: Lock the bottom left of the patch to an integer number of pixels?
+	// Increase the patch size a bit; since patch spacing is not necessarily
+	// an integer number of pixels, and we don't use conservative rasterization,
+	// we could be missing the outer edges of the patch. And it seemingly helps
+	// a little bit in general to have some more candidates as well -- although
+	// this is measured without variational refinement, so it might be moot
+	// with it.
+	//
+	// Tihs maps [0.0,1.0] to [-0.25 to 1.25), ie. extends the patch by 25% in
+	// all directions.
+	vec2 grown_pos = (position * 1.5) - vec2(0.25, 0.25);
 
-	image_pos = patch_spacing * ivec2(patch_x, patch_y) + patch_size * position;
+	image_pos = patch_spacing * ivec2(patch_x, patch_y) + patch_size * grown_pos;
 
 	// Find the flow value for this patch, and send it on to the fragment shader.
 	flow_du = texelFetch(flow_tex, ivec2(patch_x, patch_y), 0).xy;
