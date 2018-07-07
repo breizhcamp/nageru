@@ -40,7 +40,7 @@ const uint num_iterations = 16;
 
 in vec2 flow_tc;
 in vec2 patch_bottom_left_texel;  // Center of bottom-left texel of patch.
-out vec2 out_flow;
+out vec3 out_flow;
 
 uniform sampler2D flow_tex, grad0_tex, image0_tex, image1_tex;
 uniform vec2 image_size, inv_image_size;
@@ -105,6 +105,7 @@ void main()
 	// generally come out in pixels since the gradient is in pixels,
 	// so we need to convert at the end.
 	vec2 u = initial_u;
+	float mean_diff, first_mean_diff;
 
 	for (uint i = 0; i < num_iterations; ++i) {
 		vec2 du = vec2(0.0, 0.0);
@@ -131,7 +132,12 @@ void main()
 		//   sum(S^T * (x - y)) = [what we calculated] - (µ1 - µ2) sum(S^T)
 		//
 		// so we can just subtract away the mean difference here.
-		du -= grad_sum * (warped_sum - template_sum) * (1.0 / (patch_size * patch_size));
+		mean_diff = (warped_sum - template_sum) * (1.0 / (patch_size * patch_size));
+		du -= grad_sum * mean_diff;
+
+		if (i == 0) {
+			first_mean_diff = mean_diff;
+		}
 
 		// Do the actual update.
 		u -= (H_inv * du) * inv_image_size;
@@ -146,7 +152,10 @@ void main()
 	     u.y * image_size.y < -(patch_size * 0.5f) ||
 	     (1.0 - u.y) * image_size.y < -(patch_size * 0.5f)) {
 		u = initial_u;
+		mean_diff = first_mean_diff;
 	}
 
-	out_flow = u;
+	// NOTE: The mean patch diff will be for the second-to-last patch,
+	// not the true position of du. But hopefully, it will be very close.
+	out_flow = vec3(u.x, u.y, mean_diff);
 }

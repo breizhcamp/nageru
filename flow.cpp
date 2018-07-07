@@ -500,7 +500,7 @@ int main(void)
 		// Create an output flow texture.
 		GLuint flow_out_tex;
 		glCreateTextures(GL_TEXTURE_2D, 1, &flow_out_tex);
-		glTextureStorage2D(flow_out_tex, 1, GL_RG16F, width_patches, height_patches);
+		glTextureStorage2D(flow_out_tex, 1, GL_RGB16F, width_patches, height_patches);
 
 		// And draw.
 		motion_search.exec(tex0_view, tex1_view, grad0_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, width_patches, height_patches);

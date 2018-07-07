@@ -3,6 +3,7 @@
 in vec2 position;
 out vec2 image_pos;
 flat out vec2 flow_du;
+flat out float mean_diff;
 
 uniform int width_patches;
 uniform vec2 patch_size;  // In 0..1 coordinates.
@@ -28,7 +29,9 @@ void main()
 	image_pos = patch_spacing * ivec2(patch_x, patch_y) + patch_size * grown_pos;
 
 	// Find the flow value for this patch, and send it on to the fragment shader.
-	flow_du = texelFetch(flow_tex, ivec2(patch_x, patch_y), 0).xy;
+	vec3 flow_du_and_mean_diff = texelFetch(flow_tex, ivec2(patch_x, patch_y), 0).xyz;
+	flow_du = flow_du_and_mean_diff.xy;
+	mean_diff = flow_du_and_mean_diff.z;
 
 	// The result of glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0) is:
 	//
