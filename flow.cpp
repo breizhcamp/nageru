@@ -32,7 +32,7 @@ constexpr unsigned finest_level = 1;
 constexpr unsigned patch_size_pixels = 12;
 
 // Some global OpenGL objects.
-GLuint nearest_sampler, linear_sampler, mipmap_sampler;
+GLuint nearest_sampler, linear_sampler;
 GLuint vertex_vbo;
 
 string read_file(const string &filename)
@@ -442,12 +442,6 @@ int main(void)
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-	glCreateSamplers(1, &mipmap_sampler);
-	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
-	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glSamplerParameteri(mipmap_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	float vertices[] = {
 		0.0f, 1.0f,
