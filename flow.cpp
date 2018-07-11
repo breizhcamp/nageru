@@ -404,6 +404,67 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches);
 }
 
+// Warp I_1 to I_w, and then compute the mean (I) and difference (I_t) of
+// I_0 and I_w. The prewarping is what enables us to solve the variational
+// flow for du,dv instead of u,v.
+//
+// See variational_refinement.txt for more information.
+class Prewarp {
+public:
+	Prewarp();
+	void exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_tex, int level_width, int level_height);
+
+private:
+	GLuint prewarp_vs_obj;
+	GLuint prewarp_fs_obj;
+	GLuint prewarp_program;
+	GLuint prewarp_vao;
+
+	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+};
+
+Prewarp::Prewarp()
+{
+	prewarp_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	prewarp_fs_obj = compile_shader(read_file("prewarp.frag"), GL_FRAGMENT_SHADER);
+	prewarp_program = link_program(prewarp_vs_obj, prewarp_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+        glCreateVertexArrays(1, &prewarp_vao);
+	glBindVertexArray(prewarp_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(prewarp_program, "position");
+	glEnableVertexArrayAttrib(prewarp_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_image0_tex = glGetUniformLocation(prewarp_program, "image0_tex");
+	uniform_image1_tex = glGetUniformLocation(prewarp_program, "image1_tex");
+	uniform_flow_tex = glGetUniformLocation(prewarp_program, "flow_tex");
+}
+
+void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_tex, int level_width, int level_height)
+{
+	glUseProgram(prewarp_program);
+
+	bind_sampler(prewarp_program, uniform_image0_tex, 0, tex0_view, nearest_sampler);
+	bind_sampler(prewarp_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
+	bind_sampler(prewarp_program, uniform_flow_tex, 2, flow_tex, nearest_sampler);
+
+	GLuint prewarp_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &prewarp_fbo);
+	GLenum bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glNamedFramebufferDrawBuffers(prewarp_fbo, 2, bufs);
+	glNamedFramebufferTexture(prewarp_fbo, GL_COLOR_ATTACHMENT0, I_tex, 0);
+	glNamedFramebufferTexture(prewarp_fbo, GL_COLOR_ATTACHMENT1, I_t_tex, 0);
+
+	glViewport(0, 0, level_width, level_height);
+	glDisable(GL_BLEND);
+	glBindVertexArray(prewarp_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, prewarp_fbo);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
 int main(void)
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
@@ -464,6 +525,7 @@ int main(void)
 	Sobel sobel;
 	MotionSearch motion_search;
 	Densify densify;
+	Prewarp prewarp;
 
 	GLuint query;
 	glGenQueries(1, &query);
@@ -516,7 +578,16 @@ int main(void)
 		// And draw.
 		densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
 
-		// TODO: Variational refinement.
+		// Everything below here in the loop belongs to variational refinement.
+		// It is not done yet.
+
+		// Prewarping; create I and I_t.
+		GLuint I_tex, I_t_tex;
+		glCreateTextures(GL_TEXTURE_2D, 1, &I_tex);
+		glCreateTextures(GL_TEXTURE_2D, 1, &I_t_tex);
+		glTextureStorage2D(I_tex, 1, GL_R16F, level_width, level_height);
+		glTextureStorage2D(I_t_tex, 1, GL_R16F, level_width, level_height);
+		prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, level_width, level_height);
 
 		prev_level_flow_tex = dense_flow_tex;
 	}
