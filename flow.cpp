@@ -15,6 +15,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "util.h"
 
@@ -524,6 +525,7 @@ int main(void)
 	GLint available;
 	do {
 		glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &available);
+		usleep(1000);
 	} while (!available);
 	GLuint64 time_elapsed;
 	glGetQueryObjectui64v(query, GL_QUERY_RESULT, &time_elapsed);
