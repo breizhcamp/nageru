@@ -465,6 +465,64 @@ void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
+// From I, calculate the partial derivatives I_x and I_y. We use a four-tap
+// central difference filter, since apparently, that's tradition (I haven't
+// measured quality versus a more normal 0.5 (I[x+1] - I[x-1]).)
+// The coefficients come from
+//
+//   https://en.wikipedia.org/wiki/Finite_difference_coefficient
+class Derivatives {
+public:
+	Derivatives();
+	void exec(GLuint input_tex, GLuint output_tex, int level_width, int level_height);
+
+private:
+	GLuint derivatives_vs_obj;
+	GLuint derivatives_fs_obj;
+	GLuint derivatives_program;
+	GLuint derivatives_vao;
+
+	GLuint uniform_tex;
+	GLuint uniform_inv_image_size;
+};
+
+Derivatives::Derivatives()
+{
+	derivatives_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	derivatives_fs_obj = compile_shader(read_file("derivatives.frag"), GL_FRAGMENT_SHADER);
+	derivatives_program = link_program(derivatives_vs_obj, derivatives_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &derivatives_vao);
+	glBindVertexArray(derivatives_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(derivatives_program, "position");
+	glEnableVertexArrayAttrib(derivatives_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_tex = glGetUniformLocation(derivatives_program, "tex");
+	uniform_inv_image_size = glGetUniformLocation(derivatives_program, "inv_image_size");
+}
+
+void Derivatives::exec(GLuint input_tex, GLuint output_tex, int level_width, int level_height)
+{
+	glUseProgram(derivatives_program);
+
+	bind_sampler(derivatives_program, uniform_tex, 0, input_tex, nearest_sampler);
+	glProgramUniform2f(derivatives_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
+
+	GLuint derivatives_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &derivatives_fbo);
+	glNamedFramebufferTexture(derivatives_fbo, GL_COLOR_ATTACHMENT0, output_tex, 0);
+
+	glViewport(0, 0, level_width, level_height);
+	glDisable(GL_BLEND);
+	glBindVertexArray(derivatives_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, derivatives_fbo);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
 int main(void)
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
@@ -526,6 +584,7 @@ int main(void)
 	MotionSearch motion_search;
 	Densify densify;
 	Prewarp prewarp;
+	Derivatives derivatives;
 
 	GLuint query;
 	glGenQueries(1, &query);
@@ -588,6 +647,18 @@ int main(void)
 		glTextureStorage2D(I_tex, 1, GL_R16F, level_width, level_height);
 		glTextureStorage2D(I_t_tex, 1, GL_R16F, level_width, level_height);
 		prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, level_width, level_height);
+
+		// Derivatives of the images. We're only calculating first derivatives;
+		// the others will be taken on-the-fly in order to sample from fewer
+		// textures overall, since sampling from the L1 cache is cheap.
+		// (TODO: Verify that this is indeed faster than making separate
+		// double-derivative textures.)
+
+		// Calculate I_x and I_y.
+		GLuint I_x_y_tex;
+		glCreateTextures(GL_TEXTURE_2D, 1, &I_x_y_tex);
+		glTextureStorage2D(I_x_y_tex, 1, GL_RG16F, level_width, level_height);
+		derivatives.exec(I_tex, I_x_y_tex, level_width, level_height);
 
 		prev_level_flow_tex = dense_flow_tex;
 	}
