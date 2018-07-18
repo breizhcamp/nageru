@@ -224,7 +224,7 @@ private:
 	GLuint sobel_program;
 	GLuint sobel_vao;
 
-	GLuint uniform_tex, uniform_image_size, uniform_inv_image_size;
+	GLuint uniform_tex, uniform_image_size;
 };
 
 Sobel::Sobel()
@@ -242,7 +242,6 @@ Sobel::Sobel()
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_tex = glGetUniformLocation(sobel_program, "tex");
-	uniform_inv_image_size = glGetUniformLocation(sobel_program, "inv_image_size");
 }
 
 void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_height)
@@ -251,7 +250,6 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 	glBindTextureUnit(0, tex0_view);
 	glBindSampler(0, nearest_sampler);
 	glProgramUniform1i(sobel_program, uniform_tex, 0);
-	glProgramUniform2f(sobel_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 
 	GLuint grad0_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &grad0_fbo);
@@ -483,7 +481,6 @@ private:
 	GLuint derivatives_vao;
 
 	GLuint uniform_tex;
-	GLuint uniform_inv_image_size;
 };
 
 Derivatives::Derivatives()
@@ -502,7 +499,6 @@ Derivatives::Derivatives()
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_tex = glGetUniformLocation(derivatives_program, "tex");
-	uniform_inv_image_size = glGetUniformLocation(derivatives_program, "inv_image_size");
 }
 
 void Derivatives::exec(GLuint input_tex, GLuint output_tex, int level_width, int level_height)
@@ -510,7 +506,6 @@ void Derivatives::exec(GLuint input_tex, GLuint output_tex, int level_width, int
 	glUseProgram(derivatives_program);
 
 	bind_sampler(derivatives_program, uniform_tex, 0, input_tex, nearest_sampler);
-	glProgramUniform2f(derivatives_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 
 	GLuint derivatives_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &derivatives_fbo);
