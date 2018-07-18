@@ -153,10 +153,10 @@ GLuint load_texture(const char *filename, unsigned width, unsigned height)
 
 GLuint link_program(GLuint vs_obj, GLuint fs_obj)
 {
-        GLuint program = glCreateProgram();
-        glAttachShader(program, vs_obj);
-        glAttachShader(program, fs_obj);
-        glLinkProgram(program);
+	GLuint program = glCreateProgram();
+	glAttachShader(program, vs_obj);
+	glAttachShader(program, fs_obj);
+	glLinkProgram(program);
 	GLint success;
 	glGetProgramiv(program, GL_LINK_STATUS, &success);
 	if (success == GL_FALSE) {
@@ -234,8 +234,8 @@ Sobel::Sobel()
 	sobel_program = link_program(sobel_vs_obj, sobel_fs_obj);
 
 	// Set up the VAO containing all the required position/texcoord data.
-        glCreateVertexArrays(1, &sobel_vao);
-        glBindVertexArray(sobel_vao);
+	glCreateVertexArrays(1, &sobel_vao);
+	glBindVertexArray(sobel_vao);
 
 	GLint position_attrib = glGetAttribLocation(sobel_program, "position");
 	glEnableVertexArrayAttrib(sobel_vao, position_attrib);
@@ -257,7 +257,7 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 
 	glViewport(0, 0, level_width, level_height);
 	glBindFramebuffer(GL_FRAMEBUFFER, grad0_fbo);
-        glBindVertexArray(sobel_vao);
+	glBindVertexArray(sobel_vao);
 	glUseProgram(sobel_program);
 	glDisable(GL_BLEND);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -286,8 +286,8 @@ MotionSearch::MotionSearch()
 	motion_search_program = link_program(motion_vs_obj, motion_fs_obj);
 
 	// Set up the VAO containing all the required position/texcoord data.
-        glCreateVertexArrays(1, &motion_search_vao);
-        glBindVertexArray(motion_search_vao);
+	glCreateVertexArrays(1, &motion_search_vao);
+	glBindVertexArray(motion_search_vao);
 	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
 
 	GLint position_attrib = glGetAttribLocation(motion_search_program, "position");
@@ -320,7 +320,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 
 	glViewport(0, 0, width_patches, height_patches);
 	glBindFramebuffer(GL_FRAMEBUFFER, flow_fbo);
-        glBindVertexArray(motion_search_vao);
+	glBindVertexArray(motion_search_vao);
 	glUseProgram(motion_search_program);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -355,8 +355,8 @@ Densify::Densify()
 	densify_program = link_program(densify_vs_obj, densify_fs_obj);
 
 	// Set up the VAO containing all the required position/texcoord data.
-        glCreateVertexArrays(1, &densify_vao);
-        glBindVertexArray(densify_vao);
+	glCreateVertexArrays(1, &densify_vao);
+	glBindVertexArray(densify_vao);
 	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
 
 	GLint position_attrib = glGetAttribLocation(densify_program, "position");
@@ -397,7 +397,7 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
-        glBindVertexArray(densify_vao);
+	glBindVertexArray(densify_vao);
 	glBindFramebuffer(GL_FRAMEBUFFER, dense_flow_fbo);
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches);
 }
@@ -428,7 +428,7 @@ Prewarp::Prewarp()
 	prewarp_program = link_program(prewarp_vs_obj, prewarp_fs_obj);
 
 	// Set up the VAO containing all the required position/texcoord data.
-        glCreateVertexArrays(1, &prewarp_vao);
+	glCreateVertexArrays(1, &prewarp_vao);
 	glBindVertexArray(prewarp_vao);
 	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
 
