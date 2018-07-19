@@ -469,10 +469,12 @@ void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I
 // The coefficients come from
 //
 //   https://en.wikipedia.org/wiki/Finite_difference_coefficient
+//
+// Also computes β_0, since it depends only on I_x and I_y.
 class Derivatives {
 public:
 	Derivatives();
-	void exec(GLuint input_tex, GLuint output_tex, int level_width, int level_height);
+	void exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, int level_width, int level_height);
 
 private:
 	GLuint derivatives_vs_obj;
@@ -501,7 +503,7 @@ Derivatives::Derivatives()
 	uniform_tex = glGetUniformLocation(derivatives_program, "tex");
 }
 
-void Derivatives::exec(GLuint input_tex, GLuint output_tex, int level_width, int level_height)
+void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, int level_width, int level_height)
 {
 	glUseProgram(derivatives_program);
 
@@ -509,7 +511,10 @@ void Derivatives::exec(GLuint input_tex, GLuint output_tex, int level_width, int
 
 	GLuint derivatives_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &derivatives_fbo);
-	glNamedFramebufferTexture(derivatives_fbo, GL_COLOR_ATTACHMENT0, output_tex, 0);
+	GLenum bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glNamedFramebufferDrawBuffers(derivatives_fbo, 2, bufs);
+	glNamedFramebufferTexture(derivatives_fbo, GL_COLOR_ATTACHMENT0, I_x_y_tex, 0);
+	glNamedFramebufferTexture(derivatives_fbo, GL_COLOR_ATTACHMENT1, beta_0_tex, 0);
 
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
@@ -643,17 +648,17 @@ int main(void)
 		glTextureStorage2D(I_t_tex, 1, GL_R16F, level_width, level_height);
 		prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, level_width, level_height);
 
-		// Derivatives of the images. We're only calculating first derivatives;
+		// Calculate I_x and I_y. We're only calculating first derivatives;
 		// the others will be taken on-the-fly in order to sample from fewer
 		// textures overall, since sampling from the L1 cache is cheap.
 		// (TODO: Verify that this is indeed faster than making separate
 		// double-derivative textures.)
-
-		// Calculate I_x and I_y.
-		GLuint I_x_y_tex;
+		GLuint I_x_y_tex, beta_0_tex;
 		glCreateTextures(GL_TEXTURE_2D, 1, &I_x_y_tex);
+		glCreateTextures(GL_TEXTURE_2D, 1, &beta_0_tex);
 		glTextureStorage2D(I_x_y_tex, 1, GL_RG16F, level_width, level_height);
-		derivatives.exec(I_tex, I_x_y_tex, level_width, level_height);
+		glTextureStorage2D(beta_0_tex, 1, GL_R16F, level_width, level_height);
+		derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height);
 
 		prev_level_flow_tex = dense_flow_tex;
 	}
