@@ -523,6 +523,163 @@ void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, in
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
+// Calculate the smoothness constraints between neighboring pixels;
+// s_x(x,y) stores smoothness between pixel (x,y) and (x+1,y),
+// and s_y(x,y) stores between (x,y) and (x,y+1). We'll sample with
+// border color (0,0) later, so that there's zero diffusion out of
+// the border.
+//
+// See variational_refinement.txt for more information.
+class ComputeSmoothness {
+public:
+	ComputeSmoothness();
+	void exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height);
+
+private:
+	GLuint smoothness_vs_obj;
+	GLuint smoothness_fs_obj;
+	GLuint smoothness_program;
+	GLuint smoothness_vao;
+
+	GLuint uniform_flow_tex, uniform_diff_flow_tex;
+};
+
+ComputeSmoothness::ComputeSmoothness()
+{
+	smoothness_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	smoothness_fs_obj = compile_shader(read_file("smoothness.frag"), GL_FRAGMENT_SHADER);
+	smoothness_program = link_program(smoothness_vs_obj, smoothness_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &smoothness_vao);
+	glBindVertexArray(smoothness_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(smoothness_program, "position");
+	glEnableVertexArrayAttrib(smoothness_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_flow_tex = glGetUniformLocation(smoothness_program, "flow_tex");
+	uniform_diff_flow_tex = glGetUniformLocation(smoothness_program, "diff_flow_tex");
+}
+
+void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height)
+{
+	glUseProgram(smoothness_program);
+
+	bind_sampler(smoothness_program, uniform_flow_tex, 0, flow_tex, nearest_sampler);
+	bind_sampler(smoothness_program, uniform_diff_flow_tex, 1, diff_flow_tex, nearest_sampler);
+
+	GLuint smoothness_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &smoothness_fbo);
+	GLenum bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glNamedFramebufferDrawBuffers(smoothness_fbo, 2, bufs);
+	glNamedFramebufferTexture(smoothness_fbo, GL_COLOR_ATTACHMENT0, smoothness_x_tex, 0);
+	glNamedFramebufferTexture(smoothness_fbo, GL_COLOR_ATTACHMENT1, smoothness_y_tex, 0);
+
+	glViewport(0, 0, level_width, level_height);
+
+	// Make sure the smoothness on the right and upper borders is zero.
+	// We could have done this by making a (W-1)x(H-1) texture instead
+	// (we're sampling smoothness with all-zero border color), but we'd
+	// have to adjust the sampling coordinates, which is annoying.
+	glScissor(0, 0, level_width - 1, level_height - 1);
+	glEnable(GL_SCISSOR_TEST);
+
+	glDisable(GL_BLEND);
+	glBindVertexArray(smoothness_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, smoothness_fbo);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	glDisable(GL_SCISSOR_TEST);
+}
+
+// Set up the equations set (two equations in two unknowns, per pixel).
+// We store five floats; the three non-redundant elements of the 2x2 matrix (A)
+// as 32-bit floats, and the two elements on the right-hand side (b) as 16-bit
+// floats. This fits into four u32 values; R, G, B for the matrix (the last
+// element is symmetric) and A for the two b values. All the values of the
+// energy term (E_I, E_G, E_S), except the smoothness terms that depend on
+// other pixels, are calculated in one pass.
+//
+// See variational_refinement.txt for more information.
+class SetupEquations {
+public:
+	SetupEquations();
+	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height);
+
+private:
+	GLuint smoothness_sampler;
+
+	GLuint equations_vs_obj;
+	GLuint equations_fs_obj;
+	GLuint equations_program;
+	GLuint equations_vao;
+
+	GLuint uniform_I_x_y_tex, uniform_I_t_tex;
+	GLuint uniform_diff_flow_tex, uniform_flow_tex;
+	GLuint uniform_beta_0_tex;
+	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
+
+};
+
+SetupEquations::SetupEquations()
+{
+	// The smoothness is sampled so that once we get to a smoothness involving
+	// a value outside the border, the diffusivity between the two becomes zero.
+	glCreateSamplers(1, &smoothness_sampler);
+	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	float zero[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	glSamplerParameterfv(smoothness_sampler, GL_TEXTURE_BORDER_COLOR, zero);
+
+	equations_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	equations_fs_obj = compile_shader(read_file("equations.frag"), GL_FRAGMENT_SHADER);
+	equations_program = link_program(equations_vs_obj, equations_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &equations_vao);
+	glBindVertexArray(equations_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(equations_program, "position");
+	glEnableVertexArrayAttrib(equations_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_I_x_y_tex = glGetUniformLocation(equations_program, "I_x_y_tex");
+	uniform_I_t_tex = glGetUniformLocation(equations_program, "I_t_tex");
+	uniform_diff_flow_tex = glGetUniformLocation(equations_program, "diff_flow_tex");
+	uniform_flow_tex = glGetUniformLocation(equations_program, "flow_tex");
+	uniform_beta_0_tex = glGetUniformLocation(equations_program, "beta_0_tex");
+	uniform_smoothness_x_tex = glGetUniformLocation(equations_program, "smoothness_x_tex");
+	uniform_smoothness_y_tex = glGetUniformLocation(equations_program, "smoothness_y_tex");
+}
+
+void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height)
+{
+	glUseProgram(equations_program);
+
+	bind_sampler(equations_program, uniform_I_x_y_tex, 0, I_x_y_tex, nearest_sampler);
+	bind_sampler(equations_program, uniform_I_t_tex, 1, I_t_tex, nearest_sampler);
+	bind_sampler(equations_program, uniform_diff_flow_tex, 2, diff_flow_tex, nearest_sampler);
+	bind_sampler(equations_program, uniform_flow_tex, 3, flow_tex, nearest_sampler);
+	bind_sampler(equations_program, uniform_beta_0_tex, 4, beta_0_tex, nearest_sampler);
+	bind_sampler(equations_program, uniform_smoothness_x_tex, 5, smoothness_x_tex, smoothness_sampler);
+	bind_sampler(equations_program, uniform_smoothness_y_tex, 6, smoothness_y_tex, smoothness_sampler);
+
+	GLuint equations_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &equations_fbo);
+	glNamedFramebufferTexture(equations_fbo, GL_COLOR_ATTACHMENT0, equation_tex, 0);
+
+	glViewport(0, 0, level_width, level_height);
+	glDisable(GL_BLEND);
+	glBindVertexArray(equations_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, equations_fbo);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
 int main(void)
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
@@ -585,6 +742,8 @@ int main(void)
 	Densify densify;
 	Prewarp prewarp;
 	Derivatives derivatives;
+	ComputeSmoothness compute_smoothness;
+	SetupEquations setup_equations;
 
 	GLuint query;
 	glGenQueries(1, &query);
@@ -659,6 +818,34 @@ int main(void)
 		glTextureStorage2D(I_x_y_tex, 1, GL_RG16F, level_width, level_height);
 		glTextureStorage2D(beta_0_tex, 1, GL_R16F, level_width, level_height);
 		derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height);
+
+		// We need somewhere to store du and dv (the flow increment, relative
+		// to the non-refined base flow u0 and v0). It starts at zero.
+		GLuint du_dv_tex;
+		glCreateTextures(GL_TEXTURE_2D, 1, &du_dv_tex);
+		glTextureStorage2D(du_dv_tex, 1, GL_RG16F, level_width, level_height);
+
+		// And for smoothness.
+		GLuint smoothness_x_tex, smoothness_y_tex;
+		glCreateTextures(GL_TEXTURE_2D, 1, &smoothness_x_tex);
+		glCreateTextures(GL_TEXTURE_2D, 1, &smoothness_y_tex);
+		glTextureStorage2D(smoothness_x_tex, 1, GL_R16F, level_width, level_height);
+		glTextureStorage2D(smoothness_y_tex, 1, GL_R16F, level_width, level_height);
+
+		// And finally for the equation set. See SetupEquations for
+		// the storage format.
+		GLuint equation_tex;
+		glCreateTextures(GL_TEXTURE_2D, 1, &equation_tex);
+		glTextureStorage2D(equation_tex, 1, GL_RGBA32UI, level_width, level_height);
+
+		for (int outer_idx = 0; outer_idx < level + 1; ++outer_idx) {
+			// Calculate the smoothness terms between the neighboring pixels,
+			// both in x and y direction.
+			compute_smoothness.exec(dense_flow_tex, du_dv_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height);
+
+			// Set up the 2x2 equation system for each pixel.
+			setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, dense_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height);
+		}
 
 		prev_level_flow_tex = dense_flow_tex;
 	}
