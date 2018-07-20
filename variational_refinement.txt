@@ -447,15 +447,15 @@ ignoring the right-hand side, which is just a constant for us anyway:
     s(x+1, y) (du(x+1, y) - du(x, y))
   - s(x-1, y) (du(x, y) - du(x-1, y))
   + s(x, y+1) (du(x, y+1) - du(x, y))
-  - s(x, y-1) (du(x, y) - du(x, y-1)) = C
+  - s(x, y-1) (du(x, y) - du(x, y-1)) = -C
 
     s(x+1, y) du(x+1, y) - s(x+1, y) du(x, y)
   - s(x-1, y) du(x, y) + s(x-1, y) du(x-1, y)
   + s(x, y+1) du(x, y+1) - s(x, y+1) du(x, y)
-  - s(x, y-1) du(x, y) + s(x, y-1) du(x, y-1) = C
+  - s(x, y-1) du(x, y) + s(x, y-1) du(x, y-1) = -C
 
   - (s(x+1, y) + s(x-1, y) + s(x, y+1) + s(x, y-1)) du(x, y) =
-  - s(x+1, y) du(x+1, y) - s(x-1, y) du(x-1, y) - s(x, y+1) du(x, y+1) - s(x, y-1) du(x, y-1) + C
+  - s(x+1, y) du(x+1, y) - s(x-1, y) du(x-1, y) - s(x, y+1) du(x, y+1) - s(x, y-1) du(x, y-1) - C
 
 It is interesting to note that if s = 1 uniformly, which would be the case
 without our penalizer Ψ(a²), we would have the familiar discrete Laplacian,
