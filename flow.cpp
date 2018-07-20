@@ -33,7 +33,7 @@ constexpr unsigned finest_level = 1;
 constexpr unsigned patch_size_pixels = 12;
 
 // Some global OpenGL objects.
-GLuint nearest_sampler, linear_sampler;
+GLuint nearest_sampler, linear_sampler, smoothness_sampler;
 GLuint vertex_vbo;
 
 string read_file(const string &filename)
@@ -597,10 +597,11 @@ void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoot
 // Set up the equations set (two equations in two unknowns, per pixel).
 // We store five floats; the three non-redundant elements of the 2x2 matrix (A)
 // as 32-bit floats, and the two elements on the right-hand side (b) as 16-bit
-// floats. This fits into four u32 values; R, G, B for the matrix (the last
-// element is symmetric) and A for the two b values. All the values of the
-// energy term (E_I, E_G, E_S), except the smoothness terms that depend on
-// other pixels, are calculated in one pass.
+// floats. (Actually, we store the inverse of the diagonal elements, because
+// we only ever need to divide by them.) This fits into four u32 values;
+// R, G, B for the matrix (the last element is symmetric) and A for the two b values.
+// All the values of the energy term (E_I, E_G, E_S), except the smoothness
+// terms that depend on other pixels, are calculated in one pass.
 //
 // See variational_refinement.txt for more information.
 class SetupEquations {
@@ -609,8 +610,6 @@ public:
 	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height);
 
 private:
-	GLuint smoothness_sampler;
-
 	GLuint equations_vs_obj;
 	GLuint equations_fs_obj;
 	GLuint equations_program;
@@ -625,16 +624,6 @@ private:
 
 SetupEquations::SetupEquations()
 {
-	// The smoothness is sampled so that once we get to a smoothness involving
-	// a value outside the border, the diffusivity between the two becomes zero.
-	glCreateSamplers(1, &smoothness_sampler);
-	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	float zero[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	glSamplerParameterfv(smoothness_sampler, GL_TEXTURE_BORDER_COLOR, zero);
-
 	equations_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	equations_fs_obj = compile_shader(read_file("equations.frag"), GL_FRAGMENT_SHADER);
 	equations_program = link_program(equations_vs_obj, equations_fs_obj);
@@ -680,6 +669,74 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
+// Calculate the smoothness constraints between neighboring pixels;
+// s_x(x,y) stores smoothness between pixel (x,y) and (x+1,y),
+// and s_y(x,y) stores between (x,y) and (x,y+1). We'll sample with
+// border color (0,0) later, so that there's zero diffusion out of
+// the border.
+//
+// See variational_refinement.txt for more information.
+class SOR {
+public:
+	SOR();
+	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations);
+
+private:
+	GLuint sor_vs_obj;
+	GLuint sor_fs_obj;
+	GLuint sor_program;
+	GLuint sor_vao;
+
+	GLuint uniform_diff_flow_tex;
+	GLuint uniform_equation_tex;
+	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
+};
+
+SOR::SOR()
+{
+	sor_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	sor_fs_obj = compile_shader(read_file("sor.frag"), GL_FRAGMENT_SHADER);
+	sor_program = link_program(sor_vs_obj, sor_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &sor_vao);
+	glBindVertexArray(sor_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(sor_program, "position");
+	glEnableVertexArrayAttrib(sor_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_diff_flow_tex = glGetUniformLocation(sor_program, "diff_flow_tex");
+	uniform_equation_tex = glGetUniformLocation(sor_program, "equation_tex");
+}
+
+void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations)
+{
+	glUseProgram(sor_program);
+
+	bind_sampler(sor_program, uniform_diff_flow_tex, 0, diff_flow_tex, nearest_sampler);
+	bind_sampler(sor_program, uniform_smoothness_x_tex, 1, smoothness_x_tex, smoothness_sampler);
+	bind_sampler(sor_program, uniform_smoothness_y_tex, 2, smoothness_y_tex, smoothness_sampler);
+	bind_sampler(sor_program, uniform_equation_tex, 3, equation_tex, nearest_sampler);
+
+	GLuint sor_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &sor_fbo);
+	glNamedFramebufferTexture(sor_fbo, GL_COLOR_ATTACHMENT0, diff_flow_tex, 0);  // NOTE: Bind to same as we render from!
+
+	glViewport(0, 0, level_width, level_height);
+	glDisable(GL_BLEND);
+	glBindVertexArray(sor_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, sor_fbo);
+
+	for (int i = 0; i < num_iterations; ++i) {
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		if (i != num_iterations - 1) {
+			glTextureBarrier();
+		}
+	}
+}
+
 int main(void)
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
@@ -720,6 +777,16 @@ int main(void)
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glSamplerParameteri(linear_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+	// The smoothness is sampled so that once we get to a smoothness involving
+	// a value outside the border, the diffusivity between the two becomes zero.
+	glCreateSamplers(1, &smoothness_sampler);
+	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	float zero[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	glSamplerParameterfv(smoothness_sampler, GL_TEXTURE_BORDER_COLOR, zero);
+
 	float vertices[] = {
 		0.0f, 1.0f,
 		0.0f, 0.0f,
@@ -744,6 +811,7 @@ int main(void)
 	Derivatives derivatives;
 	ComputeSmoothness compute_smoothness;
 	SetupEquations setup_equations;
+	SOR sor;
 
 	GLuint query;
 	glGenQueries(1, &query);
@@ -845,6 +913,10 @@ int main(void)
 
 			// Set up the 2x2 equation system for each pixel.
 			setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, dense_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height);
+
+			// Run a few SOR (or quasi-SOR, since we're not really Jacobi) iterations.
+			// Note that these are to/from the same texture.
+			sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5);
 		}
 
 		prev_level_flow_tex = dense_flow_tex;

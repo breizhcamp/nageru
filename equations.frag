@@ -1,7 +1,7 @@
 #version 450 core
 
 in vec2 tc;
-out vec4 equation;
+out uvec4 equation;
 
 uniform sampler2D I_x_y_tex, I_t_tex;
 uniform sampler2D diff_flow_tex, flow_tex;
@@ -97,9 +97,9 @@ void main()
 	// E_S term, sans the part on the right-hand side that deals with
 	// the neighboring pixels.
 	// TODO: Multiply by some gamma.
-	float smooth_l = textureOffset(smoothness_x_tex, tc, ivec2(-1, 0)).x;
+	float smooth_l = textureOffset(smoothness_x_tex, tc, ivec2(-1,  0)).x;
 	float smooth_r = texture(smoothness_x_tex, tc).x;
-	float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2(-1, 0)).x;
+	float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
 	float smooth_u = texture(smoothness_y_tex, tc).x;
 	A11 -= smooth_l + smooth_r + smooth_d + smooth_u;
 	A22 -= smooth_l + smooth_r + smooth_d + smooth_u;
@@ -120,8 +120,8 @@ void main()
 	b2 += central.y;
 
 	// Encode the equation down into four uint32s.
-	equation.x = floatBitsToUint(A11);
+	equation.x = floatBitsToUint(1.0 / A11);
 	equation.y = floatBitsToUint(A12);
-	equation.z = floatBitsToUint(A22);
+	equation.z = floatBitsToUint(1.0 / A22);
 	equation.w = packHalf2x16(vec2(b1, b2));
 }
