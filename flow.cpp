@@ -386,6 +386,8 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 
 	float patch_spacing_x = float(level_width - patch_size_pixels) / (width_patches - 1);
 	float patch_spacing_y = float(level_height - patch_size_pixels) / (height_patches - 1);
+	if (width_patches == 1) patch_spacing_x = 0.0f;  // Avoid infinities.
+	if (height_patches == 1) patch_spacing_y = 0.0f;
 	glProgramUniform2f(densify_program, uniform_patch_spacing,
 		patch_spacing_x / level_width,
 		patch_spacing_y / level_height);
