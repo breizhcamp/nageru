@@ -709,6 +709,8 @@ SOR::SOR()
 
 	uniform_diff_flow_tex = glGetUniformLocation(sor_program, "diff_flow_tex");
 	uniform_equation_tex = glGetUniformLocation(sor_program, "equation_tex");
+	uniform_smoothness_x_tex = glGetUniformLocation(sor_program, "smoothness_x_tex");
+	uniform_smoothness_y_tex = glGetUniformLocation(sor_program, "smoothness_y_tex");
 }
 
 void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations)
@@ -735,6 +737,59 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 			glTextureBarrier();
 		}
 	}
+}
+
+// Simply add the differential flow found by the variational refinement to the base flow.
+// The output is in diff_flow_tex; we don't need to make a new texture.
+class AddBaseFlow {
+public:
+	AddBaseFlow();
+	void exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_width, int level_height);
+
+private:
+	GLuint add_flow_vs_obj;
+	GLuint add_flow_fs_obj;
+	GLuint add_flow_program;
+	GLuint add_flow_vao;
+
+	GLuint uniform_base_flow_tex;
+};
+
+AddBaseFlow::AddBaseFlow()
+{
+	add_flow_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	add_flow_fs_obj = compile_shader(read_file("add_base_flow.frag"), GL_FRAGMENT_SHADER);
+	add_flow_program = link_program(add_flow_vs_obj, add_flow_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &add_flow_vao);
+	glBindVertexArray(add_flow_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(add_flow_program, "position");
+	glEnableVertexArrayAttrib(add_flow_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_base_flow_tex = glGetUniformLocation(add_flow_program, "base_flow_tex");
+}
+
+void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_width, int level_height)
+{
+	glUseProgram(add_flow_program);
+
+	bind_sampler(add_flow_program, uniform_base_flow_tex, 0, base_flow_tex, nearest_sampler);
+
+	GLuint add_flow_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &add_flow_fbo);
+	glNamedFramebufferTexture(add_flow_fbo, GL_COLOR_ATTACHMENT0, diff_flow_tex, 0);
+
+	glViewport(0, 0, level_width, level_height);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	glBindVertexArray(add_flow_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, add_flow_fbo);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 int main(void)
@@ -800,7 +855,7 @@ int main(void)
 	// Initial flow is zero, 1x1.
 	GLuint initial_flow_tex;
 	glCreateTextures(GL_TEXTURE_2D, 1, &initial_flow_tex);
-	glTextureStorage2D(initial_flow_tex, 1, GL_RGB32F, 1, 1);
+	glTextureStorage2D(initial_flow_tex, 1, GL_RG16F, 1, 1);
 
 	GLuint prev_level_flow_tex = initial_flow_tex;
 
@@ -812,6 +867,7 @@ int main(void)
 	ComputeSmoothness compute_smoothness;
 	SetupEquations setup_equations;
 	SOR sor;
+	AddBaseFlow add_base_flow;
 
 	GLuint query;
 	glGenQueries(1, &query);
@@ -919,7 +975,12 @@ int main(void)
 			sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5);
 		}
 
-		prev_level_flow_tex = dense_flow_tex;
+		// Add the differential flow found by the variational refinement to the base flow,
+		// giving the final flow estimate for this level.
+		// The output is in diff_flow_tex; we don't need to make a new texture.
+		add_base_flow.exec(dense_flow_tex, du_dv_tex, level_width, level_height);
+
+		prev_level_flow_tex = du_dv_tex;
 	}
 	glEndQuery(GL_TIME_ELAPSED);
 
