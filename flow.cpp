@@ -997,8 +997,8 @@ int main(void)
 
 	int level_width = WIDTH >> finest_level;
 	int level_height = HEIGHT >> finest_level;
-	unique_ptr<float[]> dense_flow(new float[level_width * level_height * 3]);
-	glGetTextureImage(prev_level_flow_tex, 0, GL_RGB, GL_FLOAT, level_width * level_height * 3 * sizeof(float), dense_flow.get());
+	unique_ptr<float[]> dense_flow(new float[level_width * level_height * 2]);
+	glGetTextureImage(prev_level_flow_tex, 0, GL_RG, GL_FLOAT, level_width * level_height * 2 * sizeof(float), dense_flow.get());
 
 	FILE *fp = fopen("flow.ppm", "wb");
 	FILE *flowfp = fopen("flow.flo", "wb");
@@ -1009,12 +1009,11 @@ int main(void)
 	for (unsigned y = 0; y < unsigned(level_height); ++y) {
 		int yy = level_height - y - 1;
 		for (unsigned x = 0; x < unsigned(level_width); ++x) {
-			float du = dense_flow[(yy * level_width + x) * 3 + 0];
-			float dv = dense_flow[(yy * level_width + x) * 3 + 1];
-			float w = dense_flow[(yy * level_width + x) * 3 + 2];
+			float du = dense_flow[(yy * level_width + x) * 2 + 0];
+			float dv = dense_flow[(yy * level_width + x) * 2 + 1];
 
-			du = (du / w) * level_width;
-			dv = (-dv / w) * level_height;
+			du = du * level_width;
+			dv = -dv * level_height;
 
 			fwrite(&du, 4, 1, flowfp);
 			fwrite(&dv, 4, 1, flowfp);
