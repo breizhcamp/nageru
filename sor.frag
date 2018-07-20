@@ -23,10 +23,10 @@ void main()
 	float smooth_r = texture(smoothness_x_tex, tc).x;
 	float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
 	float smooth_u = texture(smoothness_y_tex, tc).x;
-	b -= smooth_l * textureOffset(diff_flow_tex, tc, ivec2(-1,  0)).xy;
-	b -= smooth_r * textureOffset(diff_flow_tex, tc, ivec2( 1,  0)).xy;
-	b -= smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;
-	b -= smooth_u * textureOffset(diff_flow_tex, tc, ivec2( 0,  1)).xy;
+	b += smooth_l * textureOffset(diff_flow_tex, tc, ivec2(-1,  0)).xy;
+	b += smooth_r * textureOffset(diff_flow_tex, tc, ivec2( 1,  0)).xy;
+	b += smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;
+	b += smooth_u * textureOffset(diff_flow_tex, tc, ivec2( 0,  1)).xy;
 
 	const float omega = 1.6;
 	diff_flow = texture(diff_flow_tex, tc).xy;

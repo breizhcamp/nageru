@@ -335,15 +335,15 @@ operator; this factor has to be discretized together with u before we can treat
 it as a constant. So instead, we'll define it as a function (called the
 _diffusivity_ at the given point):
 
-  g(x, y) = -1 / sqrt(u_x² + u_y² + v_x² + v_y² + ε²) = 0
+  g(x, y) = 1 / sqrt(u_x² + u_y² + v_x² + v_y² + ε²) = 0
 
 which gives us
 
-  ∂/∂x ( g(x, y) u_x ) + ∂/∂y ( g(x, y) u_y ) = 0
+  - ∂/∂x ( g(x, y) u_x ) - ∂/∂y ( g(x, y) u_y ) = 0
 
 We'll also have a similar equation for minimizing v, of course:
 
-  ∂/∂x ( g(x, y) v_x ) + ∂/∂y ( g(x, y) v_y ) = 0
+  - ∂/∂x ( g(x, y) v_x ) - ∂/∂y ( g(x, y) v_y ) = 0
 
 There's no normalization term β here, unlike the other terms; DeepFlow2
 adds one, but we're not including it here.
@@ -364,11 +364,11 @@ differently in the numerics anyway.)
 
 This gives us:
 
-  ∂/∂x ( g(x, y) (u0 + du)_x ) + ∂/∂y ( g(x, y) (u0 + du)_y ) = 0
+  - ∂/∂x ( g(x, y) (u0 + du)_x ) - ∂/∂y ( g(x, y) (u0 + du)_y ) = 0
 
 or
 
-  ∂/∂x ( g(x, y) du_x ) + ∂/∂y ( g(x, y) du_y ) = - ∂/∂x ( g(x, y) u0_x ) - ∂/∂y ( g(x, y) u0_y )
+  - ∂/∂x ( g(x, y) du_x ) - ∂/∂y ( g(x, y) du_y ) = ∂/∂x ( g(x, y) u0_x ) + ∂/∂y ( g(x, y) u0_y )
 
 where the right-hand side is effectively a constant for these purposes
 (although it still needs to be calculated anew for each iteration,
@@ -399,21 +399,21 @@ du' and dv' will be zero.)
 
 Now back to our equations, as we look at practical implementation:
 
-  ∂/∂x ( g(x, y) du_x ) + ∂/∂y ( g(x, y) du_y ) = - ∂/∂x ( g(x, y) u0_x ) - ∂/∂y ( g(x, y) u0_y )
-  ∂/∂x ( g(x, y) dv_x ) + ∂/∂y ( g(x, y) dv_y ) = - ∂/∂x ( g(x, y) v0_x ) - ∂/∂y ( g(x, y) v0_y )
+  - ∂/∂x ( g(x, y) du_x ) - ∂/∂y ( g(x, y) du_y ) = ∂/∂x ( g(x, y) u0_x ) + ∂/∂y ( g(x, y) u0_y )
+  - ∂/∂x ( g(x, y) dv_x ) - ∂/∂y ( g(x, y) dv_y ) = ∂/∂x ( g(x, y) v0_x ) + ∂/∂y ( g(x, y) v0_y )
 
-We can discretize the left-hand and right-hand side identically, so let's
-look only at
+We can discretize the left-hand and right-hand side identically (they differ
+only in signs and in variable), so let's look only at
 
-  ∂/∂x ( g(x, y) du_x ) + ∂/∂y ( g(x, y) du_y )
+  - ∂/∂x ( g(x, y) du_x ) - ∂/∂y ( g(x, y) du_y )
 
 [Brox05] equation (2.14) (which refers to a 1998 book, although I couldn't
 immediately find the equation in question in that book) discretizes this as
 
-    1/2 (g(x+1, y) + g(x, y)) (du(x+1, y) - du(x, y))
-  - 1/2 (g(x-1, y) + g(x, y)) (du(x, y) - du(x-1, y))
-  + 1/2 (g(x, y+1) + g(x, y)) (du(x, y+1) - du(x, y))
-  - 1/2 (g(x, y-1) + g(x, y)) (du(x, y) - du(x, y-1))
+  - 1/2 (g(x+1, y) + g(x, y)) (du(x+1, y) - du(x, y))
+  + 1/2 (g(x-1, y) + g(x, y)) (du(x, y) - du(x-1, y))
+  - 1/2 (g(x, y+1) + g(x, y)) (du(x, y+1) - du(x, y))
+  + 1/2 (g(x, y-1) + g(x, y)) (du(x, y) - du(x, y-1))
 
 It also mentions that it would be better to sample g at the half-way points,
 e.g. g(x+0.5, y), but that begs the question exactly how we'd do that, and
@@ -422,7 +422,7 @@ DeepFlow doesn't seem to care, so we stick with their version.
 Now we can finally let g use the values of the flow (note that this is the
 actual flow u and v, not du and dv!) from the previous iteration, as before:
 
-  g(x, y) = -1 / sqrt(u'_x² + u'_y² + v'_x² + v'_y² + ε²) = 0
+  g(x, y) = 1 / sqrt(u'_x² + u'_y² + v'_x² + v'_y² + ε²)
 
 The single derivatives in g(x) are approximated by standard central differences
 (see https://en.wikipedia.org/wiki/Finite_difference_coefficient), e.g.
@@ -444,18 +444,18 @@ Let's now define a smoothness constant between the neighbors (x,y) and (x1,y1):
 Collecting all the du(x, y) terms of the discretized equation above,
 ignoring the right-hand side, which is just a constant for us anyway:
 
-    s(x+1, y) (du(x+1, y) - du(x, y))
-  - s(x-1, y) (du(x, y) - du(x-1, y))
-  + s(x, y+1) (du(x, y+1) - du(x, y))
-  - s(x, y-1) (du(x, y) - du(x, y-1)) = -C
+  - s(x+1, y) (du(x+1, y) - du(x, y))
+  + s(x-1, y) (du(x, y) - du(x-1, y))
+  - s(x, y+1) (du(x, y+1) - du(x, y))
+  + s(x, y-1) (du(x, y) - du(x, y-1)) = C
 
-    s(x+1, y) du(x+1, y) - s(x+1, y) du(x, y)
-  - s(x-1, y) du(x, y) + s(x-1, y) du(x-1, y)
-  + s(x, y+1) du(x, y+1) - s(x, y+1) du(x, y)
-  - s(x, y-1) du(x, y) + s(x, y-1) du(x, y-1) = -C
+  - s(x+1, y) du(x+1, y) + s(x+1, y) du(x, y)
+  + s(x-1, y) du(x, y) - s(x-1, y) du(x-1, y)
+  - s(x, y+1) du(x, y+1) + s(x, y+1) du(x, y)
+  + s(x, y-1) du(x, y) - s(x, y-1) du(x, y-1) = C
 
-  - (s(x+1, y) + s(x-1, y) + s(x, y+1) + s(x, y-1)) du(x, y) =
-  - s(x+1, y) du(x+1, y) - s(x-1, y) du(x-1, y) - s(x, y+1) du(x, y+1) - s(x, y-1) du(x, y-1) - C
+  (s(x+1, y) + s(x-1, y) + s(x, y+1) + s(x, y-1)) du(x, y) =
+  s(x+1, y) du(x+1, y) + s(x-1, y) du(x-1, y) + s(x, y+1) du(x, y+1) + s(x, y-1) du(x, y-1) + C
 
 It is interesting to note that if s = 1 uniformly, which would be the case
 without our penalizer Ψ(a²), we would have the familiar discrete Laplacian,

@@ -13,7 +13,7 @@ uniform sampler2D flow_tex, diff_flow_tex;
 
 float diffusivity(float u_x, float u_y, float v_x, float v_y)
 {
-	return -inversesqrt(u_x * u_x + u_y * u_y + v_x * v_x + v_y * v_y + eps_sq);
+	return inversesqrt(u_x * u_x + u_y * u_y + v_x * v_x + v_y * v_y + eps_sq);
 }
 
 void main()

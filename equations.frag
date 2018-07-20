@@ -4,17 +4,13 @@ in vec2 tc;
 out uvec4 equation;
 
 uniform sampler2D I_x_y_tex, I_t_tex;
-uniform sampler2D diff_flow_tex, flow_tex;
+uniform sampler2D diff_flow_tex, base_flow_tex;
 uniform sampler2D beta_0_tex;
 uniform sampler2D smoothness_x_tex, smoothness_y_tex;
 
 // TODO: Consider a specialized version for the case where we know that du = dv = 0,
 // since we run so few iterations.
 
-// This must be a macro, since the offset needs to be a constant expression.
-#define get_flow(x_offs, y_offs) \
-	(textureOffset(flow_tex, tc, ivec2((x_offs), (y_offs))).xy + \
-	textureOffset(diff_flow_tex, tc, ivec2((x_offs), (y_offs))).xy)
 
 void main()
 {
@@ -93,23 +89,18 @@ void main()
 	float smooth_r = texture(smoothness_x_tex, tc).x;
 	float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
 	float smooth_u = texture(smoothness_y_tex, tc).x;
-	A11 -= smooth_l + smooth_r + smooth_d + smooth_u;
-	A22 -= smooth_l + smooth_r + smooth_d + smooth_u;
+	A11 += smooth_l + smooth_r + smooth_d + smooth_u;
+	A22 += smooth_l + smooth_r + smooth_d + smooth_u;
 
-	// Laplacian of (u0 + du, v0 + dv), sans the central term.
+	// Laplacian of (u0, v0).
 	vec2 laplacian =
-		smooth_l * get_flow(-1, 0) +
-		smooth_r * get_flow(1, 0) +
-		smooth_d * get_flow(0, -1) +
-		smooth_u * get_flow(0, 1);
-	b1 -= laplacian.x;
-	b2 -= laplacian.y;
-
-	// The central term of the Laplacian, for (u0, v0) only.
-	// (The central term for (du, dv) is what we are solving for.)
-	vec2 central = (smooth_l + smooth_r + smooth_d + smooth_u) * texture(flow_tex, tc).xy;
-	b1 += central.x;
-	b2 += central.y;
+		smooth_l * textureOffset(base_flow_tex, tc, ivec2(-1,  0)).xy +
+		smooth_r * textureOffset(base_flow_tex, tc, ivec2( 1,  0)).xy +
+		smooth_d * textureOffset(base_flow_tex, tc, ivec2( 0, -1)).xy +
+		smooth_u * textureOffset(base_flow_tex, tc, ivec2( 0,  1)).xy -
+		(smooth_l + smooth_r + smooth_d + smooth_u) * texture(base_flow_tex, tc).xy;
+	b1 += laplacian.x;
+	b2 += laplacian.y;
 
 	// Encode the equation down into four uint32s.
 	equation.x = floatBitsToUint(1.0 / A11);

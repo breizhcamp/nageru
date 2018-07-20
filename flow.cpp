@@ -628,7 +628,7 @@ private:
 	GLuint equations_vao;
 
 	GLuint uniform_I_x_y_tex, uniform_I_t_tex;
-	GLuint uniform_diff_flow_tex, uniform_flow_tex;
+	GLuint uniform_diff_flow_tex, uniform_base_flow_tex;
 	GLuint uniform_beta_0_tex;
 	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
 };
@@ -651,20 +651,20 @@ SetupEquations::SetupEquations()
 	uniform_I_x_y_tex = glGetUniformLocation(equations_program, "I_x_y_tex");
 	uniform_I_t_tex = glGetUniformLocation(equations_program, "I_t_tex");
 	uniform_diff_flow_tex = glGetUniformLocation(equations_program, "diff_flow_tex");
-	uniform_flow_tex = glGetUniformLocation(equations_program, "flow_tex");
+	uniform_base_flow_tex = glGetUniformLocation(equations_program, "base_flow_tex");
 	uniform_beta_0_tex = glGetUniformLocation(equations_program, "beta_0_tex");
 	uniform_smoothness_x_tex = glGetUniformLocation(equations_program, "smoothness_x_tex");
 	uniform_smoothness_y_tex = glGetUniformLocation(equations_program, "smoothness_y_tex");
 }
 
-void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height)
+void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height)
 {
 	glUseProgram(equations_program);
 
 	bind_sampler(equations_program, uniform_I_x_y_tex, 0, I_x_y_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_I_t_tex, 1, I_t_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_diff_flow_tex, 2, diff_flow_tex, nearest_sampler);
-	bind_sampler(equations_program, uniform_flow_tex, 3, flow_tex, nearest_sampler);
+	bind_sampler(equations_program, uniform_base_flow_tex, 3, base_flow_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_beta_0_tex, 4, beta_0_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_smoothness_x_tex, 5, smoothness_x_tex, smoothness_sampler);
 	bind_sampler(equations_program, uniform_smoothness_y_tex, 6, smoothness_y_tex, smoothness_sampler);
