@@ -583,9 +583,12 @@ void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoot
 	glViewport(0, 0, level_width, level_height);
 
 	// Make sure the smoothness on the right and upper borders is zero.
-	// We could have done this by making a (W-1)x(H-1) texture instead
+	// We could have done this by making (W-1)xH and Wx(H-1) textures instead
 	// (we're sampling smoothness with all-zero border color), but we'd
 	// have to adjust the sampling coordinates, which is annoying.
+	//
+	// FIXME: We shouldn't scissor width for horizontal,
+	// and we shouldn't scissor height for vertical
 	glScissor(0, 0, level_width - 1, level_height - 1);
 	glEnable(GL_SCISSOR_TEST);
 
