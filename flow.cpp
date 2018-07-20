@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <vector>
 
 #define BUFFER_OFFSET(i) ((char *)nullptr + (i))
 
@@ -794,6 +795,86 @@ void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_wid
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
+class GPUTimers {
+public:
+	void print();
+	pair<GLuint, GLuint> begin_timer(const string &name, int level);
+
+private:
+	struct Timer {
+		string name;
+		int level;
+		pair<GLuint, GLuint> query;
+	};
+	vector<Timer> timers;
+};
+
+pair<GLuint, GLuint> GPUTimers::begin_timer(const string &name, int level)
+{
+	GLuint queries[2];
+	glGenQueries(2, queries);
+	glQueryCounter(queries[0], GL_TIMESTAMP);
+
+	Timer timer;
+	timer.name = name;
+	timer.level = level;
+	timer.query.first = queries[0];
+	timer.query.second = queries[1];
+	timers.push_back(timer);
+	return timer.query;
+}
+
+void GPUTimers::print()
+{
+	for (const Timer &timer : timers) {
+		// NOTE: This makes the CPU wait for the GPU.
+		GLuint64 time_start, time_end;
+		glGetQueryObjectui64v(timer.query.first, GL_QUERY_RESULT, &time_start);
+		glGetQueryObjectui64v(timer.query.second, GL_QUERY_RESULT, &time_end);
+		//fprintf(stderr, "GPU time used = %.1f ms\n", time_elapsed / 1e6);
+		for (int i = 0; i < timer.level * 2; ++i) {
+			fprintf(stderr, " ");
+		}
+		fprintf(stderr, "%-30s %4.1f ms\n", timer.name.c_str(), (time_end - time_start) / 1e6);
+	}
+}
+
+// A simple RAII class for timing until the end of the scope.
+class ScopedTimer {
+public:
+	ScopedTimer(const string &name, GPUTimers *timers)
+		: timers(timers), level(0)
+	{
+		query = timers->begin_timer(name, level);
+	}
+
+	ScopedTimer(const string &name, ScopedTimer *parent_timer)
+		: timers(parent_timer->timers),
+		  level(parent_timer->level + 1)
+	{
+		query = timers->begin_timer(name, level);
+	}
+
+	~ScopedTimer()
+	{
+		end();
+	}
+
+	void end()
+	{
+		if (!ended) {
+			glQueryCounter(query.second, GL_TIMESTAMP);
+			ended = true;
+		}
+	}
+
+private:
+	GPUTimers *timers;
+	int level;
+	pair<GLuint, GLuint> query;
+	bool ended = false;
+};
+
 int main(void)
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
@@ -875,7 +956,14 @@ int main(void)
 	glGenQueries(1, &query);
 	glBeginQuery(GL_TIME_ELAPSED, query);
 
+	GPUTimers timers;
+
+	ScopedTimer total_timer("Total", &timers);
 	for (int level = coarsest_level; level >= int(finest_level); --level) {
+		char timer_name[256];
+		snprintf(timer_name, sizeof(timer_name), "Level %d", level);
+		ScopedTimer level_timer(timer_name, &total_timer);
+
 		int level_width = WIDTH >> level;
 		int level_height = HEIGHT >> level;
 		float patch_spacing_pixels = patch_size_pixels * (1.0f - patch_overlap_ratio);
@@ -899,7 +987,10 @@ int main(void)
 		glTextureStorage2D(grad0_tex, 1, GL_RG16F, level_width, level_height);
 
 		// Find the derivative.
-		sobel.exec(tex0_view, grad0_tex, level_width, level_height);
+		{
+			ScopedTimer timer("Sobel", &level_timer);
+			sobel.exec(tex0_view, grad0_tex, level_width, level_height);
+		}
 
 		// Motion search to find the initial flow. We use the flow from the previous
 		// level (sampled bilinearly; no fancy tricks) as a guide, then search from there.
@@ -910,7 +1001,10 @@ int main(void)
 		glTextureStorage2D(flow_out_tex, 1, GL_RGB16F, width_patches, height_patches);
 
 		// And draw.
-		motion_search.exec(tex0_view, tex1_view, grad0_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, width_patches, height_patches);
+		{
+			ScopedTimer timer("Motion search", &level_timer);
+			motion_search.exec(tex0_view, tex1_view, grad0_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, width_patches, height_patches);
+		}
 
 		// Densification.
 
@@ -920,10 +1014,13 @@ int main(void)
 		glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
 
 		// And draw.
-		densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
+		{
+			ScopedTimer timer("Densification", &level_timer);
+			densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
+		}
 
 		// Everything below here in the loop belongs to variational refinement.
-		// It is not done yet.
+		ScopedTimer varref_timer("Variational refinement", &level_timer);
 
 		// Prewarping; create I and I_t.
 		GLuint I_tex, I_t_tex;
@@ -931,7 +1028,10 @@ int main(void)
 		glCreateTextures(GL_TEXTURE_2D, 1, &I_t_tex);
 		glTextureStorage2D(I_tex, 1, GL_R16F, level_width, level_height);
 		glTextureStorage2D(I_t_tex, 1, GL_R16F, level_width, level_height);
-		prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, level_width, level_height);
+		{
+			ScopedTimer timer("Prewarping", &varref_timer);
+			prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, level_width, level_height);
+		}
 
 		// Calculate I_x and I_y. We're only calculating first derivatives;
 		// the others will be taken on-the-fly in order to sample from fewer
@@ -943,7 +1043,10 @@ int main(void)
 		glCreateTextures(GL_TEXTURE_2D, 1, &beta_0_tex);
 		glTextureStorage2D(I_x_y_tex, 1, GL_RG16F, level_width, level_height);
 		glTextureStorage2D(beta_0_tex, 1, GL_R16F, level_width, level_height);
-		derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height);
+		{
+			ScopedTimer timer("First derivatives", &varref_timer);
+			derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height);
+		}
 
 		// We need somewhere to store du and dv (the flow increment, relative
 		// to the non-refined base flow u0 and v0). It starts at zero.
@@ -967,33 +1070,38 @@ int main(void)
 		for (int outer_idx = 0; outer_idx < level + 1; ++outer_idx) {
 			// Calculate the smoothness terms between the neighboring pixels,
 			// both in x and y direction.
-			compute_smoothness.exec(dense_flow_tex, du_dv_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height);
+			{
+				ScopedTimer timer("Compute smoothness", &varref_timer);
+				compute_smoothness.exec(dense_flow_tex, du_dv_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height);
+			}
 
 			// Set up the 2x2 equation system for each pixel.
-			setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, dense_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height);
+			{
+				ScopedTimer timer("Set up equations", &varref_timer);
+				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, dense_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height);
+			}
 
 			// Run a few SOR (or quasi-SOR, since we're not really Jacobi) iterations.
 			// Note that these are to/from the same texture.
-			sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5);
+			{
+				ScopedTimer timer("SOR", &varref_timer);
+				sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5);
+			}
 		}
 
 		// Add the differential flow found by the variational refinement to the base flow,
 		// giving the final flow estimate for this level.
 		// The output is in diff_flow_tex; we don't need to make a new texture.
-		add_base_flow.exec(dense_flow_tex, du_dv_tex, level_width, level_height);
+		{
+			ScopedTimer timer("Add differential flow", &varref_timer);
+			add_base_flow.exec(dense_flow_tex, du_dv_tex, level_width, level_height);
+		}
 
 		prev_level_flow_tex = du_dv_tex;
 	}
-	glEndQuery(GL_TIME_ELAPSED);
+	total_timer.end();
 
-	GLint available;
-	do {
-		glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &available);
-		usleep(1000);
-	} while (!available);
-	GLuint64 time_elapsed;
-	glGetQueryObjectui64v(query, GL_QUERY_RESULT, &time_elapsed);
-	fprintf(stderr, "GPU time used = %.1f ms\n", time_elapsed / 1e6);
+	timers.print();
 
 	int level_width = WIDTH >> finest_level;
 	int level_height = HEIGHT >> finest_level;
