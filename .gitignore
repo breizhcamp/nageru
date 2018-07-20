@@ -3,7 +3,16 @@
 *.pb.h
 *.pb.cc
 *.moc.cpp
+*.mp4
+*.png
+*.flo
+*.pgm
+*.ppm
+.sw*
 ui_*.h
 futatabi
 frames/*.jpeg
 .ycm_extra_conf.py
+eval
+flow
+vis
