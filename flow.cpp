@@ -593,22 +593,17 @@ void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoot
 
 	glViewport(0, 0, level_width, level_height);
 
-	// Make sure the smoothness on the right and upper borders is zero.
-	// We could have done this by making (W-1)xH and Wx(H-1) textures instead
-	// (we're sampling smoothness with all-zero border color), but we'd
-	// have to adjust the sampling coordinates, which is annoying.
-	//
-	// FIXME: We shouldn't scissor width for horizontal,
-	// and we shouldn't scissor height for vertical
-	glScissor(0, 0, level_width - 1, level_height - 1);
-	glEnable(GL_SCISSOR_TEST);
-
 	glDisable(GL_BLEND);
 	glBindVertexArray(smoothness_vao);
 	glBindFramebuffer(GL_FRAMEBUFFER, smoothness_fbo);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-	glDisable(GL_SCISSOR_TEST);
+	// Make sure the smoothness on the right and upper borders is zero.
+	// We could have done this by making (W-1)xH and Wx(H-1) textures instead
+	// (we're sampling smoothness with all-zero border color), but we'd
+	// have to adjust the sampling coordinates, which is annoying.
+	glClearTexSubImage(smoothness_x_tex, 0,  level_width - 1, 0, 0,   1, level_height, 1,  GL_RED, GL_FLOAT, nullptr);
+	glClearTexSubImage(smoothness_y_tex, 0,  0, level_height - 1, 0,  level_width, 1, 1,   GL_RED, GL_FLOAT, nullptr);
 }
 
 // Set up the equations set (two equations in two unknowns, per pixel).
@@ -1026,6 +1021,7 @@ int main(void)
 		GLuint dense_flow_tex;
 		glCreateTextures(GL_TEXTURE_2D, 1, &dense_flow_tex);
 		glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
+		glClearTexImage(dense_flow_tex, 0, GL_RGB, GL_FLOAT, nullptr);
 
 		// And draw.
 		{
@@ -1075,6 +1071,7 @@ int main(void)
 		GLuint du_dv_tex;
 		glCreateTextures(GL_TEXTURE_2D, 1, &du_dv_tex);
 		glTextureStorage2D(du_dv_tex, 1, GL_RG16F, level_width, level_height);
+		glClearTexImage(du_dv_tex, 0, GL_RG, GL_FLOAT, nullptr);
 
 		// And for smoothness.
 		GLuint smoothness_x_tex, smoothness_y_tex;
