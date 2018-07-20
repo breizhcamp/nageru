@@ -43,7 +43,7 @@ in vec2 patch_bottom_left_texel;  // Center of bottom-left texel of patch.
 out vec3 out_flow;
 
 uniform sampler2D flow_tex, grad0_tex, image0_tex, image1_tex;
-uniform vec2 image_size, inv_image_size;
+uniform vec2 image_size, inv_image_size, inv_prev_level_size;
 
 void main()
 {
@@ -91,7 +91,7 @@ void main()
 	mat2 H_inv = inverse(H);
 
 	// Fetch the initial guess for the flow.
-	vec2 initial_u = texture(flow_tex, flow_tc).xy;
+	vec2 initial_u = texture(flow_tex, flow_tc).xy * inv_prev_level_size;
 
 	// Note: The flow is in OpenGL coordinates [0..1], but the calculations
 	// generally come out in pixels since the gradient is in pixels,

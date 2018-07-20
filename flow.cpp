@@ -268,7 +268,7 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 class MotionSearch {
 public:
 	MotionSearch();
-	void exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int width_patches, int height_patches);
+	void exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches);
 
 private:
 	GLuint motion_vs_obj;
@@ -276,7 +276,7 @@ private:
 	GLuint motion_search_program;
 	GLuint motion_search_vao;
 
-	GLuint uniform_image_size, uniform_inv_image_size;
+	GLuint uniform_image_size, uniform_inv_image_size, uniform_inv_prev_level_size;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
 };
 
@@ -297,13 +297,14 @@ MotionSearch::MotionSearch()
 
 	uniform_image_size = glGetUniformLocation(motion_search_program, "image_size");
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
+	uniform_inv_prev_level_size = glGetUniformLocation(motion_search_program, "inv_prev_level_size");
 	uniform_image0_tex = glGetUniformLocation(motion_search_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(motion_search_program, "image1_tex");
 	uniform_grad0_tex = glGetUniformLocation(motion_search_program, "grad0_tex");
 	uniform_flow_tex = glGetUniformLocation(motion_search_program, "flow_tex");
 }
 
-void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int width_patches, int height_patches)
+void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches)
 {
 	glUseProgram(motion_search_program);
 
@@ -314,6 +315,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 
 	glProgramUniform2f(motion_search_program, uniform_image_size, level_width, level_height);
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
+	glProgramUniform2f(motion_search_program, uniform_inv_prev_level_size, 1.0f / prev_level_width, 1.0f / prev_level_height);
 
 	GLuint flow_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &flow_fbo);
@@ -409,11 +411,14 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 // I_0 and I_w. The prewarping is what enables us to solve the variational
 // flow for du,dv instead of u,v.
 //
+// Also calculates the normalized flow, ie. divides by z (this is needed because
+// Densify works by additive blending) and multiplies by the image size.
+//
 // See variational_refinement.txt for more information.
 class Prewarp {
 public:
 	Prewarp();
-	void exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_tex, int level_width, int level_height);
+	void exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint normalized_flow_tex, GLuint I_tex, GLuint I_t_tex, int level_width, int level_height);
 
 private:
 	GLuint prewarp_vs_obj;
@@ -422,6 +427,7 @@ private:
 	GLuint prewarp_vao;
 
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+	GLuint uniform_image_size;
 };
 
 Prewarp::Prewarp()
@@ -442,9 +448,11 @@ Prewarp::Prewarp()
 	uniform_image0_tex = glGetUniformLocation(prewarp_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(prewarp_program, "image1_tex");
 	uniform_flow_tex = glGetUniformLocation(prewarp_program, "flow_tex");
+
+	uniform_image_size = glGetUniformLocation(prewarp_program, "image_size");
 }
 
-void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_tex, int level_width, int level_height)
+void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_tex, GLuint normalized_flow_tex, int level_width, int level_height)
 {
 	glUseProgram(prewarp_program);
 
@@ -452,12 +460,15 @@ void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I
 	bind_sampler(prewarp_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
 	bind_sampler(prewarp_program, uniform_flow_tex, 2, flow_tex, nearest_sampler);
 
+	glProgramUniform2f(prewarp_program, uniform_image_size, level_width, level_height);
+
 	GLuint prewarp_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &prewarp_fbo);
-	GLenum bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-	glNamedFramebufferDrawBuffers(prewarp_fbo, 2, bufs);
+	GLenum bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+	glNamedFramebufferDrawBuffers(prewarp_fbo, 3, bufs);
 	glNamedFramebufferTexture(prewarp_fbo, GL_COLOR_ATTACHMENT0, I_tex, 0);
 	glNamedFramebufferTexture(prewarp_fbo, GL_COLOR_ATTACHMENT1, I_t_tex, 0);
+	glNamedFramebufferTexture(prewarp_fbo, GL_COLOR_ATTACHMENT2, normalized_flow_tex, 0);
 
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
@@ -625,7 +636,6 @@ private:
 	GLuint uniform_diff_flow_tex, uniform_flow_tex;
 	GLuint uniform_beta_0_tex;
 	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
-
 };
 
 SetupEquations::SetupEquations()
@@ -746,7 +756,7 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 }
 
 // Simply add the differential flow found by the variational refinement to the base flow.
-// The output is in diff_flow_tex; we don't need to make a new texture.
+// The output is in base_flow_tex; we don't need to make a new texture.
 class AddBaseFlow {
 public:
 	AddBaseFlow();
@@ -758,7 +768,7 @@ private:
 	GLuint add_flow_program;
 	GLuint add_flow_vao;
 
-	GLuint uniform_base_flow_tex;
+	GLuint uniform_diff_flow_tex;
 };
 
 AddBaseFlow::AddBaseFlow()
@@ -776,18 +786,18 @@ AddBaseFlow::AddBaseFlow()
 	glEnableVertexArrayAttrib(add_flow_vao, position_attrib);
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
-	uniform_base_flow_tex = glGetUniformLocation(add_flow_program, "base_flow_tex");
+	uniform_diff_flow_tex = glGetUniformLocation(add_flow_program, "diff_flow_tex");
 }
 
 void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_width, int level_height)
 {
 	glUseProgram(add_flow_program);
 
-	bind_sampler(add_flow_program, uniform_base_flow_tex, 0, base_flow_tex, nearest_sampler);
+	bind_sampler(add_flow_program, uniform_diff_flow_tex, 0, diff_flow_tex, nearest_sampler);
 
 	GLuint add_flow_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &add_flow_fbo);
-	glNamedFramebufferTexture(add_flow_fbo, GL_COLOR_ATTACHMENT0, diff_flow_tex, 0);
+	glNamedFramebufferTexture(add_flow_fbo, GL_COLOR_ATTACHMENT0, base_flow_tex, 0);
 
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
@@ -942,6 +952,7 @@ int main(void)
 	GLuint initial_flow_tex;
 	glCreateTextures(GL_TEXTURE_2D, 1, &initial_flow_tex);
 	glTextureStorage2D(initial_flow_tex, 1, GL_RG16F, 1, 1);
+	int prev_level_width = 1, prev_level_height = 1;
 
 	GLuint prev_level_flow_tex = initial_flow_tex;
 
@@ -1006,7 +1017,7 @@ int main(void)
 		// And draw.
 		{
 			ScopedTimer timer("Motion search", &level_timer);
-			motion_search.exec(tex0_view, tex1_view, grad0_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, width_patches, height_patches);
+			motion_search.exec(tex0_view, tex1_view, grad0_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, prev_level_width, prev_level_height, width_patches, height_patches);
 		}
 
 		// Densification.
@@ -1025,15 +1036,23 @@ int main(void)
 		// Everything below here in the loop belongs to variational refinement.
 		ScopedTimer varref_timer("Variational refinement", &level_timer);
 
-		// Prewarping; create I and I_t.
-		GLuint I_tex, I_t_tex;
+		// Prewarping; create I and I_t, and a normalized base flow (so we don't
+		// have to normalize it over and over again, and also save some bandwidth).
+		//
+		// During the entire rest of the variational refinement, flow will be measured
+		// in pixels, not 0..1 normalized OpenGL texture coordinates.
+		// This is because variational refinement depends so heavily on derivatives,
+		// which are measured in intensity levels per pixel.
+		GLuint I_tex, I_t_tex, base_flow_tex;
 		glCreateTextures(GL_TEXTURE_2D, 1, &I_tex);
 		glCreateTextures(GL_TEXTURE_2D, 1, &I_t_tex);
+		glCreateTextures(GL_TEXTURE_2D, 1, &base_flow_tex);
 		glTextureStorage2D(I_tex, 1, GL_R16F, level_width, level_height);
 		glTextureStorage2D(I_t_tex, 1, GL_R16F, level_width, level_height);
+		glTextureStorage2D(base_flow_tex, 1, GL_RG16F, level_width, level_height);
 		{
 			ScopedTimer timer("Prewarping", &varref_timer);
-			prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, level_width, level_height);
+			prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, base_flow_tex, level_width, level_height);
 		}
 
 		// Calculate I_x and I_y. We're only calculating first derivatives;
@@ -1075,13 +1094,13 @@ int main(void)
 			// both in x and y direction.
 			{
 				ScopedTimer timer("Compute smoothness", &varref_timer);
-				compute_smoothness.exec(dense_flow_tex, du_dv_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height);
+				compute_smoothness.exec(base_flow_tex, du_dv_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height);
 			}
 
 			// Set up the 2x2 equation system for each pixel.
 			{
 				ScopedTimer timer("Set up equations", &varref_timer);
-				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, dense_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height);
+				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height);
 			}
 
 			// Run a few SOR (or quasi-SOR, since we're not really Jacobi) iterations.
@@ -1095,12 +1114,15 @@ int main(void)
 		// Add the differential flow found by the variational refinement to the base flow,
 		// giving the final flow estimate for this level.
 		// The output is in diff_flow_tex; we don't need to make a new texture.
+		// You can comment out this prat if you wish to test disabling of the variational refinement.
 		{
 			ScopedTimer timer("Add differential flow", &varref_timer);
-			add_base_flow.exec(dense_flow_tex, du_dv_tex, level_width, level_height);
+			add_base_flow.exec(base_flow_tex, du_dv_tex, level_width, level_height);
 		}
 
-		prev_level_flow_tex = du_dv_tex;
+		prev_level_flow_tex = base_flow_tex;
+		prev_level_width = level_width;
+		prev_level_height = level_height;
 	}
 	total_timer.end();
 
@@ -1123,8 +1145,7 @@ int main(void)
 			float du = dense_flow[(yy * level_width + x) * 2 + 0];
 			float dv = dense_flow[(yy * level_width + x) * 2 + 1];
 
-			du = du * level_width;
-			dv = -dv * level_height;
+			dv = -dv;
 
 			fwrite(&du, 4, 1, flowfp);
 			fwrite(&dv, 4, 1, flowfp);

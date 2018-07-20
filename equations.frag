@@ -11,24 +11,16 @@ uniform sampler2D smoothness_x_tex, smoothness_y_tex;
 // TODO: Consider a specialized version for the case where we know that du = dv = 0,
 // since we run so few iterations.
 
-// The base flow needs to be normalized.
-// TODO: Should we perhaps reduce this to a separate two-component
-// texture when calculating the derivatives?
-vec2 normalize_flow(vec3 flow)
-{
-	return flow.xy / flow.z;
-}
-
 // This must be a macro, since the offset needs to be a constant expression.
 #define get_flow(x_offs, y_offs) \
-	(normalize_flow(textureOffset(flow_tex, tc, ivec2((x_offs), (y_offs))).xyz) + \
+	(textureOffset(flow_tex, tc, ivec2((x_offs), (y_offs))).xy + \
 	textureOffset(diff_flow_tex, tc, ivec2((x_offs), (y_offs))).xy)
 
 void main()
 {
 	// Read the flow (on top of the u0/v0 flow).
 	vec2 diff_flow = texture(diff_flow_tex, tc).xy;
-	float du = diff_flow.x;  // FIXME: convert to pixels?
+	float du = diff_flow.x;
 	float dv = diff_flow.y;
 
 	// Read the first derivatives.
@@ -115,7 +107,7 @@ void main()
 
 	// The central term of the Laplacian, for (u0, v0) only.
 	// (The central term for (du, dv) is what we are solving for.)
-	vec2 central = (smooth_l + smooth_r + smooth_d + smooth_u) * normalize_flow(texture(flow_tex, tc).xyz);
+	vec2 central = (smooth_l + smooth_r + smooth_d + smooth_u) * texture(flow_tex, tc).xy;
 	b1 += central.x;
 	b2 += central.y;
 

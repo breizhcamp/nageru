@@ -6,17 +6,9 @@ const float eps_sq = 0.001 * 0.001;
 
 uniform sampler2D flow_tex, diff_flow_tex;
 
-// The base flow needs to be normalized.
-// TODO: Should we perhaps reduce this to a separate two-component
-// texture when calculating the derivatives?
-vec2 normalize_flow(vec3 flow)
-{
-	return flow.xy / flow.z;
-}
-
 // This must be a macro, since the offset needs to be a constant expression.
 #define get_flow(x_offs, y_offs) \
-	(normalize_flow(textureOffset(flow_tex, tc, ivec2((x_offs), (y_offs))).xyz) + \
+	(textureOffset(flow_tex, tc, ivec2((x_offs), (y_offs))).xy + \
 	textureOffset(diff_flow_tex, tc, ivec2((x_offs), (y_offs))).xy)
 
 float diffusivity(float u_x, float u_y, float v_x, float v_y)
