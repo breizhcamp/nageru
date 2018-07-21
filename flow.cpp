@@ -898,7 +898,7 @@ private:
 	bool ended = false;
 };
 
-int main(void)
+int main(int argc, char **argv)
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
 		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -923,8 +923,8 @@ int main(void)
 
 	// Load pictures.
 	unsigned width1, height1, width2, height2;
-	GLuint tex0 = load_texture("test1499.png", &width1, &height1);
-	GLuint tex1 = load_texture("test1500.png", &width2, &height2);
+	GLuint tex0 = load_texture(argc >= 2 ? argv[1] : "test1499.png", &width1, &height1);
+	GLuint tex1 = load_texture(argc >= 3 ? argv[2] : "test1500.png", &width2, &height2);
 
 	if (width1 != width2 || height1 != height2) {
 		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
