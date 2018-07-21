@@ -45,7 +45,10 @@ void main()
 	b += smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;
 	b += smooth_u * textureOffset(diff_flow_tex, tc, ivec2( 0,  1)).xy;
 
-	const float omega = 1.6;
+	// FIXME: omega=1.6 seems to make our entire system diverge.
+	// Is this because we do Gauss-Seidel instead of Jacobi?
+	// Figure out what's going on.
+	const float omega = 1.0;
 	diff_flow = texture(diff_flow_tex, tc).xy;
 
 	// From https://en.wikipedia.org/wiki/Successive_over-relaxation.
