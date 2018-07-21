@@ -32,7 +32,7 @@ mainwindow.o: ui_mainwindow.h
 futatabi: $(OBJS) $(CEF_LIBS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 flow: flow.o
-	$(CXX) -o $@ $^ -lepoxy -lSDL2
+	$(CXX) -o $@ $^ -lepoxy -lSDL2 -lSDL2_image
 eval: eval.o util.o
 	$(CXX) -o $@ $^
 vis: vis.o util.o

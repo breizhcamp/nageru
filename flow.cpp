@@ -1,8 +1,5 @@
 #define NO_SDL_GLEXT 1
 
-#define WIDTH 1280
-#define HEIGHT 720
-
 #include <epoxy/gl.h>
 
 #include <SDL2/SDL.h>
@@ -115,26 +112,41 @@ GLuint compile_shader(const string &shader_src, GLenum type)
 	return obj;
 }
 
-
-GLuint load_texture(const char *filename, unsigned width, unsigned height)
+GLuint load_texture(const char *filename, unsigned *width_ret, unsigned *height_ret)
 {
-	FILE *fp = fopen(filename, "rb");
-	if (fp == nullptr) {
-		perror(filename);
+	SDL_Surface *surf = IMG_Load(filename);
+	if (surf == nullptr) {
+		fprintf(stderr, "IMG_Load(%s): %s\n", filename, IMG_GetError());
 		exit(1);
 	}
-	unique_ptr<uint8_t[]> pix(new uint8_t[width * height]);
-	if (fread(pix.get(), width * height, 1, fp) != 1) {
-		fprintf(stderr, "Short read from %s\n", filename);
-		exit(1);
-	}
-	fclose(fp);
 
-	// Convert to bottom-left origin.
-	for (unsigned y = 0; y < height / 2; ++y) {
-		unsigned y2 = height - 1 - y;
-		swap_ranges(&pix[y * width], &pix[y * width + width], &pix[y2 * width]);
+	// For whatever reason, SDL doesn't support converting to YUV surfaces
+	// nor grayscale, so we'll do it (slowly) ourselves.
+	SDL_Surface *rgb_surf = SDL_ConvertSurfaceFormat(surf, SDL_PIXELFORMAT_RGBA8888, /*flags=*/0);
+	if (rgb_surf == nullptr) {
+		fprintf(stderr, "SDL_ConvertSurfaceFormat(%s): %s\n", filename, SDL_GetError());
+		exit(1);
 	}
+
+	SDL_FreeSurface(surf);
+
+	unsigned width = rgb_surf->w, height = rgb_surf->h;
+	const uint8_t *sptr = (uint8_t *)rgb_surf->pixels;
+	unique_ptr<uint8_t[]> pix(new uint8_t[width * height]);
+
+	// Extract the Y component, and convert to bottom-left origin.
+	for (unsigned y = 0; y < height; ++y) {
+		unsigned y2 = height - 1 - y;
+		for (unsigned x = 0; x < width; ++x) {
+			uint8_t r = sptr[(y2 * width + x) * 4 + 3];
+			uint8_t g = sptr[(y2 * width + x) * 4 + 2];
+			uint8_t b = sptr[(y2 * width + x) * 4 + 1];
+
+			// Rec. 709.
+			pix[y * width + x] = lrintf(r * 0.2126f + g * 0.7152f + b * 0.0722f);
+		}
+	}
+	SDL_FreeSurface(rgb_surf);
 
 	int levels = 1;
 	for (int w = width, h = height; w > 1 || h > 1; ) {
@@ -148,6 +160,9 @@ GLuint load_texture(const char *filename, unsigned width, unsigned height)
 	glTextureStorage2D(tex, levels, GL_R8, width, height);
 	glTextureSubImage2D(tex, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, pix.get());
 	glGenerateTextureMipmap(tex);
+
+	*width_ret = width;
+	*height_ret = height;
 
 	return tex;
 }
@@ -907,8 +922,15 @@ int main(void)
 	assert(context != nullptr);
 
 	// Load pictures.
-	GLuint tex0 = load_texture("test1499.pgm", WIDTH, HEIGHT);
-	GLuint tex1 = load_texture("test1500.pgm", WIDTH, HEIGHT);
+	unsigned width1, height1, width2, height2;
+	GLuint tex0 = load_texture("test1499.png", &width1, &height1);
+	GLuint tex1 = load_texture("test1500.png", &width2, &height2);
+
+	if (width1 != width2 || height1 != height2) {
+		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
+			width1, height1, width2, height2);
+		exit(1);
+	}
 
 	// Make some samplers.
 	glCreateSamplers(1, &nearest_sampler);
@@ -973,8 +995,8 @@ int main(void)
 		snprintf(timer_name, sizeof(timer_name), "Level %d", level);
 		ScopedTimer level_timer(timer_name, &total_timer);
 
-		int level_width = WIDTH >> level;
-		int level_height = HEIGHT >> level;
+		int level_width = width1 >> level;
+		int level_height = height1 >> level;
 		float patch_spacing_pixels = patch_size_pixels * (1.0f - patch_overlap_ratio);
 		int width_patches = 1 + lrintf((level_width - patch_size_pixels) / patch_spacing_pixels);
 		int height_patches = 1 + lrintf((level_height - patch_size_pixels) / patch_spacing_pixels);
@@ -1125,8 +1147,8 @@ int main(void)
 
 	timers.print();
 
-	int level_width = WIDTH >> finest_level;
-	int level_height = HEIGHT >> finest_level;
+	int level_width = width1 >> finest_level;
+	int level_height = height1 >> finest_level;
 	unique_ptr<float[]> dense_flow(new float[level_width * level_height * 2]);
 	glGetTextureImage(prev_level_flow_tex, 0, GL_RG, GL_FLOAT, level_width * level_height * 2 * sizeof(float), dense_flow.get());
 
