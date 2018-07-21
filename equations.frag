@@ -11,6 +11,44 @@ uniform sampler2D smoothness_x_tex, smoothness_y_tex;
 // TODO: Consider a specialized version for the case where we know that du = dv = 0,
 // since we run so few iterations.
 
+// Similar to packHalf2x16, but the two values share exponent, and are stored
+// as 12-bit fixed point numbers multiplied by that exponent (the leading one
+// can't be implicit in this kind of format). This allows us to store a much
+// greater range of numbers (8-bit, ie., full fp32 range), and also gives us an
+// extra mantissa bit. (Well, ostensibly two, but because the numbers have to
+// be stored denormalized, we only really gain one.)
+//
+// The price we pay is that if the numbers are of very different magnitudes,
+// the smaller number gets less precision.
+uint pack_floats_shared(float a, float b)
+{
+	float greatest = max(abs(a), abs(b));
+
+	// Find the exponent, increase it by one, and negate it.
+	// E.g., if the nonbiased exponent is 3, the number is between
+	// 2^3 and 2^4, so our normalization factor to get within -1..1
+	// is going to be 2^-4.
+	//
+	// exponent -= 127;
+	// exponent = -(exponent + 1);
+	// exponent += 127;
+	//
+	// is the same as
+	//
+	// exponent = 252 - exponent;
+	uint e = floatBitsToUint(greatest) & 0x7f800000u;
+	float normalizer = uintBitsToFloat((252 << 23) - e);
+
+	// The exponent is the same range as fp32, so just copy it
+	// verbatim, shifted up to where the sign bit used to be.
+	e <<= 1;
+
+	// Quantize to 12 bits.
+	uint qa = uint(int(round(a * (normalizer * 2047.0))));
+	uint qb = uint(int(round(b * (normalizer * 2047.0))));
+
+	return (qa & 0xfffu) | ((qb & 0xfffu) << 12) | e;
+}
 
 void main()
 {
@@ -106,5 +144,5 @@ void main()
 	equation.x = floatBitsToUint(1.0 / A11);
 	equation.y = floatBitsToUint(A12);
 	equation.z = floatBitsToUint(1.0 / A22);
-	equation.w = packHalf2x16(vec2(b1, b2));
+	equation.w = pack_floats_shared(b1, b2);
 }

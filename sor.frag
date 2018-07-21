@@ -6,13 +6,30 @@ out vec2 diff_flow;
 uniform sampler2D diff_flow_tex, smoothness_x_tex, smoothness_y_tex;
 uniform usampler2D equation_tex;
 
+// See pack_floats_shared() in equations.frag.
+vec2 unpack_floats_shared(uint c)
+{
+	// Recover the exponent, and multiply it in. Add one because
+	// we have denormalized mantissas, then another one because we
+	// already reduced the exponent by one. Then subtract 20, because
+	// we are going to shift up the number by 20 below to recover the sign bits.
+	float normalizer = uintBitsToFloat(((c >> 1) & 0x7f800000u) - (18 << 23));
+	normalizer *= (1.0 / 2047.0);
+
+	// Shift the values up so that we recover the sign bit, then normalize.
+	float a = int(uint(c & 0x000fffu) << 20) * normalizer;
+	float b = int(uint(c & 0xfff000u) << 8) * normalizer;
+
+	return vec2(a, b);
+}
+
 void main()
 {
 	uvec4 equation = texture(equation_tex, tc);
 	float inv_A11 = uintBitsToFloat(equation.x);
 	float A12 = uintBitsToFloat(equation.y);
 	float inv_A22 = uintBitsToFloat(equation.z);
-	vec2 b = unpackHalf2x16(equation.w);
+	vec2 b = unpack_floats_shared(equation.w);
 
 	// Subtract the missing terms from the right-hand side
 	// (it couldn't be done earlier, because we didn't know
