@@ -913,7 +913,7 @@ void GPUTimers::print()
 		for (int i = 0; i < timer.level * 2; ++i) {
 			fprintf(stderr, " ");
 		}
-		fprintf(stderr, "%-30s %4.1f ms\n", timer.name.c_str(), (time_end - time_start) / 1e6);
+		fprintf(stderr, "%-30s %4.1f ms\n", timer.name.c_str(), GLint64(time_end - time_start) / 1e6);
 	}
 }
 
