@@ -847,6 +847,61 @@ pair<GLuint, GLuint> GPUTimers::begin_timer(const string &name, int level)
 	return timer.query;
 }
 
+// Take a copy of the flow, bilinearly interpolated and scaled up.
+class ResizeFlow {
+public:
+	ResizeFlow();
+	void exec(GLuint in_tex, GLuint out_tex, int input_width, int input_height, int output_width, int output_height);
+
+private:
+	GLuint resize_flow_vs_obj;
+	GLuint resize_flow_fs_obj;
+	GLuint resize_flow_program;
+	GLuint resize_flow_vao;
+
+	GLuint uniform_flow_tex;
+	GLuint uniform_scale_factor;
+};
+
+ResizeFlow::ResizeFlow()
+{
+	resize_flow_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	resize_flow_fs_obj = compile_shader(read_file("resize_flow.frag"), GL_FRAGMENT_SHADER);
+	resize_flow_program = link_program(resize_flow_vs_obj, resize_flow_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &resize_flow_vao);
+	glBindVertexArray(resize_flow_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(resize_flow_program, "position");
+	glEnableVertexArrayAttrib(resize_flow_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_flow_tex = glGetUniformLocation(resize_flow_program, "flow_tex");
+	uniform_scale_factor = glGetUniformLocation(resize_flow_program, "scale_factor");
+}
+
+void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int input_height, int output_width, int output_height)
+{
+	glUseProgram(resize_flow_program);
+
+	bind_sampler(resize_flow_program, uniform_flow_tex, 0, flow_tex, nearest_sampler);
+
+	glProgramUniform2f(resize_flow_program, uniform_scale_factor, float(output_width) / input_width, float(output_height) / input_height);
+
+	GLuint resize_flow_fbo;  // TODO: cleanup
+	glCreateFramebuffers(1, &resize_flow_fbo);
+	glNamedFramebufferTexture(resize_flow_fbo, GL_COLOR_ATTACHMENT0, out_tex, 0);
+
+	glViewport(0, 0, output_width, output_height);
+	glDisable(GL_BLEND);
+	glBindVertexArray(resize_flow_vao);
+	glBindFramebuffer(GL_FRAMEBUFFER, resize_flow_fbo);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
 void GPUTimers::print()
 {
 	for (const Timer &timer : timers) {
@@ -982,6 +1037,7 @@ int main(int argc, char **argv)
 	SetupEquations setup_equations;
 	SOR sor;
 	AddBaseFlow add_base_flow;
+	ResizeFlow resize_flow;
 
 	GLuint query;
 	glGenQueries(1, &query);
@@ -1147,22 +1203,30 @@ int main(int argc, char **argv)
 
 	timers.print();
 
-	int level_width = width1 >> finest_level;
-	int level_height = height1 >> finest_level;
-	unique_ptr<float[]> dense_flow(new float[level_width * level_height * 2]);
-	glGetTextureImage(prev_level_flow_tex, 0, GL_RG, GL_FLOAT, level_width * level_height * 2 * sizeof(float), dense_flow.get());
+	// Scale up the flow to the final size (if needed).
+	GLuint final_tex;
+	if (finest_level == 0) {
+		final_tex = prev_level_flow_tex;
+	} else {
+		glCreateTextures(GL_TEXTURE_2D, 1, &final_tex);
+		glTextureStorage2D(final_tex, 1, GL_RG16F, width1, height1);
+		resize_flow.exec(prev_level_flow_tex, final_tex, prev_level_width, prev_level_height, width1, height1);
+	}
+
+	unique_ptr<float[]> dense_flow(new float[width1 * height1 * 2]);
+	glGetTextureImage(final_tex, 0, GL_RG, GL_FLOAT, width1 * height1 * 2 * sizeof(float), dense_flow.get());
 
 	FILE *fp = fopen("flow.ppm", "wb");
 	FILE *flowfp = fopen("flow.flo", "wb");
-	fprintf(fp, "P6\n%d %d\n255\n", level_width, level_height);
+	fprintf(fp, "P6\n%d %d\n255\n", width1, height1);
 	fprintf(flowfp, "FEIH");
-	fwrite(&level_width, 4, 1, flowfp);
-	fwrite(&level_height, 4, 1, flowfp);
-	for (unsigned y = 0; y < unsigned(level_height); ++y) {
-		int yy = level_height - y - 1;
-		for (unsigned x = 0; x < unsigned(level_width); ++x) {
-			float du = dense_flow[(yy * level_width + x) * 2 + 0];
-			float dv = dense_flow[(yy * level_width + x) * 2 + 1];
+	fwrite(&width1, 4, 1, flowfp);
+	fwrite(&height1, 4, 1, flowfp);
+	for (unsigned y = 0; y < unsigned(height1); ++y) {
+		int yy = height1 - y - 1;
+		for (unsigned x = 0; x < unsigned(width1); ++x) {
+			float du = dense_flow[(yy * width1 + x) * 2 + 0];
+			float dv = dense_flow[(yy * width1 + x) * 2 + 1];
 
 			dv = -dv;
 
