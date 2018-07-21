@@ -1024,6 +1024,7 @@ int main(int argc, char **argv)
 	GLuint initial_flow_tex;
 	glCreateTextures(GL_TEXTURE_2D, 1, &initial_flow_tex);
 	glTextureStorage2D(initial_flow_tex, 1, GL_RG16F, 1, 1);
+	glClearTexImage(initial_flow_tex, 0, GL_RG, GL_FLOAT, nullptr);
 	int prev_level_width = 1, prev_level_height = 1;
 
 	GLuint prev_level_flow_tex = initial_flow_tex;
