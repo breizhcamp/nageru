@@ -153,8 +153,8 @@ iteration)
 
 we have the much more manageable
 
-  k1 I_x²    u + k1 I_x I_y v = - k1 I_t
-  k1 I_x I_y u + k1 I_y²    v = - k1 I_t
+  k1 I_x²    u + k1 I_x I_y v = - k1 I_t I_x
+  k1 I_x I_y u + k1 I_y²    v = - k1 I_t I_y
 
 ie., two linear equations in u and v. Now, you will notice two
 immediate problems by this equation set:

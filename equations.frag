@@ -36,8 +36,8 @@ void main()
 	float A11 = k1 * I_x * I_x;
 	float A12 = k1 * I_x * I_y;
 	float A22 = k1 * I_y * I_y;
-	float b1 = -k1 * I_t;
-	float b2 = -k1 * I_t;
+	float b1 = -k1 * I_t * I_x;
+	float b2 = -k1 * I_t * I_y;
 
 	// Compute the second derivatives. First I_xx and I_xy.
 	vec2 I_x_y_m2 = textureOffset(I_x_y_tex, tc, ivec2(-2,  0)).xy;
