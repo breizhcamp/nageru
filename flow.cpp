@@ -1133,7 +1133,7 @@ int main(int argc, char **argv)
 		// Add the differential flow found by the variational refinement to the base flow,
 		// giving the final flow estimate for this level.
 		// The output is in diff_flow_tex; we don't need to make a new texture.
-		// You can comment out this prat if you wish to test disabling of the variational refinement.
+		// You can comment out this part if you wish to test disabling of the variational refinement.
 		{
 			ScopedTimer timer("Add differential flow", &varref_timer);
 			add_base_flow.exec(base_flow_tex, du_dv_tex, level_width, level_height);
