@@ -695,11 +695,8 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
-// Calculate the smoothness constraints between neighboring pixels;
-// s_x(x,y) stores smoothness between pixel (x,y) and (x+1,y),
-// and s_y(x,y) stores between (x,y) and (x,y+1). We'll sample with
-// border color (0,0) later, so that there's zero diffusion out of
-// the border.
+// Actually solve the equation sets made by SetupEquations, by means of
+// successive over-relaxation (SOR).
 //
 // See variational_refinement.txt for more information.
 class SOR {
