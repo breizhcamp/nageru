@@ -11,6 +11,7 @@
 #include <SDL2/SDL_video.h>
 
 #include <assert.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -965,6 +966,35 @@ private:
 
 int main(int argc, char **argv)
 {
+        static const option long_options[] = {
+                { "alpha", required_argument, 0, 'a' },
+                { "delta", required_argument, 0, 'd' },
+                { "gamma", required_argument, 0, 'g' }
+	};
+
+	for ( ;; ) {
+		int option_index = 0;
+		int c = getopt_long(argc, argv, "a:d:g:", long_options, &option_index);
+
+		if (c == -1) {
+			break;
+		}
+		switch (c) {
+		case 'a':
+			vr_alpha = atof(optarg);
+			break;
+		case 'd':
+			vr_delta = atof(optarg);
+			break;
+		case 'g':
+			vr_gamma = atof(optarg);
+			break;
+		default:
+			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);
+			exit(1);
+		};
+	}
+
 	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
 		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
 		exit(1);
@@ -988,8 +1018,8 @@ int main(int argc, char **argv)
 
 	// Load pictures.
 	unsigned width1, height1, width2, height2;
-	GLuint tex0 = load_texture(argc >= 2 ? argv[1] : "test1499.png", &width1, &height1);
-	GLuint tex1 = load_texture(argc >= 3 ? argv[2] : "test1500.png", &width2, &height2);
+	GLuint tex0 = load_texture(argc >= (optind + 1) ? argv[optind] : "test1499.png", &width1, &height1);
+	GLuint tex1 = load_texture(argc >= (optind + 2) ? argv[optind + 1] : "test1500.png", &width2, &height2);
 
 	if (width1 != width2 || height1 != height2) {
 		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
