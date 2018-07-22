@@ -30,6 +30,11 @@ constexpr unsigned coarsest_level = 5;
 constexpr unsigned finest_level = 1;
 constexpr unsigned patch_size_pixels = 12;
 
+// Weighting constants for the different parts of the variational refinement.
+// These don't correspond 1:1 to the values given in the DIS paper,
+// since we have different normalizations and ranges in some cases.
+float vr_gamma = 10.0f, vr_delta = 5.0f, vr_alpha = 10.0f;
+
 // Some global OpenGL objects.
 GLuint nearest_sampler, linear_sampler, smoothness_sampler;
 GLuint vertex_vbo;
@@ -571,6 +576,7 @@ private:
 	GLuint smoothness_vao;
 
 	GLuint uniform_flow_tex, uniform_diff_flow_tex;
+	GLuint uniform_alpha;
 };
 
 ComputeSmoothness::ComputeSmoothness()
@@ -590,6 +596,7 @@ ComputeSmoothness::ComputeSmoothness()
 
 	uniform_flow_tex = glGetUniformLocation(smoothness_program, "flow_tex");
 	uniform_diff_flow_tex = glGetUniformLocation(smoothness_program, "diff_flow_tex");
+	uniform_alpha = glGetUniformLocation(smoothness_program, "alpha");
 }
 
 void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height)
@@ -598,6 +605,7 @@ void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoot
 
 	bind_sampler(smoothness_program, uniform_flow_tex, 0, flow_tex, nearest_sampler);
 	bind_sampler(smoothness_program, uniform_diff_flow_tex, 1, diff_flow_tex, nearest_sampler);
+	glProgramUniform1f(smoothness_program, uniform_alpha, vr_alpha);
 
 	GLuint smoothness_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &smoothness_fbo);
@@ -646,6 +654,7 @@ private:
 	GLuint uniform_diff_flow_tex, uniform_base_flow_tex;
 	GLuint uniform_beta_0_tex;
 	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
+	GLuint uniform_gamma, uniform_delta;
 };
 
 SetupEquations::SetupEquations()
@@ -670,6 +679,8 @@ SetupEquations::SetupEquations()
 	uniform_beta_0_tex = glGetUniformLocation(equations_program, "beta_0_tex");
 	uniform_smoothness_x_tex = glGetUniformLocation(equations_program, "smoothness_x_tex");
 	uniform_smoothness_y_tex = glGetUniformLocation(equations_program, "smoothness_y_tex");
+	uniform_gamma = glGetUniformLocation(equations_program, "gamma");
+	uniform_delta = glGetUniformLocation(equations_program, "delta");
 }
 
 void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height)
@@ -683,6 +694,8 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 	bind_sampler(equations_program, uniform_beta_0_tex, 4, beta_0_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_smoothness_x_tex, 5, smoothness_x_tex, smoothness_sampler);
 	bind_sampler(equations_program, uniform_smoothness_y_tex, 6, smoothness_y_tex, smoothness_sampler);
+	glProgramUniform1f(equations_program, uniform_delta, vr_delta);
+	glProgramUniform1f(equations_program, uniform_gamma, vr_gamma);
 
 	GLuint equations_fbo;  // TODO: cleanup
 	glCreateFramebuffers(1, &equations_fbo);

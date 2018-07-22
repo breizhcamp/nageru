@@ -6,6 +6,9 @@ const float eps_sq = 0.001 * 0.001;
 
 uniform sampler2D flow_tex, diff_flow_tex;
 
+// Relative weighting of smoothness term.
+uniform float alpha;
+
 // This must be a macro, since the offset needs to be a constant expression.
 #define get_flow(x_offs, y_offs) \
 	(textureOffset(flow_tex, tc, ivec2((x_offs), (y_offs))).xy + \
@@ -13,7 +16,7 @@ uniform sampler2D flow_tex, diff_flow_tex;
 
 float diffusivity(float u_x, float u_y, float v_x, float v_y)
 {
-	return inversesqrt(u_x * u_x + u_y * u_y + v_x * v_x + v_y * v_y + eps_sq);
+	return alpha * inversesqrt(u_x * u_x + u_y * u_y + v_x * v_x + v_y * v_y + eps_sq);
 }
 
 void main()

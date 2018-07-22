@@ -8,6 +8,12 @@ uniform sampler2D diff_flow_tex, base_flow_tex;
 uniform sampler2D beta_0_tex;
 uniform sampler2D smoothness_x_tex, smoothness_y_tex;
 
+// Relative weighting of intensity term.
+uniform float delta;
+
+// Relative weighting of gradient term.
+uniform float gamma;
+
 // TODO: Consider a specialized version for the case where we know that du = dv = 0,
 // since we run so few iterations.
 
@@ -68,9 +74,8 @@ void main()
 	//
 	// TODO: Evaluate squaring β_0.
   	// FIXME: Should the penalizer be adjusted for 0..1 intensity range instead of 0..255?
-	// TODO: Multiply by some alpha.
 	float beta_0 = texture(beta_0_tex, tc).x;
-	float k1 = beta_0 * inversesqrt(beta_0 * (I_x * du + I_y * dv + I_t) * (I_x * du + I_y * dv + I_t) + 1e-6);
+	float k1 = delta * beta_0 * inversesqrt(beta_0 * (I_x * du + I_y * dv + I_t) * (I_x * du + I_y * dv + I_t) + 1e-6);
 	float A11 = k1 * I_x * I_x;
 	float A12 = k1 * I_x * I_y;
 	float A22 = k1 * I_y * I_y;
@@ -108,7 +113,7 @@ void main()
 	// (see derivatives.frag).
 	float beta_x = 1.0 / (I_xx * I_xx + I_xy * I_xy + 1e-7);
 	float beta_y = 1.0 / (I_xy * I_xy + I_yy * I_yy + 1e-7);
-	float k2 = inversesqrt(
+	float k2 = gamma * inversesqrt(
 		beta_x * (I_xx * du + I_xy * dv + I_xt) * (I_xx * du + I_xy * dv + I_xt) +
 		beta_y * (I_xy * du + I_yy * dv + I_yt) * (I_xy * du + I_yy * dv + I_yt) +
 		1e-6);
@@ -121,8 +126,7 @@ void main()
 	b2 -= k_x * I_xy * I_xt + k_y * I_yy * I_yt;
 
 	// E_S term, sans the part on the right-hand side that deals with
-	// the neighboring pixels.
-	// TODO: Multiply by some gamma.
+	// the neighboring pixels. The gamma is multiplied in in smoothness.frag.
 	float smooth_l = textureOffset(smoothness_x_tex, tc, ivec2(-1,  0)).x;
 	float smooth_r = texture(smoothness_x_tex, tc).x;
 	float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
