@@ -1269,6 +1269,14 @@ void DISComputeFlow::release_texture(GLuint tex_num)
 	assert(false);
 }
 
+// OpenGL uses a bottom-left coordinate system, .flo files use a top-left coordinate system.
+void flip_coordinate_system(float *dense_flow, unsigned width, unsigned height)
+{
+	for (unsigned i = 0; i < width * height; ++i) {
+		dense_flow[i * 2 + 1] = -dense_flow[i * 2 + 1];
+	}
+}
+
 void write_flow(const char *filename, const float *dense_flow, unsigned width, unsigned height)
 {
 	FILE *flowfp = fopen(filename, "wb");
@@ -1277,15 +1285,7 @@ void write_flow(const char *filename, const float *dense_flow, unsigned width, u
 	fwrite(&height, 4, 1, flowfp);
 	for (unsigned y = 0; y < height; ++y) {
 		int yy = height - y - 1;
-		for (unsigned x = 0; x < unsigned(width); ++x) {
-			float du = dense_flow[(yy * width + x) * 2 + 0];
-			float dv = dense_flow[(yy * width + x) * 2 + 1];
-
-			dv = -dv;
-
-			fwrite(&du, 4, 1, flowfp);
-			fwrite(&dv, 4, 1, flowfp);
-		}
+		fwrite(&dense_flow[yy * width * 2], width * 2 * sizeof(float), 1, flowfp);
 	}
 	fclose(flowfp);
 }
@@ -1299,8 +1299,6 @@ void write_ppm(const char *filename, const float *dense_flow, unsigned width, un
 		for (unsigned x = 0; x < unsigned(width); ++x) {
 			float du = dense_flow[(yy * width + x) * 2 + 0];
 			float dv = dense_flow[(yy * width + x) * 2 + 1];
-
-			dv = -dv;
 
 			uint8_t r, g, b;
 			flow2rgb(du, dv, &r, &g, &b);
@@ -1404,6 +1402,7 @@ int main(int argc, char **argv)
 
 	compute_flow.release_texture(final_tex);
 
+	flip_coordinate_system(dense_flow.get(), width1, height1);
 	write_flow(flow_filename, dense_flow.get(), width1, height1);
 	write_ppm("flow.ppm", dense_flow.get(), width1, height1);
 
@@ -1440,6 +1439,7 @@ int main(int argc, char **argv)
 
 		compute_flow.release_texture(final_tex);
 
+		flip_coordinate_system(dense_flow.get(), width, height);
 		write_flow(flow_filename, dense_flow.get(), width, height);
 	}
 
