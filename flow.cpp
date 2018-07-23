@@ -829,35 +829,6 @@ void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_wid
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
-class GPUTimers {
-public:
-	void print();
-	pair<GLuint, GLuint> begin_timer(const string &name, int level);
-
-private:
-	struct Timer {
-		string name;
-		int level;
-		pair<GLuint, GLuint> query;
-	};
-	vector<Timer> timers;
-};
-
-pair<GLuint, GLuint> GPUTimers::begin_timer(const string &name, int level)
-{
-	GLuint queries[2];
-	glGenQueries(2, queries);
-	glQueryCounter(queries[0], GL_TIMESTAMP);
-
-	Timer timer;
-	timer.name = name;
-	timer.level = level;
-	timer.query.first = queries[0];
-	timer.query.second = queries[1];
-	timers.push_back(timer);
-	return timer.query;
-}
-
 // Take a copy of the flow, bilinearly interpolated and scaled up.
 class ResizeFlow {
 public:
@@ -911,6 +882,35 @@ void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int inpu
 	glBindFramebuffer(GL_FRAMEBUFFER, resize_flow_fbo);
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+class GPUTimers {
+public:
+	void print();
+	pair<GLuint, GLuint> begin_timer(const string &name, int level);
+
+private:
+	struct Timer {
+		string name;
+		int level;
+		pair<GLuint, GLuint> query;
+	};
+	vector<Timer> timers;
+};
+
+pair<GLuint, GLuint> GPUTimers::begin_timer(const string &name, int level)
+{
+	GLuint queries[2];
+	glGenQueries(2, queries);
+	glQueryCounter(queries[0], GL_TIMESTAMP);
+
+	Timer timer;
+	timer.name = name;
+	timer.level = level;
+	timer.query.first = queries[0];
+	timer.query.second = queries[1];
+	timers.push_back(timer);
+	return timer.query;
 }
 
 void GPUTimers::print()
