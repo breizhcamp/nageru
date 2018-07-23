@@ -90,24 +90,21 @@ void main()
 
 	mat2 H_inv = inverse(H);
 
-	// Fetch the initial guess for the flow.
-	vec2 initial_u = texture(flow_tex, flow_tc).xy * inv_prev_level_size;
-
-	// Note: The flow is in OpenGL coordinates [0..1], but the calculations
-	// generally come out in pixels since the gradient is in pixels,
-	// so we need to convert at the end.
+	// Fetch the initial guess for the flow, and convert from the previous size to this one.
+	vec2 initial_u = texture(flow_tex, flow_tc).xy * (image_size * inv_prev_level_size);
 	vec2 u = initial_u;
 	float mean_diff, first_mean_diff;
 
 	for (uint i = 0; i < num_iterations; ++i) {
 		vec2 du = vec2(0.0, 0.0);
 		float warped_sum = 0.0f;
+		vec2 u_norm = u * inv_image_size;  // In [0..1] coordinates instead of pixels.
 		for (uint y = 0; y < patch_size; ++y) {
 			for (uint x = 0; x < patch_size; ++x) {
 				vec2 tc = base + uvec2(x, y) * inv_image_size;
 				vec2 grad = texture(grad0_tex, tc).xy;
 				float t = texture(image0_tex, tc).x;
-				float warped = texture(image1_tex, tc + u).x;
+				float warped = texture(image1_tex, tc + u_norm).x;
 				du += grad * (warped - t);
 				warped_sum += warped;
 			}
@@ -132,22 +129,23 @@ void main()
 		}
 
 		// Do the actual update.
-		u -= (H_inv * du) * inv_image_size;
+		u -= H_inv * du;
 	}
 
 	// Reject if we moved too far. Also reject if the patch goes out-of-bounds
 	// (the paper does not mention this, but the code does, and it seems to be
 	// critical to avoid really bad behavior at the edges).
-	if ((length((u - initial_u) * image_size) > patch_size) ||
-	     u.x * image_size.x < -(patch_size * 0.5f) ||
-	     (1.0 - u.x) * image_size.x < -(patch_size * 0.5f) ||
-	     u.y * image_size.y < -(patch_size * 0.5f) ||
-	     (1.0 - u.y) * image_size.y < -(patch_size * 0.5f)) {
+	if (length(u - initial_u) > patch_size ||
+	    u.x < -(patch_size * 0.5f) ||
+	    image_size.x - u.x < -(patch_size * 0.5f) ||
+	    u.y < -(patch_size * 0.5f) ||
+	    image_size.y - u.y < -(patch_size * 0.5f)) {
 		u = initial_u;
 		mean_diff = first_mean_diff;
 	}
 
 	// NOTE: The mean patch diff will be for the second-to-last patch,
 	// not the true position of du. But hopefully, it will be very close.
+	u *= inv_image_size;
 	out_flow = vec3(u.x, u.y, mean_diff);
 }
