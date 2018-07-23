@@ -37,6 +37,8 @@ constexpr unsigned patch_size_pixels = 12;
 // since we have different normalizations and ranges in some cases.
 float vr_gamma = 10.0f, vr_delta = 5.0f, vr_alpha = 10.0f;
 
+bool enable_timing = true;
+
 // Some global OpenGL objects.
 // TODO: These should really be part of DISComputeFlow.
 GLuint nearest_sampler, linear_sampler, smoothness_sampler;
@@ -923,6 +925,10 @@ private:
 
 pair<GLuint, GLuint> GPUTimers::begin_timer(const string &name, int level)
 {
+	if (!enable_timing) {
+		return make_pair(0, 0);
+	}
+
 	GLuint queries[2];
 	glGenQueries(2, queries);
 	glQueryCounter(queries[0], GL_TIMESTAMP);
@@ -974,7 +980,7 @@ public:
 
 	void end()
 	{
-		if (!ended) {
+		if (enable_timing && !ended) {
 			glQueryCounter(query.second, GL_TIMESTAMP);
 			ended = true;
 		}
@@ -1311,7 +1317,8 @@ int main(int argc, char **argv)
         static const option long_options[] = {
                 { "alpha", required_argument, 0, 'a' },
                 { "delta", required_argument, 0, 'd' },
-                { "gamma", required_argument, 0, 'g' }
+                { "gamma", required_argument, 0, 'g' },
+		{ "disable-timing", no_argument, 0, 1000 }
 	};
 
 	for ( ;; ) {
@@ -1330,6 +1337,9 @@ int main(int argc, char **argv)
 			break;
 		case 'g':
 			vr_gamma = atof(optarg);
+			break;
+		case 1000:
+			enable_timing = false;
 			break;
 		default:
 			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);
