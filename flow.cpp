@@ -1368,10 +1368,15 @@ int main(int argc, char **argv)
 	SDL_GLContext context = SDL_GL_CreateContext(window);
 	assert(context != nullptr);
 
+	const char *filename0 = argc >= (optind + 1) ? argv[optind] : "test1499.png";
+	const char *filename1 = argc >= (optind + 2) ? argv[optind + 1] : "test1500.png";
+	const char *flow_filename = argc >= (optind + 3) ? argv[optind + 2] : "flow.flo";
+	fprintf(stderr, "%s %s -> %s\n", filename0, filename1, flow_filename);
+
 	// Load pictures.
 	unsigned width1, height1, width2, height2;
-	GLuint tex0 = load_texture(argc >= (optind + 1) ? argv[optind] : "test1499.png", &width1, &height1);
-	GLuint tex1 = load_texture(argc >= (optind + 2) ? argv[optind + 1] : "test1500.png", &width2, &height2);
+	GLuint tex0 = load_texture(filename0, &width1, &height1);
+	GLuint tex1 = load_texture(filename1, &width2, &height2);
 
 	if (width1 != width2 || height1 != height2) {
 		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
@@ -1399,7 +1404,7 @@ int main(int argc, char **argv)
 
 	compute_flow.release_texture(final_tex);
 
-	write_flow(argc >= (optind + 3) ? argv[optind + 2] : "flow.flo", dense_flow.get(), width1, height1);
+	write_flow(flow_filename, dense_flow.get(), width1, height1);
 	write_ppm("flow.ppm", dense_flow.get(), width1, height1);
 
 	dense_flow.reset();
