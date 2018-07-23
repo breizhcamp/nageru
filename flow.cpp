@@ -1389,8 +1389,44 @@ int main(int argc, char **argv)
 
 	compute_flow.release_texture(final_tex);
 
-	write_flow("flow.flo", dense_flow.get(), width1, height1);
+	write_flow(argc >= (optind + 3) ? argv[optind + 2] : "flow.flo", dense_flow.get(), width1, height1);
 	write_ppm("flow.ppm", dense_flow.get(), width1, height1);
+
+	dense_flow.reset();
+
+	// See if there are more flows on the command line (ie., more than three arguments),
+	// and if so, process them.
+	int num_flows = (argc - optind) / 3;
+	for (int i = 1; i < num_flows; ++i) {
+		const char *filename0 = argv[optind + i * 3 + 0];
+		const char *filename1 = argv[optind + i * 3 + 1];
+		const char *flow_filename = argv[optind + i * 3 + 2];
+		fprintf(stderr, "%s %s -> %s\n", filename0, filename1, flow_filename);
+
+		GLuint width, height;
+		GLuint tex0 = load_texture(filename0, &width, &height);
+		if (width != width1 || height != height1) {
+			fprintf(stderr, "%s: Image dimensions don't match (%dx%d versus %dx%d)\n",
+				filename0, width, height, width1, height1);
+			exit(1);
+		}
+
+		GLuint tex1 = load_texture(filename1, &width, &height);
+		if (width != width1 || height != height1) {
+			fprintf(stderr, "%s: Image dimensions don't match (%dx%d versus %dx%d)\n",
+				filename1, width, height, width1, height1);
+			exit(1);
+		}
+
+		GLuint final_tex = compute_flow.exec(tex0, tex1);
+
+		unique_ptr<float[]> dense_flow(new float[width * height * 2]);
+		glGetTextureImage(final_tex, 0, GL_RG, GL_FLOAT, width * height * 2 * sizeof(float), dense_flow.get());
+
+		compute_flow.release_texture(final_tex);
+
+		write_flow(flow_filename, dense_flow.get(), width, height);
+	}
 
 	fprintf(stderr, "err = %d\n", glGetError());
 }
