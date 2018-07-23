@@ -132,10 +132,14 @@ void main()
 		u -= H_inv * du;
 	}
 
-	// Reject if we moved too far. Also reject if the patch goes out-of-bounds
-	// (the paper does not mention this, but the code does, and it seems to be
-	// critical to avoid really bad behavior at the edges).
-	if (length(u - initial_u) > patch_size ||
+	// Reject if we moved too far. Note that the paper says “too far” is the
+	// patch size, but the DIS code uses half of a patch size. The latter seems
+	// to give much better overall results.
+	//
+	// Also reject if the patch goes out-of-bounds (the paper does not mention this,
+	// but the code does, and it seems to be critical to avoid really bad behavior
+	// at the edges).
+	if (length(u - initial_u) > (patch_size * 0.5f) ||
 	    u.x < -(patch_size * 0.5f) ||
 	    image_size.x - u.x < -(patch_size * 0.5f) ||
 	    u.y < -(patch_size * 0.5f) ||
