@@ -20,7 +20,7 @@ int main(int argc, char **argv)
 		sum_epe += eval_flow(argv[i], argv[i + 1]);
 		++num_flows;
 	}
-	fprintf(stderr, "Average EPE: %.2f pixels\n", sum_epe / num_flows);
+	printf("Average EPE: %.2f pixels\n", sum_epe / num_flows);
 }
 
 double eval_flow(const char *filename1, const char *filename2)
