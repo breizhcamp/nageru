@@ -38,6 +38,7 @@ constexpr unsigned patch_size_pixels = 12;
 float vr_gamma = 10.0f, vr_delta = 5.0f, vr_alpha = 10.0f;
 
 // Some global OpenGL objects.
+// TODO: These should really be part of DISComputeFlow.
 GLuint nearest_sampler, linear_sampler, smoothness_sampler;
 GLuint vertex_vbo;
 
@@ -986,69 +987,31 @@ private:
 	bool ended = false;
 };
 
-int main(int argc, char **argv)
+class DISComputeFlow {
+public:
+	DISComputeFlow(int width, int height);
+	GLuint exec(GLuint tex0, GLuint tex1);
+
+private:
+	int width, height;
+	GLuint initial_flow_tex;
+
+	// The various passes.
+	Sobel sobel;
+	MotionSearch motion_search;
+	Densify densify;
+	Prewarp prewarp;
+	Derivatives derivatives;
+	ComputeSmoothness compute_smoothness;
+	SetupEquations setup_equations;
+	SOR sor;
+	AddBaseFlow add_base_flow;
+	ResizeFlow resize_flow;
+};
+
+DISComputeFlow::DISComputeFlow(int width, int height)
+	: width(width), height(height)
 {
-        static const option long_options[] = {
-                { "alpha", required_argument, 0, 'a' },
-                { "delta", required_argument, 0, 'd' },
-                { "gamma", required_argument, 0, 'g' }
-	};
-
-	for ( ;; ) {
-		int option_index = 0;
-		int c = getopt_long(argc, argv, "a:d:g:", long_options, &option_index);
-
-		if (c == -1) {
-			break;
-		}
-		switch (c) {
-		case 'a':
-			vr_alpha = atof(optarg);
-			break;
-		case 'd':
-			vr_delta = atof(optarg);
-			break;
-		case 'g':
-			vr_gamma = atof(optarg);
-			break;
-		default:
-			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);
-			exit(1);
-		};
-	}
-
-	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
-		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-		exit(1);
-	}
-	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
-	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-	SDL_Window *window = SDL_CreateWindow("OpenGL window",
-			SDL_WINDOWPOS_UNDEFINED,
-			SDL_WINDOWPOS_UNDEFINED,
-			64, 64,
-			SDL_WINDOW_OPENGL);
-	SDL_GLContext context = SDL_GL_CreateContext(window);
-	assert(context != nullptr);
-
-	// Load pictures.
-	unsigned width1, height1, width2, height2;
-	GLuint tex0 = load_texture(argc >= (optind + 1) ? argv[optind] : "test1499.png", &width1, &height1);
-	GLuint tex1 = load_texture(argc >= (optind + 2) ? argv[optind + 1] : "test1500.png", &width2, &height2);
-
-	if (width1 != width2 || height1 != height2) {
-		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
-			width1, height1, width2, height2);
-		exit(1);
-	}
-
 	// Make some samplers.
 	glCreateSamplers(1, &nearest_sampler);
 	glSamplerParameteri(nearest_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -1072,39 +1035,16 @@ int main(int argc, char **argv)
 	float zero[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	glSamplerParameterfv(smoothness_sampler, GL_TEXTURE_BORDER_COLOR, zero);
 
-	float vertices[] = {
-		0.0f, 1.0f,
-		0.0f, 0.0f,
-		1.0f, 1.0f,
-		1.0f, 0.0f,
-	};
-	glCreateBuffers(1, &vertex_vbo);
-	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
 	// Initial flow is zero, 1x1.
-	GLuint initial_flow_tex;
 	glCreateTextures(GL_TEXTURE_2D, 1, &initial_flow_tex);
 	glTextureStorage2D(initial_flow_tex, 1, GL_RG16F, 1, 1);
 	glClearTexImage(initial_flow_tex, 0, GL_RG, GL_FLOAT, nullptr);
+}
+
+GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
+{
 	int prev_level_width = 1, prev_level_height = 1;
-
 	GLuint prev_level_flow_tex = initial_flow_tex;
-
-	Sobel sobel;
-	MotionSearch motion_search;
-	Densify densify;
-	Prewarp prewarp;
-	Derivatives derivatives;
-	ComputeSmoothness compute_smoothness;
-	SetupEquations setup_equations;
-	SOR sor;
-	AddBaseFlow add_base_flow;
-	ResizeFlow resize_flow;
-
-	GLuint query;
-	glGenQueries(1, &query);
-	glBeginQuery(GL_TIME_ELAPSED, query);
 
 	GPUTimers timers;
 
@@ -1114,8 +1054,8 @@ int main(int argc, char **argv)
 		snprintf(timer_name, sizeof(timer_name), "Level %d", level);
 		ScopedTimer level_timer(timer_name, &total_timer);
 
-		int level_width = width1 >> level;
-		int level_height = height1 >> level;
+		int level_width = width >> level;
+		int level_height = height >> level;
 		float patch_spacing_pixels = patch_size_pixels * (1.0f - patch_overlap_ratio);
 		int width_patches = 1 + lrintf((level_width - patch_size_pixels) / patch_spacing_pixels);
 		int height_patches = 1 + lrintf((level_height - patch_size_pixels) / patch_spacing_pixels);
@@ -1267,14 +1207,94 @@ int main(int argc, char **argv)
 	timers.print();
 
 	// Scale up the flow to the final size (if needed).
-	GLuint final_tex;
 	if (finest_level == 0) {
-		final_tex = prev_level_flow_tex;
+		return prev_level_flow_tex;
 	} else {
+		GLuint final_tex;
 		glCreateTextures(GL_TEXTURE_2D, 1, &final_tex);
-		glTextureStorage2D(final_tex, 1, GL_RG16F, width1, height1);
-		resize_flow.exec(prev_level_flow_tex, final_tex, prev_level_width, prev_level_height, width1, height1);
+		glTextureStorage2D(final_tex, 1, GL_RG16F, width, height);
+		resize_flow.exec(prev_level_flow_tex, final_tex, prev_level_width, prev_level_height, width, height);
+		return final_tex;
 	}
+}
+
+int main(int argc, char **argv)
+{
+        static const option long_options[] = {
+                { "alpha", required_argument, 0, 'a' },
+                { "delta", required_argument, 0, 'd' },
+                { "gamma", required_argument, 0, 'g' }
+	};
+
+	for ( ;; ) {
+		int option_index = 0;
+		int c = getopt_long(argc, argv, "a:d:g:", long_options, &option_index);
+
+		if (c == -1) {
+			break;
+		}
+		switch (c) {
+		case 'a':
+			vr_alpha = atof(optarg);
+			break;
+		case 'd':
+			vr_delta = atof(optarg);
+			break;
+		case 'g':
+			vr_gamma = atof(optarg);
+			break;
+		default:
+			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);
+			exit(1);
+		};
+	}
+
+	if (SDL_Init(SDL_INIT_EVERYTHING) == -1) {
+		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+		exit(1);
+	}
+	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
+	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+	SDL_Window *window = SDL_CreateWindow("OpenGL window",
+			SDL_WINDOWPOS_UNDEFINED,
+			SDL_WINDOWPOS_UNDEFINED,
+			64, 64,
+			SDL_WINDOW_OPENGL);
+	SDL_GLContext context = SDL_GL_CreateContext(window);
+	assert(context != nullptr);
+
+	// Load pictures.
+	unsigned width1, height1, width2, height2;
+	GLuint tex0 = load_texture(argc >= (optind + 1) ? argv[optind] : "test1499.png", &width1, &height1);
+	GLuint tex1 = load_texture(argc >= (optind + 2) ? argv[optind + 1] : "test1500.png", &width2, &height2);
+
+	if (width1 != width2 || height1 != height2) {
+		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
+			width1, height1, width2, height2);
+		exit(1);
+	}
+
+	// FIXME: Should be part of DISComputeFlow (but needs to be initialized
+	// before all the render passes).
+	float vertices[] = {
+		0.0f, 1.0f,
+		0.0f, 0.0f,
+		1.0f, 1.0f,
+		1.0f, 0.0f,
+	};
+	glCreateBuffers(1, &vertex_vbo);
+	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	DISComputeFlow compute_flow(width1, height1);
+	GLuint final_tex = compute_flow.exec(tex0, tex1);
 
 	unique_ptr<float[]> dense_flow(new float[width1 * height1 * 2]);
 	glGetTextureImage(final_tex, 0, GL_RG, GL_FLOAT, width1 * height1 * 2 * sizeof(float), dense_flow.get());
