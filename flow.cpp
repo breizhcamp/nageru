@@ -990,7 +990,11 @@ private:
 class DISComputeFlow {
 public:
 	DISComputeFlow(int width, int height);
+
+	// Returns a texture that must be released with release_texture()
+	// after use.
 	GLuint exec(GLuint tex0, GLuint tex1);
+	void release_texture(GLuint tex);
 
 private:
 	int width, height;
@@ -1007,6 +1011,16 @@ private:
 	SOR sor;
 	AddBaseFlow add_base_flow;
 	ResizeFlow resize_flow;
+
+	struct Texture {
+		GLuint tex_num;
+		GLenum format;
+		GLuint width, height;
+		bool in_use = false;
+	};
+	vector<Texture> textures;
+
+	GLuint get_texture(GLenum format, GLuint width, GLuint height);
 };
 
 DISComputeFlow::DISComputeFlow(int width, int height)
@@ -1043,6 +1057,10 @@ DISComputeFlow::DISComputeFlow(int width, int height)
 
 GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 {
+	for (const Texture &tex : textures) {
+		assert(!tex.in_use);
+	}
+
 	int prev_level_width = 1, prev_level_height = 1;
 	GLuint prev_level_flow_tex = initial_flow_tex;
 
@@ -1072,9 +1090,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 
 		// Create a new texture; we could be fancy and render use a multi-level
 		// texture, but meh.
-		GLuint grad0_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &grad0_tex);
-		glTextureStorage2D(grad0_tex, 1, GL_RG16F, level_width, level_height);
+		GLuint grad0_tex = get_texture(GL_RG16F, level_width, level_height);
 
 		// Find the derivative.
 		{
@@ -1086,22 +1102,19 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 		// level (sampled bilinearly; no fancy tricks) as a guide, then search from there.
 
 		// Create an output flow texture.
-		GLuint flow_out_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &flow_out_tex);
-		glTextureStorage2D(flow_out_tex, 1, GL_RGB16F, width_patches, height_patches);
+		GLuint flow_out_tex = get_texture(GL_RGB16F, width_patches, height_patches);
 
 		// And draw.
 		{
 			ScopedTimer timer("Motion search", &level_timer);
 			motion_search.exec(tex0_view, tex1_view, grad0_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, prev_level_width, prev_level_height, width_patches, height_patches);
 		}
+		release_texture(grad0_tex);
 
 		// Densification.
 
 		// Set up an output texture (initially zero).
-		GLuint dense_flow_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &dense_flow_tex);
-		glTextureStorage2D(dense_flow_tex, 1, GL_RGB16F, level_width, level_height);
+		GLuint dense_flow_tex = get_texture(GL_RGB16F, level_width, level_height);
 		glClearTexImage(dense_flow_tex, 0, GL_RGB, GL_FLOAT, nullptr);
 
 		// And draw.
@@ -1109,6 +1122,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 			ScopedTimer timer("Densification", &level_timer);
 			densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
 		}
+		release_texture(flow_out_tex);
 
 		// Everything below here in the loop belongs to variational refinement.
 		ScopedTimer varref_timer("Variational refinement", &level_timer);
@@ -1120,52 +1134,40 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 		// in pixels, not 0..1 normalized OpenGL texture coordinates.
 		// This is because variational refinement depends so heavily on derivatives,
 		// which are measured in intensity levels per pixel.
-		GLuint I_tex, I_t_tex, base_flow_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &I_tex);
-		glCreateTextures(GL_TEXTURE_2D, 1, &I_t_tex);
-		glCreateTextures(GL_TEXTURE_2D, 1, &base_flow_tex);
-		glTextureStorage2D(I_tex, 1, GL_R16F, level_width, level_height);
-		glTextureStorage2D(I_t_tex, 1, GL_R16F, level_width, level_height);
-		glTextureStorage2D(base_flow_tex, 1, GL_RG16F, level_width, level_height);
+		GLuint I_tex = get_texture(GL_R16F, level_width, level_height);
+		GLuint I_t_tex = get_texture(GL_R16F, level_width, level_height);
+		GLuint base_flow_tex = get_texture(GL_RG16F, level_width, level_height);
 		{
 			ScopedTimer timer("Prewarping", &varref_timer);
 			prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, base_flow_tex, level_width, level_height);
 		}
+		release_texture(dense_flow_tex);
 
 		// Calculate I_x and I_y. We're only calculating first derivatives;
 		// the others will be taken on-the-fly in order to sample from fewer
 		// textures overall, since sampling from the L1 cache is cheap.
 		// (TODO: Verify that this is indeed faster than making separate
 		// double-derivative textures.)
-		GLuint I_x_y_tex, beta_0_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &I_x_y_tex);
-		glCreateTextures(GL_TEXTURE_2D, 1, &beta_0_tex);
-		glTextureStorage2D(I_x_y_tex, 1, GL_RG16F, level_width, level_height);
-		glTextureStorage2D(beta_0_tex, 1, GL_R16F, level_width, level_height);
+		GLuint I_x_y_tex = get_texture(GL_RG16F, level_width, level_height);
+		GLuint beta_0_tex = get_texture(GL_R16F, level_width, level_height);
 		{
 			ScopedTimer timer("First derivatives", &varref_timer);
 			derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height);
 		}
+		release_texture(I_tex);
 
 		// We need somewhere to store du and dv (the flow increment, relative
 		// to the non-refined base flow u0 and v0). It starts at zero.
-		GLuint du_dv_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &du_dv_tex);
-		glTextureStorage2D(du_dv_tex, 1, GL_RG16F, level_width, level_height);
+		GLuint du_dv_tex = get_texture(GL_RG16F, level_width, level_height);
 		glClearTexImage(du_dv_tex, 0, GL_RG, GL_FLOAT, nullptr);
 
 		// And for smoothness.
-		GLuint smoothness_x_tex, smoothness_y_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &smoothness_x_tex);
-		glCreateTextures(GL_TEXTURE_2D, 1, &smoothness_y_tex);
-		glTextureStorage2D(smoothness_x_tex, 1, GL_R16F, level_width, level_height);
-		glTextureStorage2D(smoothness_y_tex, 1, GL_R16F, level_width, level_height);
+		GLuint smoothness_x_tex = get_texture(GL_R16F, level_width, level_height);
+		GLuint smoothness_y_tex = get_texture(GL_R16F, level_width, level_height);
 
 		// And finally for the equation set. See SetupEquations for
 		// the storage format.
-		GLuint equation_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &equation_tex);
-		glTextureStorage2D(equation_tex, 1, GL_RGBA32UI, level_width, level_height);
+		GLuint equation_tex = get_texture(GL_RGBA32UI, level_width, level_height);
 
 		for (int outer_idx = 0; outer_idx < level + 1; ++outer_idx) {
 			// Calculate the smoothness terms between the neighboring pixels,
@@ -1189,6 +1191,13 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 			}
 		}
 
+		release_texture(I_t_tex);
+		release_texture(I_x_y_tex);
+		release_texture(beta_0_tex);
+		release_texture(smoothness_x_tex);
+		release_texture(smoothness_y_tex);
+		release_texture(equation_tex);
+
 		// Add the differential flow found by the variational refinement to the base flow,
 		// giving the final flow estimate for this level.
 		// The output is in diff_flow_tex; we don't need to make a new texture.
@@ -1197,7 +1206,11 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 			ScopedTimer timer("Add differential flow", &varref_timer);
 			add_base_flow.exec(base_flow_tex, du_dv_tex, level_width, level_height);
 		}
+		release_texture(du_dv_tex);
 
+		if (prev_level_flow_tex != initial_flow_tex) {
+			release_texture(prev_level_flow_tex);
+		}
 		prev_level_flow_tex = base_flow_tex;
 		prev_level_width = level_width;
 		prev_level_height = level_height;
@@ -1210,12 +1223,44 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 	if (finest_level == 0) {
 		return prev_level_flow_tex;
 	} else {
-		GLuint final_tex;
-		glCreateTextures(GL_TEXTURE_2D, 1, &final_tex);
-		glTextureStorage2D(final_tex, 1, GL_RG16F, width, height);
+		GLuint final_tex = get_texture(GL_RG16F, width, height);
 		resize_flow.exec(prev_level_flow_tex, final_tex, prev_level_width, prev_level_height, width, height);
+		release_texture(prev_level_flow_tex);
 		return final_tex;
 	}
+}
+
+GLuint DISComputeFlow::get_texture(GLenum format, GLuint width, GLuint height)
+{
+	for (Texture &tex : textures) {
+		if (!tex.in_use && tex.format == format &&
+		    tex.width == width && tex.height == height) {
+			tex.in_use = true;
+			return tex.tex_num;
+		}
+	}
+
+	Texture tex;
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex.tex_num);
+	glTextureStorage2D(tex.tex_num, 1, format, width, height);
+	tex.format = format;
+	tex.width = width;
+	tex.height = height;
+	tex.in_use = true;
+	textures.push_back(tex);
+	return tex.tex_num;
+}
+
+void DISComputeFlow::release_texture(GLuint tex_num)
+{
+	for (Texture &tex : textures) {
+		if (tex.tex_num == tex_num) {
+			assert(tex.in_use);
+			tex.in_use = false;
+			return;
+		}
+	}
+	assert(false);
 }
 
 int main(int argc, char **argv)
@@ -1298,6 +1343,8 @@ int main(int argc, char **argv)
 
 	unique_ptr<float[]> dense_flow(new float[width1 * height1 * 2]);
 	glGetTextureImage(final_tex, 0, GL_RG, GL_FLOAT, width1 * height1 * 2 * sizeof(float), dense_flow.get());
+
+	compute_flow.release_texture(final_tex);
 
 	FILE *fp = fopen("flow.ppm", "wb");
 	FILE *flowfp = fopen("flow.flo", "wb");
