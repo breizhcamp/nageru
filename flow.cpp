@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <map>
 #include <vector>
 
 #define BUFFER_OFFSET(i) ((char *)nullptr + (i))
@@ -227,6 +228,58 @@ void bind_sampler(GLuint program, GLint location, GLuint texture_unit, GLuint te
 	glProgramUniform1i(program, location, texture_unit);
 }
 
+// A class that caches FBOs that render to a given set of textures.
+// It never frees anything, so it is only suitable for rendering to
+// the same (small) set of textures over and over again.
+template<size_t num_elements>
+class PersistentFBOSet {
+public:
+	void render_to(const array<GLuint, num_elements> &textures);
+
+	// Convenience wrappers.
+	void render_to(GLuint texture0, enable_if<num_elements == 1> * = nullptr) {
+		render_to({{texture0}});
+	}
+
+	void render_to(GLuint texture0, GLuint texture1, enable_if<num_elements == 2> * = nullptr) {
+		render_to({{texture0, texture1}});
+	}
+
+	void render_to(GLuint texture0, GLuint texture1, GLuint texture2, enable_if<num_elements == 3> * = nullptr) {
+		render_to({{texture0, texture1, texture2}});
+	}
+
+	void render_to(GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3, enable_if<num_elements == 4> * = nullptr) {
+		render_to({{texture0, texture1, texture2, texture3}});
+	}
+
+private:
+	// TODO: Delete these on destruction.
+	map<array<GLuint, num_elements>, GLuint> fbos;
+};
+
+template<size_t num_elements>
+void PersistentFBOSet<num_elements>::render_to(const array<GLuint, num_elements> &textures)
+{
+	auto it = fbos.find(textures);
+	if (it != fbos.end()) {
+		glBindFramebuffer(GL_FRAMEBUFFER, it->second);
+		return;
+	}
+
+	GLuint fbo;
+	glCreateFramebuffers(1, &fbo);
+	GLenum bufs[num_elements];
+	for (size_t i = 0; i < num_elements; ++i) {
+		glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0 + i, textures[i], 0);
+		bufs[i] = GL_COLOR_ATTACHMENT0 + i;
+	}
+	glNamedFramebufferDrawBuffers(fbo, num_elements, bufs);
+
+	fbos[textures] = fbo;
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+}
+
 // Compute gradients in every point, used for the motion search.
 // The DIS paper doesn't actually mention how these are computed,
 // but seemingly, a 3x3 Sobel operator is used here (at least in
@@ -241,6 +294,7 @@ public:
 	void exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_height);
 
 private:
+	PersistentFBOSet<1> fbos;
 	GLuint sobel_vs_obj;
 	GLuint sobel_fs_obj;
 	GLuint sobel_program;
@@ -273,12 +327,8 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 	glBindSampler(0, nearest_sampler);
 	glProgramUniform1i(sobel_program, uniform_tex, 0);
 
-	GLuint grad0_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &grad0_fbo);
-	glNamedFramebufferTexture(grad0_fbo, GL_COLOR_ATTACHMENT0, grad0_tex, 0);
-
 	glViewport(0, 0, level_width, level_height);
-	glBindFramebuffer(GL_FRAMEBUFFER, grad0_fbo);
+	fbos.render_to(grad0_tex);
 	glBindVertexArray(sobel_vao);
 	glUseProgram(sobel_program);
 	glDisable(GL_BLEND);
@@ -292,6 +342,8 @@ public:
 	void exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches);
 
 private:
+	PersistentFBOSet<1> fbos;
+
 	GLuint motion_vs_obj;
 	GLuint motion_fs_obj;
 	GLuint motion_search_program;
@@ -338,12 +390,8 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 	glProgramUniform2f(motion_search_program, uniform_inv_prev_level_size, 1.0f / prev_level_width, 1.0f / prev_level_height);
 
-	GLuint flow_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &flow_fbo);
-	glNamedFramebufferTexture(flow_fbo, GL_COLOR_ATTACHMENT0, flow_out_tex, 0);
-
 	glViewport(0, 0, width_patches, height_patches);
-	glBindFramebuffer(GL_FRAMEBUFFER, flow_fbo);
+	fbos.render_to(flow_out_tex);
 	glBindVertexArray(motion_search_vao);
 	glUseProgram(motion_search_program);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -363,6 +411,8 @@ public:
 	void exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches);
 
 private:
+	PersistentFBOSet<1> fbos;
+
 	GLuint densify_vs_obj;
 	GLuint densify_fs_obj;
 	GLuint densify_program;
@@ -416,15 +466,11 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 		patch_spacing_x / level_width,
 		patch_spacing_y / level_height);
 
-	GLuint dense_flow_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &dense_flow_fbo);
-	glNamedFramebufferTexture(dense_flow_fbo, GL_COLOR_ATTACHMENT0, dense_flow_tex, 0);
-
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
 	glBindVertexArray(densify_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, dense_flow_fbo);
+	fbos.render_to(dense_flow_tex);
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches);
 }
 
@@ -442,6 +488,8 @@ public:
 	void exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint normalized_flow_tex, GLuint I_tex, GLuint I_t_tex, int level_width, int level_height);
 
 private:
+	PersistentFBOSet<3> fbos;
+
 	GLuint prewarp_vs_obj;
 	GLuint prewarp_fs_obj;
 	GLuint prewarp_program;
@@ -483,18 +531,10 @@ void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I
 
 	glProgramUniform2f(prewarp_program, uniform_image_size, level_width, level_height);
 
-	GLuint prewarp_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &prewarp_fbo);
-	GLenum bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-	glNamedFramebufferDrawBuffers(prewarp_fbo, 3, bufs);
-	glNamedFramebufferTexture(prewarp_fbo, GL_COLOR_ATTACHMENT0, I_tex, 0);
-	glNamedFramebufferTexture(prewarp_fbo, GL_COLOR_ATTACHMENT1, I_t_tex, 0);
-	glNamedFramebufferTexture(prewarp_fbo, GL_COLOR_ATTACHMENT2, normalized_flow_tex, 0);
-
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
 	glBindVertexArray(prewarp_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, prewarp_fbo);
+	fbos.render_to(I_tex, I_t_tex, normalized_flow_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -512,6 +552,8 @@ public:
 	void exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, int level_width, int level_height);
 
 private:
+	PersistentFBOSet<2> fbos;
+
 	GLuint derivatives_vs_obj;
 	GLuint derivatives_fs_obj;
 	GLuint derivatives_program;
@@ -544,17 +586,10 @@ void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, in
 
 	bind_sampler(derivatives_program, uniform_tex, 0, input_tex, nearest_sampler);
 
-	GLuint derivatives_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &derivatives_fbo);
-	GLenum bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-	glNamedFramebufferDrawBuffers(derivatives_fbo, 2, bufs);
-	glNamedFramebufferTexture(derivatives_fbo, GL_COLOR_ATTACHMENT0, I_x_y_tex, 0);
-	glNamedFramebufferTexture(derivatives_fbo, GL_COLOR_ATTACHMENT1, beta_0_tex, 0);
-
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
 	glBindVertexArray(derivatives_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, derivatives_fbo);
+	fbos.render_to(I_x_y_tex, beta_0_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -571,6 +606,8 @@ public:
 	void exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height);
 
 private:
+	PersistentFBOSet<2> fbos;
+
 	GLuint smoothness_vs_obj;
 	GLuint smoothness_fs_obj;
 	GLuint smoothness_program;
@@ -608,18 +645,11 @@ void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoot
 	bind_sampler(smoothness_program, uniform_diff_flow_tex, 1, diff_flow_tex, nearest_sampler);
 	glProgramUniform1f(smoothness_program, uniform_alpha, vr_alpha);
 
-	GLuint smoothness_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &smoothness_fbo);
-	GLenum bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-	glNamedFramebufferDrawBuffers(smoothness_fbo, 2, bufs);
-	glNamedFramebufferTexture(smoothness_fbo, GL_COLOR_ATTACHMENT0, smoothness_x_tex, 0);
-	glNamedFramebufferTexture(smoothness_fbo, GL_COLOR_ATTACHMENT1, smoothness_y_tex, 0);
-
 	glViewport(0, 0, level_width, level_height);
 
 	glDisable(GL_BLEND);
 	glBindVertexArray(smoothness_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, smoothness_fbo);
+	fbos.render_to(smoothness_x_tex, smoothness_y_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	// Make sure the smoothness on the right and upper borders is zero.
@@ -646,6 +676,8 @@ public:
 	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height);
 
 private:
+	PersistentFBOSet<1> fbos;
+
 	GLuint equations_vs_obj;
 	GLuint equations_fs_obj;
 	GLuint equations_program;
@@ -698,14 +730,10 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 	glProgramUniform1f(equations_program, uniform_delta, vr_delta);
 	glProgramUniform1f(equations_program, uniform_gamma, vr_gamma);
 
-	GLuint equations_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &equations_fbo);
-	glNamedFramebufferTexture(equations_fbo, GL_COLOR_ATTACHMENT0, equation_tex, 0);
-
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
 	glBindVertexArray(equations_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, equations_fbo);
+	fbos.render_to(equation_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -719,6 +747,8 @@ public:
 	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations);
 
 private:
+	PersistentFBOSet<1> fbos;
+
 	GLuint sor_vs_obj;
 	GLuint sor_fs_obj;
 	GLuint sor_program;
@@ -759,14 +789,10 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 	bind_sampler(sor_program, uniform_smoothness_y_tex, 2, smoothness_y_tex, smoothness_sampler);
 	bind_sampler(sor_program, uniform_equation_tex, 3, equation_tex, nearest_sampler);
 
-	GLuint sor_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &sor_fbo);
-	glNamedFramebufferTexture(sor_fbo, GL_COLOR_ATTACHMENT0, diff_flow_tex, 0);  // NOTE: Bind to same as we render from!
-
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
 	glBindVertexArray(sor_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, sor_fbo);
+	fbos.render_to(diff_flow_tex);  // NOTE: Bind to same as we render from!
 
 	for (int i = 0; i < num_iterations; ++i) {
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -784,6 +810,8 @@ public:
 	void exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_width, int level_height);
 
 private:
+	PersistentFBOSet<1> fbos;
+
 	GLuint add_flow_vs_obj;
 	GLuint add_flow_fs_obj;
 	GLuint add_flow_program;
@@ -816,15 +844,11 @@ void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_wid
 
 	bind_sampler(add_flow_program, uniform_diff_flow_tex, 0, diff_flow_tex, nearest_sampler);
 
-	GLuint add_flow_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &add_flow_fbo);
-	glNamedFramebufferTexture(add_flow_fbo, GL_COLOR_ATTACHMENT0, base_flow_tex, 0);
-
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
 	glBindVertexArray(add_flow_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, add_flow_fbo);
+	fbos.render_to(base_flow_tex);
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -836,6 +860,8 @@ public:
 	void exec(GLuint in_tex, GLuint out_tex, int input_width, int input_height, int output_width, int output_height);
 
 private:
+	PersistentFBOSet<1> fbos;
+
 	GLuint resize_flow_vs_obj;
 	GLuint resize_flow_fs_obj;
 	GLuint resize_flow_program;
@@ -872,14 +898,10 @@ void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int inpu
 
 	glProgramUniform2f(resize_flow_program, uniform_scale_factor, float(output_width) / input_width, float(output_height) / input_height);
 
-	GLuint resize_flow_fbo;  // TODO: cleanup
-	glCreateFramebuffers(1, &resize_flow_fbo);
-	glNamedFramebufferTexture(resize_flow_fbo, GL_COLOR_ATTACHMENT0, out_tex, 0);
-
 	glViewport(0, 0, output_width, output_height);
 	glDisable(GL_BLEND);
 	glBindVertexArray(resize_flow_vao);
-	glBindFramebuffer(GL_FRAMEBUFFER, resize_flow_fbo);
+	fbos.render_to(out_tex);
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
