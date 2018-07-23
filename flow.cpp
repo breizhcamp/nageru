@@ -38,6 +38,7 @@ constexpr unsigned patch_size_pixels = 12;
 float vr_gamma = 10.0f, vr_delta = 5.0f, vr_alpha = 10.0f;
 
 bool enable_timing = true;
+bool enable_variational_refinement = true;  // Just for debugging.
 
 // Some global OpenGL objects.
 // TODO: These should really be part of DISComputeFlow.
@@ -1207,8 +1208,10 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 		// Add the differential flow found by the variational refinement to the base flow,
 		// giving the final flow estimate for this level.
 		// The output is in diff_flow_tex; we don't need to make a new texture.
-		// You can comment out this part if you wish to test disabling of the variational refinement.
-		{
+		//
+		// Disabling this doesn't save any time (although we could easily make it so that
+		// it is more efficient), but it helps debug the motion search.
+		if (enable_variational_refinement) {
 			ScopedTimer timer("Add differential flow", &varref_timer);
 			add_base_flow.exec(base_flow_tex, du_dv_tex, level_width, level_height);
 		}
@@ -1316,7 +1319,8 @@ int main(int argc, char **argv)
                 { "alpha", required_argument, 0, 'a' },
                 { "delta", required_argument, 0, 'd' },
                 { "gamma", required_argument, 0, 'g' },
-		{ "disable-timing", no_argument, 0, 1000 }
+		{ "disable-timing", no_argument, 0, 1000 },
+		{ "ignore-variational-refinement", no_argument, 0, 1001 }  // Still calculates it, just doesn't apply it.
 	};
 
 	for ( ;; ) {
@@ -1338,6 +1342,9 @@ int main(int argc, char **argv)
 			break;
 		case 1000:
 			enable_timing = false;
+			break;
+		case 1001:
+			enable_variational_refinement = false;
 			break;
 		default:
 			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);
