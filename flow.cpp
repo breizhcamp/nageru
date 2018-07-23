@@ -1263,6 +1263,49 @@ void DISComputeFlow::release_texture(GLuint tex_num)
 	assert(false);
 }
 
+void write_flow(const char *filename, const float *dense_flow, unsigned width, unsigned height)
+{
+	FILE *flowfp = fopen(filename, "wb");
+	fprintf(flowfp, "FEIH");
+	fwrite(&width, 4, 1, flowfp);
+	fwrite(&height, 4, 1, flowfp);
+	for (unsigned y = 0; y < height; ++y) {
+		int yy = height - y - 1;
+		for (unsigned x = 0; x < unsigned(width); ++x) {
+			float du = dense_flow[(yy * width + x) * 2 + 0];
+			float dv = dense_flow[(yy * width + x) * 2 + 1];
+
+			dv = -dv;
+
+			fwrite(&du, 4, 1, flowfp);
+			fwrite(&dv, 4, 1, flowfp);
+		}
+	}
+	fclose(flowfp);
+}
+
+void write_ppm(const char *filename, const float *dense_flow, unsigned width, unsigned height)
+{
+	FILE *fp = fopen(filename, "wb");
+	fprintf(fp, "P6\n%d %d\n255\n", width, height);
+	for (unsigned y = 0; y < unsigned(height); ++y) {
+		int yy = height - y - 1;
+		for (unsigned x = 0; x < unsigned(width); ++x) {
+			float du = dense_flow[(yy * width + x) * 2 + 0];
+			float dv = dense_flow[(yy * width + x) * 2 + 1];
+
+			dv = -dv;
+
+			uint8_t r, g, b;
+			flow2rgb(du, dv, &r, &g, &b);
+			putc(r, fp);
+			putc(g, fp);
+			putc(b, fp);
+		}
+	}
+	fclose(fp);
+}
+
 int main(int argc, char **argv)
 {
         static const option long_options[] = {
@@ -1346,32 +1389,8 @@ int main(int argc, char **argv)
 
 	compute_flow.release_texture(final_tex);
 
-	FILE *fp = fopen("flow.ppm", "wb");
-	FILE *flowfp = fopen("flow.flo", "wb");
-	fprintf(fp, "P6\n%d %d\n255\n", width1, height1);
-	fprintf(flowfp, "FEIH");
-	fwrite(&width1, 4, 1, flowfp);
-	fwrite(&height1, 4, 1, flowfp);
-	for (unsigned y = 0; y < unsigned(height1); ++y) {
-		int yy = height1 - y - 1;
-		for (unsigned x = 0; x < unsigned(width1); ++x) {
-			float du = dense_flow[(yy * width1 + x) * 2 + 0];
-			float dv = dense_flow[(yy * width1 + x) * 2 + 1];
-
-			dv = -dv;
-
-			fwrite(&du, 4, 1, flowfp);
-			fwrite(&dv, 4, 1, flowfp);
-
-			uint8_t r, g, b;
-			flow2rgb(du, dv, &r, &g, &b);
-			putc(r, fp);
-			putc(g, fp);
-			putc(b, fp);
-		}
-	}
-	fclose(fp);
-	fclose(flowfp);
+	write_flow("flow.flo", dense_flow.get(), width1, height1);
+	write_ppm("flow.ppm", dense_flow.get(), width1, height1);
 
 	fprintf(stderr, "err = %d\n", glGetError());
 }
