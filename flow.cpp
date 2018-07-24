@@ -18,8 +18,10 @@
 #include "util.h"
 
 #include <algorithm>
+#include <deque>
 #include <memory>
 #include <map>
+#include <stack>
 #include <vector>
 
 #define BUFFER_OFFSET(i) ((char *)nullptr + (i))
@@ -44,6 +46,15 @@ bool enable_variational_refinement = true;  // Just for debugging.
 // TODO: These should really be part of DISComputeFlow.
 GLuint nearest_sampler, linear_sampler, smoothness_sampler;
 GLuint vertex_vbo;
+
+// Structures for asynchronous readback. We assume everything is the same size (and GL_RG16F).
+struct ReadInProgress {
+	GLuint pbo;
+	string filename0, filename1;
+	string flow_filename, ppm_filename;  // Either may be empty for no write.
+};
+stack<GLuint> spare_pbos;
+deque<ReadInProgress> reads_in_progress;
 
 string read_file(const string &filename)
 {
@@ -1315,6 +1326,41 @@ void write_ppm(const char *filename, const float *dense_flow, unsigned width, un
 	fclose(fp);
 }
 
+void finish_one_read(GLuint width, GLuint height)
+{
+	assert(!reads_in_progress.empty());
+	ReadInProgress read = reads_in_progress.front();
+	reads_in_progress.pop_front();
+
+	unique_ptr<float[]> flow(new float[width * height * 2]);
+	void *buf = glMapNamedBufferRange(read.pbo, 0, width * height * 2 * sizeof(float), GL_MAP_READ_BIT);  // Blocks if the read isn't done yet.
+	memcpy(flow.get(), buf, width * height * 2 * sizeof(float));
+	glUnmapNamedBuffer(read.pbo);
+	spare_pbos.push(read.pbo);
+
+	flip_coordinate_system(flow.get(), width, height);
+	if (!read.flow_filename.empty()) {
+		write_flow(read.flow_filename.c_str(), flow.get(), width, height);
+		fprintf(stderr, "%s %s -> %s\n", read.filename0.c_str(), read.filename1.c_str(), read.flow_filename.c_str());
+	}
+	if (!read.ppm_filename.empty()) {
+		write_ppm(read.ppm_filename.c_str(), flow.get(), width, height);
+	}
+}
+
+void schedule_read(GLuint tex, GLuint width, GLuint height, const char *filename0, const char *filename1, const char *flow_filename, const char *ppm_filename)
+{
+	if (spare_pbos.empty()) {
+		finish_one_read(width, height);
+	}
+	assert(!spare_pbos.empty());
+	reads_in_progress.emplace_back(ReadInProgress{ spare_pbos.top(), filename0, filename1, flow_filename, ppm_filename });
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, spare_pbos.top());
+	spare_pbos.pop();
+	glGetTextureImage(tex, 0, GL_RG, GL_FLOAT, width * height * 2 * sizeof(float), nullptr);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+}
+
 int main(int argc, char **argv)
 {
         static const option long_options[] = {
@@ -1378,7 +1424,6 @@ int main(int argc, char **argv)
 	const char *filename0 = argc >= (optind + 1) ? argv[optind] : "test1499.png";
 	const char *filename1 = argc >= (optind + 2) ? argv[optind + 1] : "test1500.png";
 	const char *flow_filename = argc >= (optind + 3) ? argv[optind + 2] : "flow.flo";
-	fprintf(stderr, "%s %s -> %s\n", filename0, filename1, flow_filename);
 
 	// Load pictures.
 	unsigned width1, height1, width2, height2;
@@ -1389,6 +1434,14 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
 			width1, height1, width2, height2);
 		exit(1);
+	}
+
+	// Set up some PBOs to do asynchronous readback.
+	GLuint pbos[5];
+        glCreateBuffers(5, pbos);
+	for (int i = 0; i < 5; ++i) {
+		glNamedBufferData(pbos[i], width1 * height1 * 2 * sizeof(float), nullptr, GL_STREAM_READ);
+		spare_pbos.push(pbos[i]);
 	}
 
 	// FIXME: Should be part of DISComputeFlow (but needs to be initialized
@@ -1406,16 +1459,8 @@ int main(int argc, char **argv)
 	DISComputeFlow compute_flow(width1, height1);
 	GLuint final_tex = compute_flow.exec(tex0, tex1);
 
-	unique_ptr<float[]> dense_flow(new float[width1 * height1 * 2]);
-	glGetTextureImage(final_tex, 0, GL_RG, GL_FLOAT, width1 * height1 * 2 * sizeof(float), dense_flow.get());
-
+	schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "flow.ppm");
 	compute_flow.release_texture(final_tex);
-
-	flip_coordinate_system(dense_flow.get(), width1, height1);
-	write_flow(flow_filename, dense_flow.get(), width1, height1);
-	write_ppm("flow.ppm", dense_flow.get(), width1, height1);
-
-	dense_flow.reset();
 
 	// See if there are more flows on the command line (ie., more than three arguments),
 	// and if so, process them.
@@ -1424,8 +1469,6 @@ int main(int argc, char **argv)
 		const char *filename0 = argv[optind + i * 3 + 0];
 		const char *filename1 = argv[optind + i * 3 + 1];
 		const char *flow_filename = argv[optind + i * 3 + 2];
-		fprintf(stderr, "%s %s -> %s\n", filename0, filename1, flow_filename);
-
 		GLuint width, height;
 		GLuint tex0 = load_texture(filename0, &width, &height);
 		if (width != width1 || height != height1) {
@@ -1442,15 +1485,11 @@ int main(int argc, char **argv)
 		}
 
 		GLuint final_tex = compute_flow.exec(tex0, tex1);
-
-		unique_ptr<float[]> dense_flow(new float[width * height * 2]);
-		glGetTextureImage(final_tex, 0, GL_RG, GL_FLOAT, width * height * 2 * sizeof(float), dense_flow.get());
-
+		schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "");
 		compute_flow.release_texture(final_tex);
-
-		flip_coordinate_system(dense_flow.get(), width, height);
-		write_flow(flow_filename, dense_flow.get(), width, height);
 	}
 
-	fprintf(stderr, "err = %d\n", glGetError());
+	while (!reads_in_progress.empty()) {
+		finish_one_read(width1, height1);
+	}
 }
