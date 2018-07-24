@@ -28,17 +28,17 @@ inline void flow2rgb(float du, float dv, uint8_t *rr, uint8_t *gg, uint8_t *bb)
 	float h = (angle + M_PI) * 6.0 / (2.0 * M_PI);
 	float X = c * (1.0 - fabs(fmod(h, 2.0) - 1.0));
 	float r = 0.0f, g = 0.0f, b = 0.0f;
-	if (h < 1.0f) {
+	if (h <= 1.0f) {
 		r = c; g = X;
-	} else if (h < 2.0f) {
+	} else if (h <= 2.0f) {
 		r = X; g = c;
-	} else if (h < 3.0f) {
+	} else if (h <= 3.0f) {
 		g = c; b = X;
-	} else if (h < 4.0f) {
+	} else if (h <= 4.0f) {
 		g = X; b = c;
-	} else if (h < 5.0f) {
+	} else if (h <= 5.0f) {
 		r = X; b = c;
-	} else if (h < 6.0f) {
+	} else if (h <= 6.0f) {
 		r = c; b = X;
 	} else {
 		// h is NaN, so black is fine.
