@@ -139,11 +139,12 @@ void main()
 	// Also reject if the patch goes out-of-bounds (the paper does not mention this,
 	// but the code does, and it seems to be critical to avoid really bad behavior
 	// at the edges).
+	vec2 patch_center = (base * image_size - 0.5f) + patch_size * 0.5f + u;
 	if (length(u - initial_u) > (patch_size * 0.5f) ||
-	    u.x < -(patch_size * 0.5f) ||
-	    image_size.x - u.x < -(patch_size * 0.5f) ||
-	    u.y < -(patch_size * 0.5f) ||
-	    image_size.y - u.y < -(patch_size * 0.5f)) {
+	    patch_center.x < -(patch_size * 0.5f) ||
+	    image_size.x - patch_center.x < -(patch_size * 0.5f) ||
+	    patch_center.y < -(patch_size * 0.5f) ||
+	    image_size.y - patch_center.y < -(patch_size * 0.5f)) {
 		u = initial_u;
 		mean_diff = first_mean_diff;
 	}
