@@ -44,7 +44,7 @@ bool enable_variational_refinement = true;  // Just for debugging.
 
 // Some global OpenGL objects.
 // TODO: These should really be part of DISComputeFlow.
-GLuint nearest_sampler, linear_sampler, smoothness_sampler;
+GLuint nearest_sampler, linear_sampler, zero_border_sampler;
 GLuint vertex_vbo;
 
 // Structures for asynchronous readback. We assume everything is the same size (and GL_RG16F).
@@ -399,7 +399,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 
 	bind_sampler(motion_search_program, uniform_image0_tex, 0, tex0_view, nearest_sampler);
 	bind_sampler(motion_search_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
-	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, nearest_sampler);
+	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, zero_border_sampler);
 	bind_sampler(motion_search_program, uniform_flow_tex, 3, flow_tex, linear_sampler);
 
 	glProgramUniform2f(motion_search_program, uniform_image_size, level_width, level_height);
@@ -742,8 +742,8 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 	bind_sampler(equations_program, uniform_diff_flow_tex, 2, diff_flow_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_base_flow_tex, 3, base_flow_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_beta_0_tex, 4, beta_0_tex, nearest_sampler);
-	bind_sampler(equations_program, uniform_smoothness_x_tex, 5, smoothness_x_tex, smoothness_sampler);
-	bind_sampler(equations_program, uniform_smoothness_y_tex, 6, smoothness_y_tex, smoothness_sampler);
+	bind_sampler(equations_program, uniform_smoothness_x_tex, 5, smoothness_x_tex, zero_border_sampler);
+	bind_sampler(equations_program, uniform_smoothness_y_tex, 6, smoothness_y_tex, zero_border_sampler);
 	glProgramUniform1f(equations_program, uniform_delta, vr_delta);
 	glProgramUniform1f(equations_program, uniform_gamma, vr_gamma);
 
@@ -802,8 +802,8 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 	glUseProgram(sor_program);
 
 	bind_sampler(sor_program, uniform_diff_flow_tex, 0, diff_flow_tex, nearest_sampler);
-	bind_sampler(sor_program, uniform_smoothness_x_tex, 1, smoothness_x_tex, smoothness_sampler);
-	bind_sampler(sor_program, uniform_smoothness_y_tex, 2, smoothness_y_tex, smoothness_sampler);
+	bind_sampler(sor_program, uniform_smoothness_x_tex, 1, smoothness_x_tex, zero_border_sampler);
+	bind_sampler(sor_program, uniform_smoothness_y_tex, 2, smoothness_y_tex, zero_border_sampler);
 	bind_sampler(sor_program, uniform_equation_tex, 3, equation_tex, nearest_sampler);
 
 	glViewport(0, 0, level_width, level_height);
@@ -1061,13 +1061,15 @@ DISComputeFlow::DISComputeFlow(int width, int height)
 
 	// The smoothness is sampled so that once we get to a smoothness involving
 	// a value outside the border, the diffusivity between the two becomes zero.
-	glCreateSamplers(1, &smoothness_sampler);
-	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glSamplerParameteri(smoothness_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	// Similarly, gradients are zero outside the border, since the edge is taken
+	// to be constant.
+	glCreateSamplers(1, &zero_border_sampler);
+	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 	float zero[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	glSamplerParameterfv(smoothness_sampler, GL_TEXTURE_BORDER_COLOR, zero);
+	glSamplerParameterfv(zero_border_sampler, GL_TEXTURE_BORDER_COLOR, zero);
 
 	// Initial flow is zero, 1x1.
 	glCreateTextures(GL_TEXTURE_2D, 1, &initial_flow_tex);
