@@ -1366,25 +1366,25 @@ void schedule_read(GLuint tex, GLuint width, GLuint height, const char *filename
 int main(int argc, char **argv)
 {
         static const option long_options[] = {
-                { "alpha", required_argument, 0, 'a' },
-                { "delta", required_argument, 0, 'd' },
-                { "gamma", required_argument, 0, 'g' },
+		{ "smoothness-relative-weight", required_argument, 0, 's' },  // alpha.
+		{ "intensity-relative-weight", required_argument, 0, 'i' },  // delta.
+		{ "gradient-relative-weight", required_argument, 0, 'g' },  // gamma.
 		{ "disable-timing", no_argument, 0, 1000 },
 		{ "ignore-variational-refinement", no_argument, 0, 1001 }  // Still calculates it, just doesn't apply it.
 	};
 
 	for ( ;; ) {
 		int option_index = 0;
-		int c = getopt_long(argc, argv, "a:d:g:", long_options, &option_index);
+		int c = getopt_long(argc, argv, "s:i:g:", long_options, &option_index);
 
 		if (c == -1) {
 			break;
 		}
 		switch (c) {
-		case 'a':
+		case 's':
 			vr_alpha = atof(optarg);
 			break;
-		case 'd':
+		case 'i':
 			vr_delta = atof(optarg);
 			break;
 		case 'g':
