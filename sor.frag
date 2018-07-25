@@ -35,7 +35,6 @@ void main()
 	// (it couldn't be done earlier, because we didn't know
 	// the values of the neighboring pixels; they change for
 	// each SOR iteration).
-	// TODO: Multiply by some gamma.
 	float smooth_l = textureOffset(smoothness_x_tex, tc, ivec2(-1,  0)).x;
 	float smooth_r = texture(smoothness_x_tex, tc).x;
 	float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
