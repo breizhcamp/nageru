@@ -37,7 +37,11 @@ constexpr unsigned patch_size_pixels = 12;
 // Weighting constants for the different parts of the variational refinement.
 // These don't correspond 1:1 to the values given in the DIS paper,
 // since we have different normalizations and ranges in some cases.
-float vr_gamma = 10.0f, vr_delta = 5.0f, vr_alpha = 10.0f;
+// These are found through a simple grid search on some MPI-Sintel data,
+// although the error (EPE) seems to be fairly insensitive to the precise values.
+// Only the relative values matter, so we fix alpha (the smoothness constant)
+// at unity and tweak the others.
+float vr_alpha = 1.0f, vr_delta = 0.25f, vr_gamma = 0.25f;
 
 bool enable_timing = true;
 bool enable_variational_refinement = true;  // Just for debugging.
