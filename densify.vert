@@ -24,7 +24,7 @@ void main()
 	//
 	// This maps [0.0,1.0] to [-0.25,1.25], ie. extends the patch by 25% in
 	// all directions.
-	vec2 grown_pos = (position * 1.5) - vec2(0.25, 0.25);
+	vec2 grown_pos = (position * 1.5) - 0.25;
 
 	image_pos = patch_spacing * ivec2(patch_x, patch_y) + patch_size * grown_pos;
 
