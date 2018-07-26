@@ -471,11 +471,7 @@ at all it beyond this text to prove, but it does. Not that we bother
 iterating until it converges; a few iterations is good enough.)
 Gauss-Seidel iterations improve on this in that (surprisingly!) using this
 iteration's computed du/dv values if they're ready; this improves convergence,
-but is hard to parallelize. On the GPU, we render to the same texture as
-we render from; as per the OpenGL spec, this will give us undefined behavior
-on read (since our read/write sets are neither identical nor disjoint),
-but in practice, we'll get either the old value (Jacobi) or the
-new one (Gauss-Seidel); more likely, the former.
+but is hard to parallelize.
 
 Successive over-relaxation (SOR) improves further on this, in that it
 assumes that the solution moves towards the right value, so why not
@@ -485,8 +481,27 @@ instead (this value is called ω). Again, the convergence proof is beyond the
 scope here, but SOR converges for any ω between 1 and 2 (1 gives plain
 Gauss-Seidel, and over 2, we risk overshooting and never converging). Optimal
 ω depends on the equation system; DIS uses ω = 1.6, which presumably was
-measured, and should be OK for us too, even if we are closer to Jacobi
-than to Gauss-Seidel.
+measured, while we do ω = 1.8 (seems to be marginally better after some
+light testing).
+
+Efficient GPU implementation of SOR is not trivial; like noted before,
+Gauss-Seidel is inherently serial, which is a poor match for the GPU.
+Worse, doing SOR with Jacobi as base instead of Gauss-Seidel makes for
+an algorithm which simply does not converge. We solve this by using a
+method called red-black SOR (not to be confused with red-black binary
+trees). Conceptually, it assigns every unknown a color, with every other
+being red or black (similar to a checkerboard). Since red values now
+only depend on black values and vice versa, one can do all red values
+in parallel, then all black values, and so on. (This is equivalent to
+reordering the equation set; different such orderings can have different
+convergence speeds.)
+
+Our GPU SOR implementation is not overly efficient, so essentially one such
+half-iteration of red-black SOR costs the same as one full iteration of
+Jacobi but convergence is so much faster that it's worth it. Generally
+speaking, Gauss-Seidel converges twice as fast as Jacobi (ie., if Jacobi
+converges in N iterations, Gauss-Seidel does so in N/2), but SOR converges
+_geometrically_ faster, ie., in O(√N) iterations.
 
 Do note that the DeepFlow code does not fully use SOR or even Gauss-Seidel;
 it solves every 2x2 block (ie., single du/dv pair) using Cramer's rule,
@@ -494,7 +509,9 @@ and then pushes that vector 80% further, SOR-style. This would be clearly
 more accurate if we didn't have SOR in the mix (since du and dv would
 converge immediately relative to each other, bar Cramer's numerical issues),
 but I'm not sure whether it's better given SOR. (DIS changes this to a more
-traditional SOR formulation, which we also use.)
+traditional SOR formulation, which we also use. It doesn't seem to be much
+different in practical testing; perhaps minutely worse, but I haven't done
+a deep analysis here.)
 
 And that's it. References:
 

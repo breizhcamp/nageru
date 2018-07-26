@@ -783,11 +783,12 @@ private:
 	GLuint uniform_diff_flow_tex;
 	GLuint uniform_equation_tex;
 	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
+	GLuint uniform_image_size, uniform_phase;
 };
 
 SOR::SOR()
 {
-	sor_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	sor_vs_obj = compile_shader(read_file("sor.vert"), GL_VERTEX_SHADER);
 	sor_fs_obj = compile_shader(read_file("sor.frag"), GL_FRAGMENT_SHADER);
 	sor_program = link_program(sor_vs_obj, sor_fs_obj);
 
@@ -804,6 +805,8 @@ SOR::SOR()
 	uniform_equation_tex = glGetUniformLocation(sor_program, "equation_tex");
 	uniform_smoothness_x_tex = glGetUniformLocation(sor_program, "smoothness_x_tex");
 	uniform_smoothness_y_tex = glGetUniformLocation(sor_program, "smoothness_y_tex");
+	uniform_image_size = glGetUniformLocation(sor_program, "image_size");
+	uniform_phase = glGetUniformLocation(sor_program, "phase");
 }
 
 void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations)
@@ -815,12 +818,22 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 	bind_sampler(sor_program, uniform_smoothness_y_tex, 2, smoothness_y_tex, zero_border_sampler);
 	bind_sampler(sor_program, uniform_equation_tex, 3, equation_tex, nearest_sampler);
 
+	glProgramUniform2f(sor_program, uniform_image_size, level_width, level_height);
+
+	// NOTE: We bind to the texture we are rendering from, but we never write any value
+	// that we read in the same shader pass (we call discard for red values when we compute
+	// black, and vice versa), and we have barriers between the passes, so we're fine
+	// as per the spec.
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
 	glBindVertexArray(sor_vao);
-	fbos.render_to(diff_flow_tex);  // NOTE: Bind to same as we render from!
+	fbos.render_to(diff_flow_tex);
 
 	for (int i = 0; i < num_iterations; ++i) {
+		glProgramUniform1i(sor_program, uniform_phase, 0);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glTextureBarrier();
+		glProgramUniform1i(sor_program, uniform_phase, 1);
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		if (i != num_iterations - 1) {
 			glTextureBarrier();

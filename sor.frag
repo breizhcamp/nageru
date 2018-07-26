@@ -1,10 +1,13 @@
 #version 450 core
 
 in vec2 tc;
+in float element_sum_idx;
 out vec2 diff_flow;
 
 uniform sampler2D diff_flow_tex, smoothness_x_tex, smoothness_y_tex;
 uniform usampler2D equation_tex;
+uniform vec2 image_size;
+uniform int phase;
 
 // See pack_floats_shared() in equations.frag.
 vec2 unpack_floats_shared(uint c)
@@ -25,6 +28,16 @@ vec2 unpack_floats_shared(uint c)
 
 void main()
 {
+	// Red-black SOR: Every other pass, we update every other element in a
+	// checkerboard pattern. This is rather suboptimal for the GPU, as it
+	// just immediately throws away half of the warp, but it helps convergence
+	// a _lot_ (rough testing indicates that five iterations of SOR is as good
+	// as ~50 iterations of Jacobi). We could probably do better by reorganizing
+	// the data into two-values-per-pixel, so-called “twinning buffering”,
+	// but it makes for rather annoying code in the rest of the pipeline.
+	int color = int(round(element_sum_idx)) & 1;
+	if (color != phase) discard;
+
 	uvec4 equation = texture(equation_tex, tc);
 	float inv_A11 = uintBitsToFloat(equation.x);
 	float A12 = uintBitsToFloat(equation.y);
@@ -44,10 +57,7 @@ void main()
 	b += smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;
 	b += smooth_u * textureOffset(diff_flow_tex, tc, ivec2( 0,  1)).xy;
 
-	// FIXME: omega=1.6 seems to make our entire system diverge.
-	// Is this because we do Gauss-Seidel instead of Jacobi?
-	// Figure out what's going on.
-	const float omega = 1.0;
+	const float omega = 1.8;  // Marginally better than 1.6, it seems.
 	diff_flow = texture(diff_flow_tex, tc).xy;
 
 	// From https://en.wikipedia.org/wiki/Successive_over-relaxation.
