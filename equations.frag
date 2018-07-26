@@ -69,10 +69,10 @@ void main()
 	float I_y = I_x_y.y;
 	float I_t = texture(I_t_tex, tc).x;
 
-	// E_I term. Note that we don't square β_0, in line with DeepFlow,
-	// even though it's probably an error.
+	// E_I term. Note that we don't square β_0, in line with DeepFlow;
+	// it's probably an error (see variational_refinement.txt),
+	// but squaring it seems to give worse results.
 	//
-	// TODO: Evaluate squaring β_0.
   	// FIXME: Should the penalizer be adjusted for 0..1 intensity range instead of 0..255?
 	float beta_0 = texture(beta_0_tex, tc).x;
 	float k1 = delta * beta_0 * inversesqrt(beta_0 * (I_x * du + I_y * dv + I_t) * (I_x * du + I_y * dv + I_t) + 1e-6);
