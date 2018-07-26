@@ -36,7 +36,7 @@
  */
 
 const uint patch_size = 12;
-const uint num_iterations = 16;
+const uint num_iterations = 8;
 
 in vec2 flow_tc;
 in vec2 patch_center;
