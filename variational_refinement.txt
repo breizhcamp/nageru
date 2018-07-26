@@ -465,28 +465,28 @@ neighbors.
 Now our equation system is finally complete and linear, and the rest is
 fairly pedestrian. The last term connects all the unknowns together,
 but we still solve them mostly as 2x2 matrices. The most basic iterative
-method is Gauss-Seidel, where we solve du(x, y) and dv(x,y) using the
+method is Jacobi, where we solve du(x, y) and dv(x,y) using the
 previous iteration's value for all other du/dv values. (That this converges
 at all it beyond this text to prove, but it does. Not that we bother
 iterating until it converges; a few iterations is good enough.)
-Jacobi iterations improve on this in that (surprisingly!) using this
+Gauss-Seidel iterations improve on this in that (surprisingly!) using this
 iteration's computed du/dv values if they're ready; this improves convergence,
 but is hard to parallelize. On the GPU, we render to the same texture as
 we render from; as per the OpenGL spec, this will give us undefined behavior
 on read (since our read/write sets are neither identical nor disjoint),
-but in practice, we'll get either the old value (Gauss-Seidel) or the
-new one (Jacobi); more likely, the former.
+but in practice, we'll get either the old value (Jacobi) or the
+new one (Gauss-Seidel); more likely, the former.
 
 Successive over-relaxation (SOR) improves further on this, in that it
 assumes that the solution moves towards the right value, so why not
-just go a bit further? That is, if Jacobi would tell you to increase
+just go a bit further? That is, if Gauss-Seidel would tell you to increase
 the flow by 1.0 pixel to the right, perhaps go 1.5 pixels to the right
 instead (this value is called ω). Again, the convergence proof is beyond the
 scope here, but SOR converges for any ω between 1 and 2 (1 gives plain
-Jacobi, and over 2, we risk overshooting and never converging). Optimal
+Gauss-Seidel, and over 2, we risk overshooting and never converging). Optimal
 ω depends on the equation system; DIS uses ω = 1.6, which presumably was
-measured, and should be OK for us too, even if we are closer to Gauss-Seidel
-than to Jacobi.
+measured, and should be OK for us too, even if we are closer to Jacobi
+than to Gauss-Seidel.
 
 Do note that the DeepFlow code does not fully use SOR or even Gauss-Seidel;
 it solves every 2x2 block (ie., single du/dv pair) using Cramer's rule,
