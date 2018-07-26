@@ -39,7 +39,7 @@ const uint patch_size = 12;
 const uint num_iterations = 16;
 
 in vec2 flow_tc;
-in vec2 patch_bottom_left_texel;  // Center of bottom-left texel of patch.
+in vec2 patch_center;
 out vec3 out_flow;
 
 uniform sampler2D flow_tex, grad0_tex, image0_tex, image1_tex;
@@ -47,9 +47,10 @@ uniform vec2 image_size, inv_image_size, inv_prev_level_size;
 
 void main()
 {
-	// Lock patch_bottom_left_texel to an integer, so that we never get
-	// any bilinear artifacts for the gradient.
-	vec2 base = (round(patch_bottom_left_texel * image_size - vec2(0.5, 0.5)) + vec2(0.5, 0.5))
+	// Lock the patch center to an integer, so that we never get
+	// any bilinear artifacts for the gradient. (NOTE: This assumes an
+	// even patch size.) Then calculate the bottom-left texel of the patch.
+	vec2 base = (round(patch_center * image_size) - (0.5f * patch_size - 0.5f))
 		* inv_image_size;
 
 	// First, precompute the pseudo-Hessian for the template patch.

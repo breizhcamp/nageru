@@ -368,7 +368,7 @@ private:
 	GLuint motion_search_program;
 	GLuint motion_search_vao;
 
-	GLuint uniform_image_size, uniform_inv_image_size, uniform_inv_flow_size, uniform_inv_prev_level_size;
+	GLuint uniform_image_size, uniform_inv_image_size, uniform_flow_size, uniform_inv_prev_level_size;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
 };
 
@@ -389,7 +389,7 @@ MotionSearch::MotionSearch()
 
 	uniform_image_size = glGetUniformLocation(motion_search_program, "image_size");
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
-	uniform_inv_flow_size = glGetUniformLocation(motion_search_program, "inv_flow_size");
+	uniform_flow_size = glGetUniformLocation(motion_search_program, "flow_size");
 	uniform_inv_prev_level_size = glGetUniformLocation(motion_search_program, "inv_prev_level_size");
 	uniform_image0_tex = glGetUniformLocation(motion_search_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(motion_search_program, "image1_tex");
@@ -408,7 +408,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 
 	glProgramUniform2f(motion_search_program, uniform_image_size, level_width, level_height);
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
-	glProgramUniform2f(motion_search_program, uniform_inv_flow_size, 1.0f / width_patches, 1.0f / height_patches);
+	glProgramUniform2f(motion_search_program, uniform_flow_size, width_patches, height_patches);
 	glProgramUniform2f(motion_search_program, uniform_inv_prev_level_size, 1.0f / prev_level_width, 1.0f / prev_level_height);
 
 	glViewport(0, 0, width_patches, height_patches);
@@ -441,6 +441,7 @@ private:
 
 	GLuint uniform_width_patches, uniform_patch_size, uniform_patch_spacing;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+	GLuint uniform_flow_size;
 };
 
 Densify::Densify()
@@ -464,6 +465,7 @@ Densify::Densify()
 	uniform_image0_tex = glGetUniformLocation(densify_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(densify_program, "image1_tex");
 	uniform_flow_tex = glGetUniformLocation(densify_program, "flow_tex");
+	uniform_flow_size = glGetUniformLocation(densify_program, "flow_size");
 }
 
 void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches)
@@ -478,6 +480,9 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 	glProgramUniform2f(densify_program, uniform_patch_size,
 		float(patch_size_pixels) / level_width,
 		float(patch_size_pixels) / level_height);
+	glProgramUniform2f(densify_program, uniform_flow_size,
+		width_patches,
+		height_patches);
 
 	float patch_spacing_x = float(level_width - patch_size_pixels) / (width_patches - 1);
 	float patch_spacing_y = float(level_height - patch_size_pixels) / (height_patches - 1);
@@ -1101,8 +1106,13 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 		int level_width = width >> level;
 		int level_height = height >> level;
 		float patch_spacing_pixels = patch_size_pixels * (1.0f - patch_overlap_ratio);
-		int width_patches = 1 + lrintf((level_width - patch_size_pixels) / patch_spacing_pixels);
-		int height_patches = 1 + lrintf((level_height - patch_size_pixels) / patch_spacing_pixels);
+
+		// Make sure we have patches at least every Nth pixel, e.g. for width=9
+		// and patch_spacing=3 (the default), we put out patch centers in
+		// x=0, x=3, x=6, x=9, which is four patches. The fragment shader will
+		// lock all the centers to integer coordinates if needed.
+		int width_patches = 1 + ceil(level_width / patch_spacing_pixels);
+		int height_patches = 1 + ceil(level_height / patch_spacing_pixels);
 
 		// Make sure we always read from the correct level; the chosen
 		// mipmapping could otherwise be rather unpredictable, especially
