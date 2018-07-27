@@ -6,7 +6,6 @@ out vec2 diff_flow;
 
 uniform sampler2D diff_flow_tex, smoothness_x_tex, smoothness_y_tex;
 uniform usampler2D equation_tex;
-uniform vec2 image_size;
 uniform int phase;
 
 // See pack_floats_shared() in equations.frag.

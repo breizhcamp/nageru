@@ -4,7 +4,7 @@ in vec2 position;
 out vec2 tc;
 out float element_sum_idx;
 
-uniform vec2 image_size;
+uniform sampler2D diff_flow_tex;
 
 void main()
 {
@@ -17,6 +17,6 @@ void main()
 	gl_Position = vec4(2.0 * position.x - 1.0, 2.0 * position.y - 1.0, -1.0, 1.0);
 	tc = position;
 
-	vec2 element_idx = position * image_size - 0.5;
+	vec2 element_idx = position * textureSize(diff_flow_tex, 0) - 0.5;
 	element_sum_idx = element_idx.x + element_idx.y;
 }

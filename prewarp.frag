@@ -7,7 +7,6 @@ out float I, I_t;
 out vec2 normalized_flow;
 
 uniform sampler2D image0_tex, image1_tex, flow_tex;
-uniform vec2 image_size;
 
 void main()
 {
@@ -19,5 +18,5 @@ void main()
 
 	I = 0.5f * (I_0 + I_w);
 	I_t = I_w - I_0;
-	normalized_flow = flow.xy * image_size;
+	normalized_flow = flow.xy * textureSize(image0_tex, 0);
 }

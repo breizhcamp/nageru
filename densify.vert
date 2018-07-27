@@ -5,21 +5,19 @@ out vec2 image_pos;
 flat out vec2 flow_du;
 flat out float mean_diff;
 
-uniform int width_patches;
 uniform vec2 patch_size;  // In 0..1 coordinates.
 uniform vec2 patch_spacing;  // In 0..1 coordinates.
 uniform sampler2D flow_tex;
-uniform vec2 flow_size;
 
 void main()
 {
-	int patch_x = gl_InstanceID % width_patches;
-	int patch_y = gl_InstanceID / width_patches;
+	int patch_x = gl_InstanceID % textureSize(flow_tex, 0).x;
+	int patch_y = gl_InstanceID / textureSize(flow_tex, 0).x;
 
 	// Convert the patch index to being the full 0..1 range, to match where
 	// the motion search puts the patches. We don't bother with the locking
 	// to texel centers, though.
-	vec2 patch_center = ivec2(patch_x, patch_y) / (flow_size - 1.0);
+	vec2 patch_center = ivec2(patch_x, patch_y) / (textureSize(flow_tex, 0) - 1.0);
 
 	// Increase the patch size a bit; since patch spacing is not necessarily
 	// an integer number of pixels, and we don't use conservative rasterization,

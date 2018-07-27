@@ -43,10 +43,12 @@ in vec2 patch_center;
 out vec3 out_flow;
 
 uniform sampler2D flow_tex, grad0_tex, image0_tex, image1_tex;
-uniform vec2 image_size, inv_image_size, inv_prev_level_size;
+uniform vec2 inv_image_size, inv_prev_level_size;
 
 void main()
 {
+	vec2 image_size = textureSize(image0_tex, 0);
+
 	// Lock the patch center to an integer, so that we never get
 	// any bilinear artifacts for the gradient. (NOTE: This assumes an
 	// even patch size.) Then calculate the bottom-left texel of the patch.

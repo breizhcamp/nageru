@@ -4,7 +4,7 @@ in vec2 position;
 out vec2 flow_tc;
 out vec2 patch_center;
 
-uniform vec2 flow_size;
+uniform sampler2D flow_tex;
 
 void main()
 {
@@ -23,6 +23,7 @@ void main()
 	//
 	//   a = 1 / (w - 1)
 	//   b = w / 2 (w - 1)
+	vec2 flow_size = textureSize(flow_tex, 0);
 	vec2 a = flow_size / (flow_size - 1);
 	vec2 b = -1.0 / (2 * (flow_size - 1.0));
 	patch_center = a * position + b;

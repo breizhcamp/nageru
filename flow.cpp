@@ -319,7 +319,7 @@ private:
 	GLuint sobel_program;
 	GLuint sobel_vao;
 
-	GLuint uniform_tex, uniform_image_size;
+	GLuint uniform_tex;
 };
 
 Sobel::Sobel()
@@ -368,7 +368,7 @@ private:
 	GLuint motion_search_program;
 	GLuint motion_search_vao;
 
-	GLuint uniform_image_size, uniform_inv_image_size, uniform_flow_size, uniform_inv_prev_level_size;
+	GLuint uniform_inv_image_size, uniform_inv_prev_level_size;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
 };
 
@@ -387,9 +387,7 @@ MotionSearch::MotionSearch()
 	glEnableVertexArrayAttrib(motion_search_vao, position_attrib);
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
-	uniform_image_size = glGetUniformLocation(motion_search_program, "image_size");
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
-	uniform_flow_size = glGetUniformLocation(motion_search_program, "flow_size");
 	uniform_inv_prev_level_size = glGetUniformLocation(motion_search_program, "inv_prev_level_size");
 	uniform_image0_tex = glGetUniformLocation(motion_search_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(motion_search_program, "image1_tex");
@@ -406,9 +404,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, zero_border_sampler);
 	bind_sampler(motion_search_program, uniform_flow_tex, 3, flow_tex, linear_sampler);
 
-	glProgramUniform2f(motion_search_program, uniform_image_size, level_width, level_height);
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
-	glProgramUniform2f(motion_search_program, uniform_flow_size, width_patches, height_patches);
 	glProgramUniform2f(motion_search_program, uniform_inv_prev_level_size, 1.0f / prev_level_width, 1.0f / prev_level_height);
 
 	glViewport(0, 0, width_patches, height_patches);
@@ -439,9 +435,8 @@ private:
 	GLuint densify_program;
 	GLuint densify_vao;
 
-	GLuint uniform_width_patches, uniform_patch_size, uniform_patch_spacing;
+	GLuint uniform_patch_size, uniform_patch_spacing;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
-	GLuint uniform_flow_size;
 };
 
 Densify::Densify()
@@ -459,13 +454,11 @@ Densify::Densify()
 	glEnableVertexArrayAttrib(densify_vao, position_attrib);
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
-	uniform_width_patches = glGetUniformLocation(densify_program, "width_patches");
 	uniform_patch_size = glGetUniformLocation(densify_program, "patch_size");
 	uniform_patch_spacing = glGetUniformLocation(densify_program, "patch_spacing");
 	uniform_image0_tex = glGetUniformLocation(densify_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(densify_program, "image1_tex");
 	uniform_flow_tex = glGetUniformLocation(densify_program, "flow_tex");
-	uniform_flow_size = glGetUniformLocation(densify_program, "flow_size");
 }
 
 void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches)
@@ -476,13 +469,9 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 	bind_sampler(densify_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
 	bind_sampler(densify_program, uniform_flow_tex, 2, flow_tex, nearest_sampler);
 
-	glProgramUniform1i(densify_program, uniform_width_patches, width_patches);
 	glProgramUniform2f(densify_program, uniform_patch_size,
 		float(patch_size_pixels) / level_width,
 		float(patch_size_pixels) / level_height);
-	glProgramUniform2f(densify_program, uniform_flow_size,
-		width_patches,
-		height_patches);
 
 	float patch_spacing_x = float(level_width - patch_size_pixels) / (width_patches - 1);
 	float patch_spacing_y = float(level_height - patch_size_pixels) / (height_patches - 1);
@@ -522,7 +511,6 @@ private:
 	GLuint prewarp_vao;
 
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
-	GLuint uniform_image_size;
 };
 
 Prewarp::Prewarp()
@@ -543,8 +531,6 @@ Prewarp::Prewarp()
 	uniform_image0_tex = glGetUniformLocation(prewarp_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(prewarp_program, "image1_tex");
 	uniform_flow_tex = glGetUniformLocation(prewarp_program, "flow_tex");
-
-	uniform_image_size = glGetUniformLocation(prewarp_program, "image_size");
 }
 
 void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_tex, GLuint normalized_flow_tex, int level_width, int level_height)
@@ -554,8 +540,6 @@ void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I
 	bind_sampler(prewarp_program, uniform_image0_tex, 0, tex0_view, nearest_sampler);
 	bind_sampler(prewarp_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
 	bind_sampler(prewarp_program, uniform_flow_tex, 2, flow_tex, nearest_sampler);
-
-	glProgramUniform2f(prewarp_program, uniform_image_size, level_width, level_height);
 
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
@@ -783,7 +767,7 @@ private:
 	GLuint uniform_diff_flow_tex;
 	GLuint uniform_equation_tex;
 	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
-	GLuint uniform_image_size, uniform_phase;
+	GLuint uniform_phase;
 };
 
 SOR::SOR()
@@ -805,7 +789,6 @@ SOR::SOR()
 	uniform_equation_tex = glGetUniformLocation(sor_program, "equation_tex");
 	uniform_smoothness_x_tex = glGetUniformLocation(sor_program, "smoothness_x_tex");
 	uniform_smoothness_y_tex = glGetUniformLocation(sor_program, "smoothness_y_tex");
-	uniform_image_size = glGetUniformLocation(sor_program, "image_size");
 	uniform_phase = glGetUniformLocation(sor_program, "phase");
 }
 
@@ -817,8 +800,6 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 	bind_sampler(sor_program, uniform_smoothness_x_tex, 1, smoothness_x_tex, zero_border_sampler);
 	bind_sampler(sor_program, uniform_smoothness_y_tex, 2, smoothness_y_tex, zero_border_sampler);
 	bind_sampler(sor_program, uniform_equation_tex, 3, equation_tex, nearest_sampler);
-
-	glProgramUniform2f(sor_program, uniform_image_size, level_width, level_height);
 
 	// NOTE: We bind to the texture we are rendering from, but we never write any value
 	// that we read in the same shader pass (we call discard for red values when we compute

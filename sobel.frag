@@ -4,7 +4,6 @@ in vec2 tc;
 out vec2 gradients;
 
 uniform sampler2D tex;
-uniform vec2 inv_image_size;
 
 void main()
 {
