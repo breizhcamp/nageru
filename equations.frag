@@ -14,9 +14,6 @@ uniform float delta;
 // Relative weighting of gradient term.
 uniform float gamma;
 
-// TODO: Consider a specialized version for the case where we know that du = dv = 0,
-// since we run so few iterations.
-
 // Similar to packHalf2x16, but the two values share exponent, and are stored
 // as 12-bit fixed point numbers multiplied by that exponent (the leading one
 // can't be implicit in this kind of format). This allows us to store a much
