@@ -342,9 +342,7 @@ Sobel::Sobel()
 void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_height)
 {
 	glUseProgram(sobel_program);
-	glBindTextureUnit(0, tex0_view);
-	glBindSampler(0, nearest_sampler);
-	glProgramUniform1i(sobel_program, uniform_tex, 0);
+	bind_sampler(sobel_program, uniform_tex, 0, tex0_view, nearest_sampler);
 
 	glViewport(0, 0, level_width, level_height);
 	fbos.render_to(grad0_tex);
