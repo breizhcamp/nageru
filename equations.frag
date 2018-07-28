@@ -69,8 +69,6 @@ void main()
 	// E_I term. Note that we don't square β_0, in line with DeepFlow;
 	// it's probably an error (see variational_refinement.txt),
 	// but squaring it seems to give worse results.
-	//
-  	// FIXME: Should the penalizer be adjusted for 0..1 intensity range instead of 0..255?
 	float beta_0 = texture(beta_0_tex, tc).x;
 	float k1 = delta * beta_0 * inversesqrt(beta_0 * (I_x * du + I_y * dv + I_t) * (I_x * du + I_y * dv + I_t) + 1e-6);
 	float A11 = k1 * I_x * I_x;
@@ -106,8 +104,7 @@ void main()
 	float I_xt = I_tx_ty.x;
 	float I_yt = I_tx_ty.y;
 
-	// E_G term. Same TODOs as E_I. Same normalization as beta_0
-	// (see derivatives.frag).
+	// E_G term. Same normalization as beta_0 (see derivatives.frag).
 	float beta_x = 1.0 / (I_xx * I_xx + I_xy * I_xy + 1e-7);
 	float beta_y = 1.0 / (I_xy * I_xy + I_yy * I_yy + 1e-7);
 	float k2 = gamma * inversesqrt(
