@@ -60,6 +60,17 @@ struct ReadInProgress {
 stack<GLuint> spare_pbos;
 deque<ReadInProgress> reads_in_progress;
 
+int find_num_levels(int width, int height)
+{
+	int levels = 1;
+	for (int w = width, h = height; w > 1 || h > 1; ) {
+		w >>= 1;
+		h >>= 1;
+		++levels;
+	}
+	return levels;
+}
+
 string read_file(const string &filename)
 {
 	FILE *fp = fopen(filename.c_str(), "r");
@@ -147,8 +158,8 @@ GLuint load_texture(const char *filename, unsigned *width_ret, unsigned *height_
 	}
 
 	// For whatever reason, SDL doesn't support converting to YUV surfaces
-	// nor grayscale, so we'll do it (slowly) ourselves.
-	SDL_Surface *rgb_surf = SDL_ConvertSurfaceFormat(surf, SDL_PIXELFORMAT_RGBA8888, /*flags=*/0);
+	// nor grayscale, so we'll do it ourselves.
+	SDL_Surface *rgb_surf = SDL_ConvertSurfaceFormat(surf, SDL_PIXELFORMAT_RGBA32, /*flags=*/0);
 	if (rgb_surf == nullptr) {
 		fprintf(stderr, "SDL_ConvertSurfaceFormat(%s): %s\n", filename, SDL_GetError());
 		exit(1);
@@ -158,34 +169,19 @@ GLuint load_texture(const char *filename, unsigned *width_ret, unsigned *height_
 
 	unsigned width = rgb_surf->w, height = rgb_surf->h;
 	const uint8_t *sptr = (uint8_t *)rgb_surf->pixels;
-	unique_ptr<uint8_t[]> pix(new uint8_t[width * height]);
+	unique_ptr<uint8_t[]> pix(new uint8_t[width * height * 4]);
 
 	// Extract the Y component, and convert to bottom-left origin.
 	for (unsigned y = 0; y < height; ++y) {
 		unsigned y2 = height - 1 - y;
-		for (unsigned x = 0; x < width; ++x) {
-			uint8_t r = sptr[(y2 * width + x) * 4 + 3];
-			uint8_t g = sptr[(y2 * width + x) * 4 + 2];
-			uint8_t b = sptr[(y2 * width + x) * 4 + 1];
-
-			// Rec. 709.
-			pix[y * width + x] = lrintf(r * 0.2126f + g * 0.7152f + b * 0.0722f);
-		}
+		memcpy(pix.get() + y * width * 4, sptr + y2 * rgb_surf->pitch, width * 4);
 	}
 	SDL_FreeSurface(rgb_surf);
 
-	int levels = 1;
-	for (int w = width, h = height; w > 1 || h > 1; ) {
-		w >>= 1;
-		h >>= 1;
-		++levels;
-	}
-
 	GLuint tex;
 	glCreateTextures(GL_TEXTURE_2D, 1, &tex);
-	glTextureStorage2D(tex, levels, GL_R8, width, height);
-	glTextureSubImage2D(tex, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, pix.get());
-	glGenerateTextureMipmap(tex);
+	glTextureStorage2D(tex, 1, GL_RGBA8, width, height);
+	glTextureSubImage2D(tex, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pix.get());
 
 	*width_ret = width;
 	*height_ret = height;
@@ -297,6 +293,52 @@ void PersistentFBOSet<num_elements>::render_to(const array<GLuint, num_elements>
 
 	fbos[textures] = fbo;
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+}
+
+// Convert RGB to grayscale, using Rec. 709 coefficients.
+class GrayscaleConversion {
+public:
+	GrayscaleConversion();
+	void exec(GLint tex, GLint gray_tex, int width, int height);
+
+private:
+	PersistentFBOSet<1> fbos;
+	GLuint gray_vs_obj;
+	GLuint gray_fs_obj;
+	GLuint gray_program;
+	GLuint gray_vao;
+
+	GLuint uniform_tex;
+};
+
+GrayscaleConversion::GrayscaleConversion()
+{
+	gray_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	gray_fs_obj = compile_shader(read_file("gray.frag"), GL_FRAGMENT_SHADER);
+	gray_program = link_program(gray_vs_obj, gray_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &gray_vao);
+	glBindVertexArray(gray_vao);
+
+	GLint position_attrib = glGetAttribLocation(gray_program, "position");
+	glEnableVertexArrayAttrib(gray_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_tex = glGetUniformLocation(gray_program, "tex");
+}
+
+void GrayscaleConversion::exec(GLint tex, GLint gray_tex, int width, int height)
+{
+	glUseProgram(gray_program);
+	bind_sampler(gray_program, uniform_tex, 0, tex, nearest_sampler);
+
+	glViewport(0, 0, width, height);
+	fbos.render_to(gray_tex);
+	glBindVertexArray(gray_vao);
+	glUseProgram(gray_program);
+	glDisable(GL_BLEND);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 // Compute gradients in every point, used for the motion search.
@@ -1470,8 +1512,24 @@ int main(int argc, char **argv)
 	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
 
+	int levels = find_num_levels(width1, height1);
+	GLuint tex0_gray, tex1_gray;
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex0_gray);
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex1_gray);
+	glTextureStorage2D(tex0_gray, levels, GL_R8, width1, height1);
+	glTextureStorage2D(tex1_gray, levels, GL_R8, width1, height1);
+
+	GrayscaleConversion gray;
+	gray.exec(tex0, tex0_gray, width1, height1);
+	glDeleteTextures(1, &tex0);
+	glGenerateTextureMipmap(tex0_gray);
+
+	gray.exec(tex1, tex1_gray, width1, height1);
+	glDeleteTextures(1, &tex1);
+	glGenerateTextureMipmap(tex1_gray);
+
 	DISComputeFlow compute_flow(width1, height1);
-	GLuint final_tex = compute_flow.exec(tex0, tex1);
+	GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray);
 
 	schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "flow.ppm");
 	compute_flow.release_texture(final_tex);
@@ -1490,6 +1548,9 @@ int main(int argc, char **argv)
 				filename0, width, height, width1, height1);
 			exit(1);
 		}
+		gray.exec(tex0, tex0_gray, width, height);
+		glGenerateTextureMipmap(tex0_gray);
+		glDeleteTextures(1, &tex0);
 
 		GLuint tex1 = load_texture(filename1, &width, &height);
 		if (width != width1 || height != height1) {
@@ -1497,11 +1558,17 @@ int main(int argc, char **argv)
 				filename1, width, height, width1, height1);
 			exit(1);
 		}
+		gray.exec(tex1, tex1_gray, width, height);
+		glGenerateTextureMipmap(tex1_gray);
+		glDeleteTextures(1, &tex1);
 
-		GLuint final_tex = compute_flow.exec(tex0, tex1);
+		GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray);
+
 		schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "");
 		compute_flow.release_texture(final_tex);
 	}
+	glDeleteTextures(1, &tex0_gray);
+	glDeleteTextures(1, &tex1_gray);
 
 	while (!reads_in_progress.empty()) {
 		finish_one_read(width1, height1);
