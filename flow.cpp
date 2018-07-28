@@ -1423,10 +1423,10 @@ int main(int argc, char **argv)
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
 	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 	SDL_Window *window = SDL_CreateWindow("OpenGL window",
-			SDL_WINDOWPOS_UNDEFINED,
-			SDL_WINDOWPOS_UNDEFINED,
-			64, 64,
-			SDL_WINDOW_OPENGL);
+		SDL_WINDOWPOS_UNDEFINED,
+		SDL_WINDOWPOS_UNDEFINED,
+		64, 64,
+		SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
 	SDL_GLContext context = SDL_GL_CreateContext(window);
 	assert(context != nullptr);
 
