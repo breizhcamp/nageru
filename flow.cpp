@@ -1109,7 +1109,6 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 		// Make sure we always read from the correct level; the chosen
 		// mipmapping could otherwise be rather unpredictable, especially
 		// during motion search.
-		// TODO: create these beforehand, and stop leaking them.
 		GLuint tex0_view, tex1_view;
 		glGenTextures(1, &tex0_view);
 		glTextureView(tex0_view, GL_TEXTURE_2D, tex0, GL_R8, level, 1, 0, 1);
@@ -1170,6 +1169,8 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 			prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, base_flow_tex, level_width, level_height);
 		}
 		release_texture(dense_flow_tex);
+		glDeleteTextures(1, &tex0_view);
+		glDeleteTextures(1, &tex1_view);
 
 		// Calculate I_x and I_y. We're only calculating first derivatives;
 		// the others will be taken on-the-fly in order to sample from fewer
