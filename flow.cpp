@@ -28,6 +28,8 @@
 
 using namespace std;
 
+SDL_Window *window;
+
 // Operating point 3 (10 Hz on CPU, excluding preprocessing).
 constexpr float patch_overlap_ratio = 0.75f;
 constexpr unsigned coarsest_level = 5;
@@ -45,6 +47,7 @@ float vr_alpha = 1.0f, vr_delta = 0.25f, vr_gamma = 0.25f;
 
 bool enable_timing = true;
 bool enable_variational_refinement = true;  // Just for debugging.
+bool enable_interpolation = false;
 
 // Some global OpenGL objects.
 // TODO: These should really be part of DISComputeFlow.
@@ -149,7 +152,12 @@ GLuint compile_shader(const string &shader_src, GLenum type)
 	return obj;
 }
 
-GLuint load_texture(const char *filename, unsigned *width_ret, unsigned *height_ret)
+enum MipmapPolicy {
+	WITHOUT_MIPMAPS,
+	WITH_MIPMAPS
+};
+
+GLuint load_texture(const char *filename, unsigned *width_ret, unsigned *height_ret, MipmapPolicy mipmaps)
 {
 	SDL_Surface *surf = IMG_Load(filename);
 	if (surf == nullptr) {
@@ -178,10 +186,16 @@ GLuint load_texture(const char *filename, unsigned *width_ret, unsigned *height_
 	}
 	SDL_FreeSurface(rgb_surf);
 
+	int num_levels = (mipmaps == WITH_MIPMAPS) ? find_num_levels(width, height) : 1;
+
 	GLuint tex;
 	glCreateTextures(GL_TEXTURE_2D, 1, &tex);
-	glTextureStorage2D(tex, 1, GL_RGBA8, width, height);
+	glTextureStorage2D(tex, num_levels, GL_RGBA8, width, height);
 	glTextureSubImage2D(tex, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pix.get());
+
+	if (mipmaps == WITH_MIPMAPS) {
+		glGenerateTextureMipmap(tex);
+	}
 
 	*width_ret = width;
 	*height_ret = height;
@@ -1069,9 +1083,14 @@ class DISComputeFlow {
 public:
 	DISComputeFlow(int width, int height);
 
+	enum ResizeStrategy {
+		DO_NOT_RESIZE_FLOW,
+		RESIZE_FLOW_TO_FULL_SIZE
+	};
+
 	// Returns a texture that must be released with release_texture()
 	// after use.
-	GLuint exec(GLuint tex0, GLuint tex1);
+	GLuint exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_strategy);
 
 	void release_texture(GLuint tex) {
 		pool.release_texture(tex);
@@ -1129,7 +1148,7 @@ DISComputeFlow::DISComputeFlow(int width, int height)
 	glClearTexImage(initial_flow_tex, 0, GL_RG, GL_FLOAT, nullptr);
 }
 
-GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
+GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_strategy)
 {
 	int prev_level_width = 1, prev_level_height = 1;
 	GLuint prev_level_flow_tex = initial_flow_tex;
@@ -1298,7 +1317,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 	timers.print();
 
 	// Scale up the flow to the final size (if needed).
-	if (finest_level == 0) {
+	if (finest_level == 0 || resize_strategy == DO_NOT_RESIZE_FLOW) {
 		return prev_level_flow_tex;
 	} else {
 		GLuint final_tex = pool.get_texture(GL_RG16F, width, height);
@@ -1306,6 +1325,217 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1)
 		pool.release_texture(prev_level_flow_tex);
 		return final_tex;
 	}
+}
+
+// Forward-warp the flow half-way (or rather, by alpha). A non-zero “splatting”
+// radius fills most of the holes.
+class Splat {
+public:
+	Splat();
+
+	// alpha is the time of the interpolated frame (0..1).
+	void exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_tex, int width, int height, float alpha);
+
+private:
+	PersistentFBOSet<2> fbos;
+
+	GLuint splat_vs_obj;
+	GLuint splat_fs_obj;
+	GLuint splat_program;
+	GLuint splat_vao;
+
+	GLuint uniform_invert_flow, uniform_splat_size, uniform_alpha;
+	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+	GLuint uniform_inv_flow_size;
+};
+
+Splat::Splat()
+{
+	splat_vs_obj = compile_shader(read_file("splat.vert"), GL_VERTEX_SHADER);
+	splat_fs_obj = compile_shader(read_file("splat.frag"), GL_FRAGMENT_SHADER);
+	splat_program = link_program(splat_vs_obj, splat_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &splat_vao);
+	glBindVertexArray(splat_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(splat_program, "position");
+	glEnableVertexArrayAttrib(splat_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_invert_flow = glGetUniformLocation(splat_program, "invert_flow");
+	uniform_splat_size = glGetUniformLocation(splat_program, "splat_size");
+	uniform_alpha = glGetUniformLocation(splat_program, "alpha");
+	uniform_image0_tex = glGetUniformLocation(splat_program, "image0_tex");
+	uniform_image1_tex = glGetUniformLocation(splat_program, "image1_tex");
+	uniform_flow_tex = glGetUniformLocation(splat_program, "flow_tex");
+	uniform_inv_flow_size = glGetUniformLocation(splat_program, "inv_flow_size");
+}
+
+void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_tex, int width, int height, float alpha)
+{
+	glUseProgram(splat_program);
+
+	bind_sampler(splat_program, uniform_image0_tex, 0, tex0, linear_sampler);
+	bind_sampler(splat_program, uniform_image1_tex, 1, tex1, linear_sampler);
+
+	// FIXME: This is set to 1.0 right now so not to trigger Haswell's “PMA stall”.
+	// Move to 2.0 later.
+	float splat_size = 1.0f;  // 4x4 splat means 16x overdraw, 2x2 splat means 4x overdraw.
+	glProgramUniform2f(splat_program, uniform_splat_size, splat_size / width, splat_size / height);
+	glProgramUniform1f(splat_program, uniform_alpha, alpha);
+	glProgramUniform2f(splat_program, uniform_inv_flow_size, 1.0f / width, 1.0f / height);
+
+	glViewport(0, 0, width, height);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);  // We store the difference between I_0 and I_1, where less difference is good. (Default is effectively +inf, which always loses.)
+	glBindVertexArray(splat_vao);
+
+	// FIXME: Get this into FBOSet, so we can reuse FBOs across frames.
+	GLuint fbo;
+	glCreateFramebuffers(1, &fbo);
+	glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, flow_tex, 0);
+	glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, depth_tex, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	// Do forward splatting.
+	bind_sampler(splat_program, uniform_flow_tex, 2, forward_flow_tex, nearest_sampler);
+	glProgramUniform1i(splat_program, uniform_invert_flow, 0);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width * height);
+
+	// Do backward splatting.
+	bind_sampler(splat_program, uniform_flow_tex, 2, backward_flow_tex, nearest_sampler);
+	glProgramUniform1i(splat_program, uniform_invert_flow, 1);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width * height);
+
+	glDisable(GL_DEPTH_TEST);
+
+	glDeleteFramebuffers(1, &fbo);
+}
+
+class Blend {
+public:
+	Blend();
+	void exec(GLuint tex0, GLuint tex1, GLuint flow_tex, GLuint output_tex, int width, int height, float alpha);
+
+private:
+	PersistentFBOSet<1> fbos;
+	GLuint blend_vs_obj;
+	GLuint blend_fs_obj;
+	GLuint blend_program;
+	GLuint blend_vao;
+
+	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+	GLuint uniform_alpha, uniform_flow_consistency_tolerance;
+};
+
+Blend::Blend()
+{
+	blend_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	blend_fs_obj = compile_shader(read_file("blend.frag"), GL_FRAGMENT_SHADER);
+	blend_program = link_program(blend_vs_obj, blend_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &blend_vao);
+	glBindVertexArray(blend_vao);
+
+	GLint position_attrib = glGetAttribLocation(blend_program, "position");
+	glEnableVertexArrayAttrib(blend_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_image0_tex = glGetUniformLocation(blend_program, "image0_tex");
+	uniform_image1_tex = glGetUniformLocation(blend_program, "image1_tex");
+	uniform_flow_tex = glGetUniformLocation(blend_program, "flow_tex");
+	uniform_alpha = glGetUniformLocation(blend_program, "alpha");
+	uniform_flow_consistency_tolerance = glGetUniformLocation(blend_program, "flow_consistency_tolerance");
+}
+
+void Blend::exec(GLuint tex0, GLuint tex1, GLuint flow_tex, GLuint output_tex, int level_width, int level_height, float alpha)
+{
+	glUseProgram(blend_program);
+	bind_sampler(blend_program, uniform_image0_tex, 0, tex0, linear_sampler);
+	bind_sampler(blend_program, uniform_image1_tex, 1, tex1, linear_sampler);
+	bind_sampler(blend_program, uniform_flow_tex, 2, flow_tex, linear_sampler);  // May be upsampled.
+	glProgramUniform1f(blend_program, uniform_alpha, alpha);
+	//glProgramUniform1f(blend_program, uniform_flow_consistency_tolerance, 1.0f / 
+
+	glViewport(0, 0, level_width, level_height);
+	fbos.render_to(output_tex);
+	glBindVertexArray(blend_vao);
+	glUseProgram(blend_program);
+	glDisable(GL_BLEND);  // A bit ironic, perhaps.
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+class Interpolate {
+public:
+	Interpolate(int width, int height, int flow_level);
+
+	// Returns a texture that must be released with release_texture()
+	// after use. tex0 and tex1 must be RGBA8 textures with mipmaps
+	// (unless flow_level == 0).
+	GLuint exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint width, GLuint height, float alpha);
+
+	void release_texture(GLuint tex) {
+		pool.release_texture(tex);
+	}
+
+private:
+	int width, height, flow_level;
+	TexturePool pool;
+	Splat splat;
+	Blend blend;
+};
+
+Interpolate::Interpolate(int width, int height, int flow_level)
+	: width(width), height(height), flow_level(flow_level) {}
+
+GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint width, GLuint height, float alpha)
+{
+	GPUTimers timers;
+
+	ScopedTimer total_timer("Total", &timers);
+
+	// Pick out the right level to test splatting results on.
+	GLuint tex0_view, tex1_view;
+	glGenTextures(1, &tex0_view);
+	glTextureView(tex0_view, GL_TEXTURE_2D, tex0, GL_RGBA8, flow_level, 1, 0, 1);
+	glGenTextures(1, &tex1_view);
+	glTextureView(tex1_view, GL_TEXTURE_2D, tex1, GL_RGBA8, flow_level, 1, 0, 1);
+
+	int flow_width = width >> flow_level;
+	int flow_height = height >> flow_level;
+
+	GLuint flow_tex = pool.get_texture(GL_RG16F, flow_width, flow_height);
+	GLuint depth_tex = pool.get_texture(GL_DEPTH_COMPONENT32F, flow_width, flow_height);  // Used for ranking flows.
+	{
+		ScopedTimer timer("Clear", &total_timer);
+		glClearTexImage(flow_tex, 0, GL_RG, GL_FLOAT, nullptr);
+		float infinity = 1000000.0f;
+		glClearTexImage(depth_tex, 0, GL_DEPTH_COMPONENT, GL_FLOAT, &infinity);
+	}
+
+	//SDL_GL_SwapWindow(window);
+	{
+		ScopedTimer timer("Splat", &total_timer);
+		splat.exec(tex0_view, tex1_view, forward_flow_tex, backward_flow_tex, flow_tex, depth_tex, flow_width, flow_height, alpha);
+	}
+	//SDL_GL_SwapWindow(window);
+	pool.release_texture(depth_tex);
+	glDeleteTextures(1, &tex0_view);
+	glDeleteTextures(1, &tex1_view);
+
+	GLuint output_tex = pool.get_texture(GL_RGB8, width, height);
+	{
+		ScopedTimer timer("Blend", &total_timer);
+		blend.exec(tex0, tex1, flow_tex, output_tex, width, height, alpha);
+	}
+	total_timer.end();
+	timers.print();
+
+	return output_tex;
 }
 
 GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height)
@@ -1417,6 +1647,169 @@ void schedule_read(GLuint tex, GLuint width, GLuint height, const char *filename
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 }
 
+void compute_flow_only(int argc, char **argv, int optind)
+{
+	const char *filename0 = argc >= (optind + 1) ? argv[optind] : "test1499.png";
+	const char *filename1 = argc >= (optind + 2) ? argv[optind + 1] : "test1500.png";
+	const char *flow_filename = argc >= (optind + 3) ? argv[optind + 2] : "flow.flo";
+
+	// Load pictures.
+	unsigned width1, height1, width2, height2;
+	GLuint tex0 = load_texture(filename0, &width1, &height1, WITHOUT_MIPMAPS);
+	GLuint tex1 = load_texture(filename1, &width2, &height2, WITHOUT_MIPMAPS);
+
+	if (width1 != width2 || height1 != height2) {
+		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
+			width1, height1, width2, height2);
+		exit(1);
+	}
+
+	// Set up some PBOs to do asynchronous readback.
+	GLuint pbos[5];
+	glCreateBuffers(5, pbos);
+	for (int i = 0; i < 5; ++i) {
+		glNamedBufferData(pbos[i], width1 * height1 * 2 * sizeof(float), nullptr, GL_STREAM_READ);
+		spare_pbos.push(pbos[i]);
+	}
+
+	int levels = find_num_levels(width1, height1);
+	GLuint tex0_gray, tex1_gray;
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex0_gray);
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex1_gray);
+	glTextureStorage2D(tex0_gray, levels, GL_R8, width1, height1);
+	glTextureStorage2D(tex1_gray, levels, GL_R8, width1, height1);
+
+	GrayscaleConversion gray;
+	gray.exec(tex0, tex0_gray, width1, height1);
+	glDeleteTextures(1, &tex0);
+	glGenerateTextureMipmap(tex0_gray);
+
+	gray.exec(tex1, tex1_gray, width1, height1);
+	glDeleteTextures(1, &tex1);
+	glGenerateTextureMipmap(tex1_gray);
+
+	DISComputeFlow compute_flow(width1, height1);
+	GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
+
+	schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "flow.ppm");
+	compute_flow.release_texture(final_tex);
+
+	// See if there are more flows on the command line (ie., more than three arguments),
+	// and if so, process them.
+	int num_flows = (argc - optind) / 3;
+	for (int i = 1; i < num_flows; ++i) {
+		const char *filename0 = argv[optind + i * 3 + 0];
+		const char *filename1 = argv[optind + i * 3 + 1];
+		const char *flow_filename = argv[optind + i * 3 + 2];
+		GLuint width, height;
+		GLuint tex0 = load_texture(filename0, &width, &height, WITHOUT_MIPMAPS);
+		if (width != width1 || height != height1) {
+			fprintf(stderr, "%s: Image dimensions don't match (%dx%d versus %dx%d)\n",
+				filename0, width, height, width1, height1);
+			exit(1);
+		}
+		gray.exec(tex0, tex0_gray, width, height);
+		glGenerateTextureMipmap(tex0_gray);
+		glDeleteTextures(1, &tex0);
+
+		GLuint tex1 = load_texture(filename1, &width, &height, WITHOUT_MIPMAPS);
+		if (width != width1 || height != height1) {
+			fprintf(stderr, "%s: Image dimensions don't match (%dx%d versus %dx%d)\n",
+				filename1, width, height, width1, height1);
+			exit(1);
+		}
+		gray.exec(tex1, tex1_gray, width, height);
+		glGenerateTextureMipmap(tex1_gray);
+		glDeleteTextures(1, &tex1);
+
+		GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
+
+		schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "");
+		compute_flow.release_texture(final_tex);
+	}
+	glDeleteTextures(1, &tex0_gray);
+	glDeleteTextures(1, &tex1_gray);
+
+	while (!reads_in_progress.empty()) {
+		finish_one_read(width1, height1);
+	}
+}
+
+// Interpolate images based on
+//
+//   Herbst, Seitz, Baker: “Occlusion Reasoning for Temporal Interpolation
+//   Using Optical Flow”
+//
+// or at least a reasonable subset thereof. Unfinished.
+void interpolate_image(int argc, char **argv, int optind)
+{
+	const char *filename0 = argc >= (optind + 1) ? argv[optind] : "test1499.png";
+	const char *filename1 = argc >= (optind + 2) ? argv[optind + 1] : "test1500.png";
+	//const char *out_filename = argc >= (optind + 3) ? argv[optind + 2] : "interpolated.png";
+
+	// Load pictures.
+	unsigned width1, height1, width2, height2;
+	GLuint tex0 = load_texture(filename0, &width1, &height1, WITH_MIPMAPS);
+	GLuint tex1 = load_texture(filename1, &width2, &height2, WITH_MIPMAPS);
+
+	if (width1 != width2 || height1 != height2) {
+		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
+			width1, height1, width2, height2);
+		exit(1);
+	}
+
+	// Set up some PBOs to do asynchronous readback.
+	GLuint pbos[5];
+	glCreateBuffers(5, pbos);
+	for (int i = 0; i < 5; ++i) {
+		glNamedBufferData(pbos[i], width1 * height1 * 2 * sizeof(float), nullptr, GL_STREAM_READ);
+		spare_pbos.push(pbos[i]);
+	}
+
+	DISComputeFlow compute_flow(width1, height1);
+	GrayscaleConversion gray;
+	Interpolate interpolate(width1, height1, finest_level);
+	//Interpolate interpolate(width1, height1, 0);
+
+	int levels = find_num_levels(width1, height1);
+	GLuint tex0_gray, tex1_gray;
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex0_gray);
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex1_gray);
+	glTextureStorage2D(tex0_gray, levels, GL_R8, width1, height1);
+	glTextureStorage2D(tex1_gray, levels, GL_R8, width1, height1);
+
+	gray.exec(tex0, tex0_gray, width1, height1);
+	glGenerateTextureMipmap(tex0_gray);
+
+	gray.exec(tex1, tex1_gray, width1, height1);
+	glGenerateTextureMipmap(tex1_gray);
+
+	GLuint forward_flow_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
+	GLuint backward_flow_tex = compute_flow.exec(tex1_gray, tex0_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
+
+	for (int frameno = 1; frameno < 60; ++frameno) {
+		float alpha = frameno / 60.0f;
+		GLuint interpolated_tex = interpolate.exec(tex0, tex1, forward_flow_tex, backward_flow_tex, width1, height1, alpha);
+
+		unique_ptr<uint8_t[]> rgb(new uint8_t[width1 * height1 * 3]);
+		glGetTextureImage(interpolated_tex, 0, GL_RGB, GL_UNSIGNED_BYTE, width1 * height1 * 3, rgb.get());
+
+		char buf[256];
+		snprintf(buf, sizeof(buf), "interp%04d.ppm", frameno);
+		FILE *fp = fopen(buf, "wb");
+		fprintf(fp, "P6\n%d %d\n255\n", width1, height1);
+		for (unsigned y = 0; y < height1; ++y) {
+			unsigned y2 = height1 - 1 - y;
+			fwrite(rgb.get() + y2 * width1 * 3, width1 * 3, 1, fp);
+		}
+		fclose(fp);
+	}
+
+	//schedule_read(interpolated_tex, width1, height1, filename0, filename1, "", "halfflow.ppm");
+	//interpolate.release_texture(interpolated_tex);
+	//finish_one_read(width1, height1);
+}
+
 int main(int argc, char **argv)
 {
         static const option long_options[] = {
@@ -1424,7 +1817,8 @@ int main(int argc, char **argv)
 		{ "intensity-relative-weight", required_argument, 0, 'i' },  // delta.
 		{ "gradient-relative-weight", required_argument, 0, 'g' },  // gamma.
 		{ "disable-timing", no_argument, 0, 1000 },
-		{ "ignore-variational-refinement", no_argument, 0, 1001 }  // Still calculates it, just doesn't apply it.
+		{ "ignore-variational-refinement", no_argument, 0, 1001 },  // Still calculates it, just doesn't apply it.
+		{ "interpolate", no_argument, 0, 1002 }
 	};
 
 	for ( ;; ) {
@@ -1450,6 +1844,9 @@ int main(int argc, char **argv)
 		case 1001:
 			enable_variational_refinement = false;
 			break;
+		case 1002:
+			enable_interpolation = true;
+			break;
 		default:
 			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);
 			exit(1);
@@ -1469,36 +1866,13 @@ int main(int argc, char **argv)
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
 	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-	SDL_Window *window = SDL_CreateWindow("OpenGL window",
+	window = SDL_CreateWindow("OpenGL window",
 		SDL_WINDOWPOS_UNDEFINED,
 		SDL_WINDOWPOS_UNDEFINED,
 		64, 64,
 		SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
 	SDL_GLContext context = SDL_GL_CreateContext(window);
 	assert(context != nullptr);
-
-	const char *filename0 = argc >= (optind + 1) ? argv[optind] : "test1499.png";
-	const char *filename1 = argc >= (optind + 2) ? argv[optind + 1] : "test1500.png";
-	const char *flow_filename = argc >= (optind + 3) ? argv[optind + 2] : "flow.flo";
-
-	// Load pictures.
-	unsigned width1, height1, width2, height2;
-	GLuint tex0 = load_texture(filename0, &width1, &height1);
-	GLuint tex1 = load_texture(filename1, &width2, &height2);
-
-	if (width1 != width2 || height1 != height2) {
-		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
-			width1, height1, width2, height2);
-		exit(1);
-	}
-
-	// Set up some PBOs to do asynchronous readback.
-	GLuint pbos[5];
-        glCreateBuffers(5, pbos);
-	for (int i = 0; i < 5; ++i) {
-		glNamedBufferData(pbos[i], width1 * height1 * 2 * sizeof(float), nullptr, GL_STREAM_READ);
-		spare_pbos.push(pbos[i]);
-	}
 
 	// FIXME: Should be part of DISComputeFlow (but needs to be initialized
 	// before all the render passes).
@@ -1512,65 +1886,9 @@ int main(int argc, char **argv)
 	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
 
-	int levels = find_num_levels(width1, height1);
-	GLuint tex0_gray, tex1_gray;
-	glCreateTextures(GL_TEXTURE_2D, 1, &tex0_gray);
-	glCreateTextures(GL_TEXTURE_2D, 1, &tex1_gray);
-	glTextureStorage2D(tex0_gray, levels, GL_R8, width1, height1);
-	glTextureStorage2D(tex1_gray, levels, GL_R8, width1, height1);
-
-	GrayscaleConversion gray;
-	gray.exec(tex0, tex0_gray, width1, height1);
-	glDeleteTextures(1, &tex0);
-	glGenerateTextureMipmap(tex0_gray);
-
-	gray.exec(tex1, tex1_gray, width1, height1);
-	glDeleteTextures(1, &tex1);
-	glGenerateTextureMipmap(tex1_gray);
-
-	DISComputeFlow compute_flow(width1, height1);
-	GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray);
-
-	schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "flow.ppm");
-	compute_flow.release_texture(final_tex);
-
-	// See if there are more flows on the command line (ie., more than three arguments),
-	// and if so, process them.
-	int num_flows = (argc - optind) / 3;
-	for (int i = 1; i < num_flows; ++i) {
-		const char *filename0 = argv[optind + i * 3 + 0];
-		const char *filename1 = argv[optind + i * 3 + 1];
-		const char *flow_filename = argv[optind + i * 3 + 2];
-		GLuint width, height;
-		GLuint tex0 = load_texture(filename0, &width, &height);
-		if (width != width1 || height != height1) {
-			fprintf(stderr, "%s: Image dimensions don't match (%dx%d versus %dx%d)\n",
-				filename0, width, height, width1, height1);
-			exit(1);
-		}
-		gray.exec(tex0, tex0_gray, width, height);
-		glGenerateTextureMipmap(tex0_gray);
-		glDeleteTextures(1, &tex0);
-
-		GLuint tex1 = load_texture(filename1, &width, &height);
-		if (width != width1 || height != height1) {
-			fprintf(stderr, "%s: Image dimensions don't match (%dx%d versus %dx%d)\n",
-				filename1, width, height, width1, height1);
-			exit(1);
-		}
-		gray.exec(tex1, tex1_gray, width, height);
-		glGenerateTextureMipmap(tex1_gray);
-		glDeleteTextures(1, &tex1);
-
-		GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray);
-
-		schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "");
-		compute_flow.release_texture(final_tex);
-	}
-	glDeleteTextures(1, &tex0_gray);
-	glDeleteTextures(1, &tex1_gray);
-
-	while (!reads_in_progress.empty()) {
-		finish_one_read(width1, height1);
+	if (enable_interpolation) {
+		interpolate_image(argc, argv, optind);
+	} else {
+		compute_flow_only(argc, argv, optind);
 	}
 }
