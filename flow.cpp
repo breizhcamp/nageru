@@ -1390,7 +1390,7 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	glViewport(0, 0, width, height);
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);  // We store the difference between I_0 and I_1, where less difference is good. (Default is effectively +inf, which always loses.)
+	glDepthFunc(GL_LESS);  // We store the difference between I_0 and I_1, where less difference is good. (Default 1.0 is effectively +inf, which always loses.)
 	glBindVertexArray(splat_vao);
 
 	// FIXME: Get this into FBOSet, so we can reuse FBOs across frames.
@@ -1513,7 +1513,7 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	{
 		ScopedTimer timer("Clear", &total_timer);
 		glClearTexImage(flow_tex, 0, GL_RG, GL_FLOAT, nullptr);
-		float infinity = 1000000.0f;
+		float infinity = 1.0f;
 		glClearTexImage(depth_tex, 0, GL_DEPTH_COMPONENT, GL_FLOAT, &infinity);
 	}
 

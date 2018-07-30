@@ -16,5 +16,5 @@ void main()
 	vec3 I_0 = texture(image0_tex, image_pos + I_0_check_offset).rgb;
 	vec3 I_1 = texture(image1_tex, image_pos + I_1_check_offset).rgb;
 	vec3 diff = abs(I_1 - I_0);
-	gl_FragDepth = diff.x + diff.y + diff.z;
+	gl_FragDepth = 0.125 * (diff.x + diff.y + diff.z);  // Make sure we stay well under the 1.0 maximum.
 }
