@@ -1381,7 +1381,9 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	bind_sampler(splat_program, uniform_image1_tex, 1, tex1, linear_sampler);
 
 	// FIXME: This is set to 1.0 right now so not to trigger Haswell's “PMA stall”.
-	// Move to 2.0 later.
+	// Move to 2.0 later, or even 4.0.
+	// (Since we have hole filling, it's not critical, but larger values seem to do
+	// better than hole filling for large motion, blurs etc.)
 	float splat_size = 1.0f;  // 4x4 splat means 16x overdraw, 2x2 splat means 4x overdraw.
 	glProgramUniform2f(splat_program, uniform_splat_size, splat_size / width, splat_size / height);
 	glProgramUniform1f(splat_program, uniform_alpha, alpha);
@@ -1409,6 +1411,196 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	bind_sampler(splat_program, uniform_flow_tex, 2, backward_flow_tex, nearest_sampler);
 	glProgramUniform1i(splat_program, uniform_invert_flow, 1);
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width * height);
+
+	glDisable(GL_DEPTH_TEST);
+
+	glDeleteFramebuffers(1, &fbo);
+}
+
+// Doing good and fast hole-filling on a GPU is nontrivial. We choose an option
+// that's fairly simple (given that most holes are really small) and also hopefully
+// cheap should the holes not be so small. Conceptually, we look for the first
+// non-hole to the left of us (ie., shoot a ray until we hit something), then
+// the first non-hole to the right of us, then up and down, and then average them
+// all together. It's going to create “stars” if the holes are big, but OK, that's
+// a tradeoff.
+//
+// Our implementation here is efficient assuming that the hierarchical Z-buffer is
+// on even for shaders that do discard (this typically kills early Z, but hopefully
+// not hierarchical Z); we set up Z so that only holes are written to, which means
+// that as soon as a hole is filled, the rasterizer should just skip it. Most of the
+// fullscreen quads should just be discarded outright, really.
+class HoleFill {
+public:
+	HoleFill();
+
+	// Output will be in flow_tex, temp_tex[0, 1, 2], representing the filling
+	// from the down, left, right and up, respectively. Use HoleBlend to merge
+	// them into one.
+	void exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height);
+
+private:
+	PersistentFBOSet<2> fbos;
+
+	GLuint fill_vs_obj;
+	GLuint fill_fs_obj;
+	GLuint fill_program;
+	GLuint fill_vao;
+
+	GLuint uniform_tex;
+	GLuint uniform_z, uniform_sample_offset;
+};
+
+HoleFill::HoleFill()
+{
+	fill_vs_obj = compile_shader(read_file("hole_fill.vert"), GL_VERTEX_SHADER);
+	fill_fs_obj = compile_shader(read_file("hole_fill.frag"), GL_FRAGMENT_SHADER);
+	fill_program = link_program(fill_vs_obj, fill_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &fill_vao);
+	glBindVertexArray(fill_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(fill_program, "position");
+	glEnableVertexArrayAttrib(fill_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_tex = glGetUniformLocation(fill_program, "tex");
+	uniform_z = glGetUniformLocation(fill_program, "z");
+	uniform_sample_offset = glGetUniformLocation(fill_program, "sample_offset");
+}
+
+void HoleFill::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height)
+{
+	glUseProgram(fill_program);
+
+	bind_sampler(fill_program, uniform_tex, 0, flow_tex, nearest_sampler);
+
+	glProgramUniform1f(fill_program, uniform_z, 1.0f - 1.0f / 1024.0f);
+
+	glViewport(0, 0, width, height);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);  // Only update the values > 0.999f (ie., only invalid pixels).
+	glBindVertexArray(fill_vao);
+
+	// FIXME: Get this into FBOSet, so we can reuse FBOs across frames.
+	GLuint fbo;
+	glCreateFramebuffers(1, &fbo);
+	glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, flow_tex, 0);  // NOTE: Reading and writing to the same texture.
+	glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, depth_tex, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	// Fill holes from the left, by shifting 1, 2, 4, 8, etc. pixels to the right.
+	for (int offs = 1; offs < width; offs *= 2) {
+		glProgramUniform2f(fill_program, uniform_sample_offset, -offs / float(width), 0.0f);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glTextureBarrier();
+	}
+	glCopyImageSubData(flow_tex, GL_TEXTURE_2D, 0, 0, 0, 0, temp_tex[0], GL_TEXTURE_2D, 0, 0, 0, 0, width, height, 1);
+
+	// Similar to the right; adjust Z a bit down, so that we re-fill the pixels that
+	// were overwritten in the last algorithm.
+	glProgramUniform1f(fill_program, uniform_z, 1.0f - 2.0f / 1024.0f);
+	for (int offs = 1; offs < width; offs *= 2) {
+		glProgramUniform2f(fill_program, uniform_sample_offset, offs / float(width), 0.0f);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glTextureBarrier();
+	}
+	glCopyImageSubData(flow_tex, GL_TEXTURE_2D, 0, 0, 0, 0, temp_tex[1], GL_TEXTURE_2D, 0, 0, 0, 0, width, height, 1);
+
+	// Up.
+	glProgramUniform1f(fill_program, uniform_z, 1.0f - 3.0f / 1024.0f);
+	for (int offs = 1; offs < height; offs *= 2) {
+		glProgramUniform2f(fill_program, uniform_sample_offset, 0.0f, -offs / float(height));
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glTextureBarrier();
+	}
+	glCopyImageSubData(flow_tex, GL_TEXTURE_2D, 0, 0, 0, 0, temp_tex[2], GL_TEXTURE_2D, 0, 0, 0, 0, width, height, 1);
+
+	// Down.
+	glProgramUniform1f(fill_program, uniform_z, 1.0f - 4.0f / 1024.0f);
+	for (int offs = 1; offs < height; offs *= 2) {
+		glProgramUniform2f(fill_program, uniform_sample_offset, 0.0f, offs / float(height));
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glTextureBarrier();
+	}
+
+	glDisable(GL_DEPTH_TEST);
+
+	glDeleteFramebuffers(1, &fbo);
+}
+
+// Blend the four directions from HoleFill into one pixel, so that single-pixel
+// holes become the average of their four neighbors.
+class HoleBlend {
+public:
+	HoleBlend();
+
+	void exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height);
+
+private:
+	PersistentFBOSet<2> fbos;
+
+	GLuint blend_vs_obj;
+	GLuint blend_fs_obj;
+	GLuint blend_program;
+	GLuint blend_vao;
+
+	GLuint uniform_left_tex, uniform_right_tex, uniform_up_tex, uniform_down_tex;
+	GLuint uniform_z, uniform_sample_offset;
+};
+
+HoleBlend::HoleBlend()
+{
+	blend_vs_obj = compile_shader(read_file("hole_fill.vert"), GL_VERTEX_SHADER);  // Reuse the vertex shader from the fill.
+	blend_fs_obj = compile_shader(read_file("hole_blend.frag"), GL_FRAGMENT_SHADER);
+	blend_program = link_program(blend_vs_obj, blend_fs_obj);
+
+	// Set up the VAO containing all the required position/texcoord data.
+	glCreateVertexArrays(1, &blend_vao);
+	glBindVertexArray(blend_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = glGetAttribLocation(blend_program, "position");
+	glEnableVertexArrayAttrib(blend_vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+	uniform_left_tex = glGetUniformLocation(blend_program, "left_tex");
+	uniform_right_tex = glGetUniformLocation(blend_program, "right_tex");
+	uniform_up_tex = glGetUniformLocation(blend_program, "up_tex");
+	uniform_down_tex = glGetUniformLocation(blend_program, "down_tex");
+	uniform_z = glGetUniformLocation(blend_program, "z");
+	uniform_sample_offset = glGetUniformLocation(blend_program, "sample_offset");
+}
+
+void HoleBlend::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height)
+{
+	glUseProgram(blend_program);
+
+	bind_sampler(blend_program, uniform_left_tex, 0, temp_tex[0], nearest_sampler);
+	bind_sampler(blend_program, uniform_right_tex, 1, temp_tex[1], nearest_sampler);
+	bind_sampler(blend_program, uniform_up_tex, 2, temp_tex[2], nearest_sampler);
+	bind_sampler(blend_program, uniform_down_tex, 3, flow_tex, nearest_sampler);
+
+	glProgramUniform1f(blend_program, uniform_z, 1.0f - 4.0f / 1024.0f);
+	glProgramUniform2f(blend_program, uniform_sample_offset, 0.0f, 0.0f);
+
+	glViewport(0, 0, width, height);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);  // Skip over all of the pixels that were never holes to begin with.
+	glBindVertexArray(blend_vao);
+
+	// FIXME: Get this into FBOSet, so we can reuse FBOs across frames.
+	GLuint fbo;
+	glCreateFramebuffers(1, &fbo);
+	glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, flow_tex, 0);  // NOTE: Reading and writing to the same texture.
+	glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, depth_tex, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	glDisable(GL_DEPTH_TEST);
 
@@ -1486,6 +1678,8 @@ private:
 	int width, height, flow_level;
 	TexturePool pool;
 	Splat splat;
+	HoleFill hole_fill;
+	HoleBlend hole_blend;
 	Blend blend;
 };
 
@@ -1512,20 +1706,34 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	GLuint depth_tex = pool.get_texture(GL_DEPTH_COMPONENT32F, flow_width, flow_height);  // Used for ranking flows.
 	{
 		ScopedTimer timer("Clear", &total_timer);
-		glClearTexImage(flow_tex, 0, GL_RG, GL_FLOAT, nullptr);
+		float invalid_flow[] = { 1000.0f, 1000.0f };
+		glClearTexImage(flow_tex, 0, GL_RG, GL_FLOAT, invalid_flow);
 		float infinity = 1.0f;
 		glClearTexImage(depth_tex, 0, GL_DEPTH_COMPONENT, GL_FLOAT, &infinity);
 	}
 
-	//SDL_GL_SwapWindow(window);
 	{
 		ScopedTimer timer("Splat", &total_timer);
 		splat.exec(tex0_view, tex1_view, forward_flow_tex, backward_flow_tex, flow_tex, depth_tex, flow_width, flow_height, alpha);
 	}
-	//SDL_GL_SwapWindow(window);
-	pool.release_texture(depth_tex);
 	glDeleteTextures(1, &tex0_view);
 	glDeleteTextures(1, &tex1_view);
+
+	GLuint temp_tex[3];
+	temp_tex[0] = pool.get_texture(GL_RG16F, flow_width, flow_height);
+	temp_tex[1] = pool.get_texture(GL_RG16F, flow_width, flow_height);
+	temp_tex[2] = pool.get_texture(GL_RG16F, flow_width, flow_height);
+
+	{
+		ScopedTimer timer("Fill holes", &total_timer);
+		hole_fill.exec(flow_tex, depth_tex, temp_tex, flow_width, flow_height);
+		hole_blend.exec(flow_tex, depth_tex, temp_tex, flow_width, flow_height);
+	}
+
+	pool.release_texture(temp_tex[0]);
+	pool.release_texture(temp_tex[1]);
+	pool.release_texture(temp_tex[2]);
+	pool.release_texture(depth_tex);
 
 	GLuint output_tex = pool.get_texture(GL_RGB8, width, height);
 	{
