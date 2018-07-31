@@ -1735,7 +1735,7 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	pool.release_texture(temp_tex[2]);
 	pool.release_texture(depth_tex);
 
-	GLuint output_tex = pool.get_texture(GL_RGB8, width, height);
+	GLuint output_tex = pool.get_texture(GL_RGBA8, width, height);
 	{
 		ScopedTimer timer("Blend", &total_timer);
 		blend.exec(tex0, tex1, flow_tex, output_tex, width, height, alpha);
@@ -1787,6 +1787,11 @@ void flip_coordinate_system(float *dense_flow, unsigned width, unsigned height)
 	}
 }
 
+// Not relevant for RGB.
+void flip_coordinate_system(uint8_t *dense_flow, unsigned width, unsigned height)
+{
+}
+
 void write_flow(const char *filename, const float *dense_flow, unsigned width, unsigned height)
 {
 	FILE *flowfp = fopen(filename, "wb");
@@ -1798,6 +1803,12 @@ void write_flow(const char *filename, const float *dense_flow, unsigned width, u
 		fwrite(&dense_flow[yy * width * 2], width * 2 * sizeof(float), 1, flowfp);
 	}
 	fclose(flowfp);
+}
+
+// Not relevant for RGB.
+void write_flow(const char *filename, const uint8_t *dense_flow, unsigned width, unsigned height)
+{
+	assert(false);
 }
 
 void write_ppm(const char *filename, const float *dense_flow, unsigned width, unsigned height)
@@ -1820,15 +1831,49 @@ void write_ppm(const char *filename, const float *dense_flow, unsigned width, un
 	fclose(fp);
 }
 
+void write_ppm(const char *filename, const uint8_t *rgba, unsigned width, unsigned height)
+{
+	unique_ptr<uint8_t[]> rgb_line(new uint8_t[width * 3 + 1]);
+
+	FILE *fp = fopen(filename, "wb");
+	fprintf(fp, "P6\n%d %d\n255\n", width, height);
+	for (unsigned y = 0; y < height; ++y) {
+		unsigned y2 = height - 1 - y;
+		for (size_t x = 0; x < width; ++x) {
+			memcpy(&rgb_line[x * 3], &rgba[(y2 * width + x) * 4], 4);
+		}
+		fwrite(rgb_line.get(), width * 3, 1, fp);
+	}
+	fclose(fp);
+}
+
+struct FlowType {
+	using type = float;
+	static constexpr GLenum gl_format = GL_RG;
+	static constexpr GLenum gl_type = GL_FLOAT;
+	static constexpr int num_channels = 2;
+};
+
+struct RGBAType {
+	using type = uint8_t;
+	static constexpr GLenum gl_format = GL_RGBA;
+	static constexpr GLenum gl_type = GL_UNSIGNED_BYTE;
+	static constexpr int num_channels = 4;
+};
+
+template <class Type>
 void finish_one_read(GLuint width, GLuint height)
 {
+	using T = typename Type::type;
+	constexpr int bytes_per_pixel = Type::num_channels * sizeof(T);
+
 	assert(!reads_in_progress.empty());
 	ReadInProgress read = reads_in_progress.front();
 	reads_in_progress.pop_front();
 
-	unique_ptr<float[]> flow(new float[width * height * 2]);
-	void *buf = glMapNamedBufferRange(read.pbo, 0, width * height * 2 * sizeof(float), GL_MAP_READ_BIT);  // Blocks if the read isn't done yet.
-	memcpy(flow.get(), buf, width * height * 2 * sizeof(float));
+	unique_ptr<T[]> flow(new typename Type::type[width * height * Type::num_channels]);
+	void *buf = glMapNamedBufferRange(read.pbo, 0, width * height * bytes_per_pixel, GL_MAP_READ_BIT);  // Blocks if the read isn't done yet.
+	memcpy(flow.get(), buf, width * height * bytes_per_pixel);  // TODO: Unneeded for RGBType, since flip_coordinate_system() does nothing.:
 	glUnmapNamedBuffer(read.pbo);
 	spare_pbos.push(read.pbo);
 
@@ -1842,16 +1887,20 @@ void finish_one_read(GLuint width, GLuint height)
 	}
 }
 
+template <class Type>
 void schedule_read(GLuint tex, GLuint width, GLuint height, const char *filename0, const char *filename1, const char *flow_filename, const char *ppm_filename)
 {
+	using T = typename Type::type;
+	constexpr int bytes_per_pixel = Type::num_channels * sizeof(T);
+
 	if (spare_pbos.empty()) {
-		finish_one_read(width, height);
+		finish_one_read<Type>(width, height);
 	}
 	assert(!spare_pbos.empty());
 	reads_in_progress.emplace_back(ReadInProgress{ spare_pbos.top(), filename0, filename1, flow_filename, ppm_filename });
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, spare_pbos.top());
 	spare_pbos.pop();
-	glGetTextureImage(tex, 0, GL_RG, GL_FLOAT, width * height * 2 * sizeof(float), nullptr);
+	glGetTextureImage(tex, 0, Type::gl_format, Type::gl_type, width * height * bytes_per_pixel, nullptr);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 }
 
@@ -1899,7 +1948,7 @@ void compute_flow_only(int argc, char **argv, int optind)
 	DISComputeFlow compute_flow(width1, height1);
 	GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
 
-	schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "flow.ppm");
+	schedule_read<FlowType>(final_tex, width1, height1, filename0, filename1, flow_filename, "flow.ppm");
 	compute_flow.release_texture(final_tex);
 
 	// See if there are more flows on the command line (ie., more than three arguments),
@@ -1932,14 +1981,14 @@ void compute_flow_only(int argc, char **argv, int optind)
 
 		GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
 
-		schedule_read(final_tex, width1, height1, filename0, filename1, flow_filename, "");
+		schedule_read<FlowType>(final_tex, width1, height1, filename0, filename1, flow_filename, "");
 		compute_flow.release_texture(final_tex);
 	}
 	glDeleteTextures(1, &tex0_gray);
 	glDeleteTextures(1, &tex1_gray);
 
 	while (!reads_in_progress.empty()) {
-		finish_one_read(width1, height1);
+		finish_one_read<FlowType>(width1, height1);
 	}
 }
 
@@ -1970,14 +2019,13 @@ void interpolate_image(int argc, char **argv, int optind)
 	GLuint pbos[5];
 	glCreateBuffers(5, pbos);
 	for (int i = 0; i < 5; ++i) {
-		glNamedBufferData(pbos[i], width1 * height1 * 2 * sizeof(float), nullptr, GL_STREAM_READ);
+		glNamedBufferData(pbos[i], width1 * height1 * 4 * sizeof(uint8_t), nullptr, GL_STREAM_READ);
 		spare_pbos.push(pbos[i]);
 	}
 
 	DISComputeFlow compute_flow(width1, height1);
 	GrayscaleConversion gray;
 	Interpolate interpolate(width1, height1, finest_level);
-	//Interpolate interpolate(width1, height1, 0);
 
 	int levels = find_num_levels(width1, height1);
 	GLuint tex0_gray, tex1_gray;
@@ -1996,26 +2044,19 @@ void interpolate_image(int argc, char **argv, int optind)
 	GLuint backward_flow_tex = compute_flow.exec(tex1_gray, tex0_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 
 	for (int frameno = 1; frameno < 60; ++frameno) {
+		char ppm_filename[256];
+		snprintf(ppm_filename, sizeof(ppm_filename), "interp%04d.ppm", frameno);
+
 		float alpha = frameno / 60.0f;
 		GLuint interpolated_tex = interpolate.exec(tex0, tex1, forward_flow_tex, backward_flow_tex, width1, height1, alpha);
 
-		unique_ptr<uint8_t[]> rgb(new uint8_t[width1 * height1 * 3]);
-		glGetTextureImage(interpolated_tex, 0, GL_RGB, GL_UNSIGNED_BYTE, width1 * height1 * 3, rgb.get());
-
-		char buf[256];
-		snprintf(buf, sizeof(buf), "interp%04d.ppm", frameno);
-		FILE *fp = fopen(buf, "wb");
-		fprintf(fp, "P6\n%d %d\n255\n", width1, height1);
-		for (unsigned y = 0; y < height1; ++y) {
-			unsigned y2 = height1 - 1 - y;
-			fwrite(rgb.get() + y2 * width1 * 3, width1 * 3, 1, fp);
-		}
-		fclose(fp);
+		schedule_read<RGBAType>(interpolated_tex, width1, height1, filename0, filename1, "", ppm_filename);
+		interpolate.release_texture(interpolated_tex);
 	}
 
-	//schedule_read(interpolated_tex, width1, height1, filename0, filename1, "", "halfflow.ppm");
-	//interpolate.release_texture(interpolated_tex);
-	//finish_one_read(width1, height1);
+	while (!reads_in_progress.empty()) {
+		finish_one_read<RGBAType>(width1, height1);
+	}
 }
 
 int main(int argc, char **argv)
