@@ -6,7 +6,6 @@ flat out vec2 flow_du;
 flat out float mean_diff;
 
 uniform vec2 patch_size;  // In 0..1 coordinates.
-uniform vec2 patch_spacing;  // In 0..1 coordinates.
 uniform sampler2D flow_tex;
 
 void main()

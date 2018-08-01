@@ -489,7 +489,7 @@ private:
 	GLuint densify_program;
 	GLuint densify_vao;
 
-	GLuint uniform_patch_size, uniform_patch_spacing;
+	GLuint uniform_patch_size;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
 };
 
@@ -509,7 +509,6 @@ Densify::Densify()
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_patch_size = glGetUniformLocation(densify_program, "patch_size");
-	uniform_patch_spacing = glGetUniformLocation(densify_program, "patch_spacing");
 	uniform_image0_tex = glGetUniformLocation(densify_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(densify_program, "image1_tex");
 	uniform_flow_tex = glGetUniformLocation(densify_program, "flow_tex");
@@ -526,14 +525,6 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 	glProgramUniform2f(densify_program, uniform_patch_size,
 		float(patch_size_pixels) / level_width,
 		float(patch_size_pixels) / level_height);
-
-	float patch_spacing_x = float(level_width - patch_size_pixels) / (width_patches - 1);
-	float patch_spacing_y = float(level_height - patch_size_pixels) / (height_patches - 1);
-	if (width_patches == 1) patch_spacing_x = 0.0f;  // Avoid infinities.
-	if (height_patches == 1) patch_spacing_y = 0.0f;
-	glProgramUniform2f(densify_program, uniform_patch_spacing,
-		patch_spacing_x / level_width,
-		patch_spacing_y / level_height);
 
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
