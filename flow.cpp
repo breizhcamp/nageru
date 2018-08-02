@@ -1547,6 +1547,7 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 		ScopedTimer timer("Blend", &total_timer);
 		blend.exec(tex0, tex1, flow_tex, output_tex, width, height, alpha);
 	}
+	pool.release_texture(flow_tex);
 	total_timer.end();
 	timers.print();
 
