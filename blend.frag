@@ -4,7 +4,7 @@ in vec2 tc;
 out vec4 rgba;
 
 uniform sampler2D image0_tex, image1_tex, flow_tex;
-uniform float alpha, flow_consistency_tolerance;
+uniform float alpha;
 
 void main()
 {
