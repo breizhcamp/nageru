@@ -1,6 +1,6 @@
 #version 450 core
 
-in vec2 position;
+layout(location=0) in vec2 position;
 out vec2 flow_tc;
 out vec2 patch_center;
 

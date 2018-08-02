@@ -1,6 +1,6 @@
 #version 450 core
 
-in vec2 position;
+layout(location=0) in vec2 position;
 out vec2 image_pos;
 flat out vec2 flow_du;
 flat out float mean_diff;

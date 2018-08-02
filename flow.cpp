@@ -222,32 +222,6 @@ GLuint link_program(GLuint vs_obj, GLuint fs_obj)
 	return program;
 }
 
-GLuint generate_vbo(GLint size, GLsizeiptr data_size, const GLvoid *data)
-{
-	GLuint vbo;
-	glCreateBuffers(1, &vbo);
-	glBufferData(GL_ARRAY_BUFFER, data_size, data, GL_STATIC_DRAW);
-	glNamedBufferData(vbo, data_size, data, GL_STATIC_DRAW);
-	return vbo;
-}
-
-GLuint fill_vertex_attribute(GLuint vao, GLuint glsl_program_num, const string &attribute_name, GLint size, GLenum type, GLsizeiptr data_size, const GLvoid *data)
-{
-	int attrib = glGetAttribLocation(glsl_program_num, attribute_name.c_str());
-	if (attrib == -1) {
-		return -1;
-	}
-
-	GLuint vbo = generate_vbo(size, data_size, data);
-
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glEnableVertexArrayAttrib(vao, attrib);
-	glVertexAttribPointer(attrib, size, type, GL_FALSE, 0, BUFFER_OFFSET(0));
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	return vbo;
-}
-
 void bind_sampler(GLuint program, GLint location, GLuint texture_unit, GLuint tex, GLuint sampler)
 {
 	if (location == -1) {
@@ -428,7 +402,6 @@ private:
 	GLuint sobel_vs_obj;
 	GLuint sobel_fs_obj;
 	GLuint sobel_program;
-	GLuint sobel_vao;
 
 	GLuint uniform_tex;
 };
@@ -438,14 +411,6 @@ Sobel::Sobel()
 	sobel_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	sobel_fs_obj = compile_shader(read_file("sobel.frag"), GL_FRAGMENT_SHADER);
 	sobel_program = link_program(sobel_vs_obj, sobel_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &sobel_vao);
-	glBindVertexArray(sobel_vao);
-
-	GLint position_attrib = glGetAttribLocation(sobel_program, "position");
-	glEnableVertexArrayAttrib(sobel_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_tex = glGetUniformLocation(sobel_program, "tex");
 }
@@ -457,7 +422,6 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 
 	glViewport(0, 0, level_width, level_height);
 	fbos.render_to(grad0_tex);
-	glBindVertexArray(sobel_vao);
 	glUseProgram(sobel_program);
 	glDisable(GL_BLEND);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -475,7 +439,6 @@ private:
 	GLuint motion_vs_obj;
 	GLuint motion_fs_obj;
 	GLuint motion_search_program;
-	GLuint motion_search_vao;
 
 	GLuint uniform_inv_image_size, uniform_inv_prev_level_size;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
@@ -486,15 +449,6 @@ MotionSearch::MotionSearch()
 	motion_vs_obj = compile_shader(read_file("motion_search.vert"), GL_VERTEX_SHADER);
 	motion_fs_obj = compile_shader(read_file("motion_search.frag"), GL_FRAGMENT_SHADER);
 	motion_search_program = link_program(motion_vs_obj, motion_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &motion_search_vao);
-	glBindVertexArray(motion_search_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(motion_search_program, "position");
-	glEnableVertexArrayAttrib(motion_search_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
 	uniform_inv_prev_level_size = glGetUniformLocation(motion_search_program, "inv_prev_level_size");
@@ -518,7 +472,6 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 
 	glViewport(0, 0, width_patches, height_patches);
 	fbos.render_to(flow_out_tex);
-	glBindVertexArray(motion_search_vao);
 	glUseProgram(motion_search_program);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -542,7 +495,6 @@ private:
 	GLuint densify_vs_obj;
 	GLuint densify_fs_obj;
 	GLuint densify_program;
-	GLuint densify_vao;
 
 	GLuint uniform_patch_size;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
@@ -553,15 +505,6 @@ Densify::Densify()
 	densify_vs_obj = compile_shader(read_file("densify.vert"), GL_VERTEX_SHADER);
 	densify_fs_obj = compile_shader(read_file("densify.frag"), GL_FRAGMENT_SHADER);
 	densify_program = link_program(densify_vs_obj, densify_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &densify_vao);
-	glBindVertexArray(densify_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(densify_program, "position");
-	glEnableVertexArrayAttrib(densify_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_patch_size = glGetUniformLocation(densify_program, "patch_size");
 	uniform_image0_tex = glGetUniformLocation(densify_program, "image0_tex");
@@ -584,7 +527,6 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
-	glBindVertexArray(densify_vao);
 	fbos.render_to(dense_flow_tex);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -610,7 +552,6 @@ private:
 	GLuint prewarp_vs_obj;
 	GLuint prewarp_fs_obj;
 	GLuint prewarp_program;
-	GLuint prewarp_vao;
 
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
 };
@@ -620,15 +561,6 @@ Prewarp::Prewarp()
 	prewarp_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	prewarp_fs_obj = compile_shader(read_file("prewarp.frag"), GL_FRAGMENT_SHADER);
 	prewarp_program = link_program(prewarp_vs_obj, prewarp_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &prewarp_vao);
-	glBindVertexArray(prewarp_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(prewarp_program, "position");
-	glEnableVertexArrayAttrib(prewarp_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_image0_tex = glGetUniformLocation(prewarp_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(prewarp_program, "image1_tex");
@@ -645,7 +577,6 @@ void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I
 
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
-	glBindVertexArray(prewarp_vao);
 	fbos.render_to(I_tex, I_t_tex, normalized_flow_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -669,7 +600,6 @@ private:
 	GLuint derivatives_vs_obj;
 	GLuint derivatives_fs_obj;
 	GLuint derivatives_program;
-	GLuint derivatives_vao;
 
 	GLuint uniform_tex;
 };
@@ -679,15 +609,6 @@ Derivatives::Derivatives()
 	derivatives_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	derivatives_fs_obj = compile_shader(read_file("derivatives.frag"), GL_FRAGMENT_SHADER);
 	derivatives_program = link_program(derivatives_vs_obj, derivatives_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &derivatives_vao);
-	glBindVertexArray(derivatives_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(derivatives_program, "position");
-	glEnableVertexArrayAttrib(derivatives_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_tex = glGetUniformLocation(derivatives_program, "tex");
 }
@@ -700,7 +621,6 @@ void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, in
 
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
-	glBindVertexArray(derivatives_vao);
 	fbos.render_to(I_x_y_tex, beta_0_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -723,7 +643,6 @@ private:
 	GLuint smoothness_vs_obj;
 	GLuint smoothness_fs_obj;
 	GLuint smoothness_program;
-	GLuint smoothness_vao;
 
 	GLuint uniform_flow_tex, uniform_diff_flow_tex;
 	GLuint uniform_alpha, uniform_zero_diff_flow;
@@ -734,15 +653,6 @@ ComputeSmoothness::ComputeSmoothness()
 	smoothness_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	smoothness_fs_obj = compile_shader(read_file("smoothness.frag"), GL_FRAGMENT_SHADER);
 	smoothness_program = link_program(smoothness_vs_obj, smoothness_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &smoothness_vao);
-	glBindVertexArray(smoothness_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(smoothness_program, "position");
-	glEnableVertexArrayAttrib(smoothness_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_flow_tex = glGetUniformLocation(smoothness_program, "flow_tex");
 	uniform_diff_flow_tex = glGetUniformLocation(smoothness_program, "diff_flow_tex");
@@ -762,7 +672,6 @@ void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoot
 	glViewport(0, 0, level_width, level_height);
 
 	glDisable(GL_BLEND);
-	glBindVertexArray(smoothness_vao);
 	fbos.render_to(smoothness_x_tex, smoothness_y_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
@@ -795,7 +704,6 @@ private:
 	GLuint equations_vs_obj;
 	GLuint equations_fs_obj;
 	GLuint equations_program;
-	GLuint equations_vao;
 
 	GLuint uniform_I_x_y_tex, uniform_I_t_tex;
 	GLuint uniform_diff_flow_tex, uniform_base_flow_tex;
@@ -809,15 +717,6 @@ SetupEquations::SetupEquations()
 	equations_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	equations_fs_obj = compile_shader(read_file("equations.frag"), GL_FRAGMENT_SHADER);
 	equations_program = link_program(equations_vs_obj, equations_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &equations_vao);
-	glBindVertexArray(equations_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(equations_program, "position");
-	glEnableVertexArrayAttrib(equations_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_I_x_y_tex = glGetUniformLocation(equations_program, "I_x_y_tex");
 	uniform_I_t_tex = glGetUniformLocation(equations_program, "I_t_tex");
@@ -848,7 +747,6 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
-	glBindVertexArray(equations_vao);
 	fbos.render_to(equation_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -868,7 +766,6 @@ private:
 	GLuint sor_vs_obj;
 	GLuint sor_fs_obj;
 	GLuint sor_program;
-	GLuint sor_vao;
 
 	GLuint uniform_diff_flow_tex;
 	GLuint uniform_equation_tex;
@@ -881,15 +778,6 @@ SOR::SOR()
 	sor_vs_obj = compile_shader(read_file("sor.vert"), GL_VERTEX_SHADER);
 	sor_fs_obj = compile_shader(read_file("sor.frag"), GL_FRAGMENT_SHADER);
 	sor_program = link_program(sor_vs_obj, sor_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &sor_vao);
-	glBindVertexArray(sor_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(sor_program, "position");
-	glEnableVertexArrayAttrib(sor_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_diff_flow_tex = glGetUniformLocation(sor_program, "diff_flow_tex");
 	uniform_equation_tex = glGetUniformLocation(sor_program, "equation_tex");
@@ -916,7 +804,6 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 	// as per the spec.
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
-	glBindVertexArray(sor_vao);
 	fbos.render_to(diff_flow_tex);
 
 	for (int i = 0; i < num_iterations; ++i) {
@@ -954,7 +841,6 @@ private:
 	GLuint add_flow_vs_obj;
 	GLuint add_flow_fs_obj;
 	GLuint add_flow_program;
-	GLuint add_flow_vao;
 
 	GLuint uniform_diff_flow_tex;
 };
@@ -964,15 +850,6 @@ AddBaseFlow::AddBaseFlow()
 	add_flow_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	add_flow_fs_obj = compile_shader(read_file("add_base_flow.frag"), GL_FRAGMENT_SHADER);
 	add_flow_program = link_program(add_flow_vs_obj, add_flow_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &add_flow_vao);
-	glBindVertexArray(add_flow_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(add_flow_program, "position");
-	glEnableVertexArrayAttrib(add_flow_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_diff_flow_tex = glGetUniformLocation(add_flow_program, "diff_flow_tex");
 }
@@ -986,7 +863,6 @@ void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_wid
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
-	glBindVertexArray(add_flow_vao);
 	fbos.render_to(base_flow_tex);
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -1004,7 +880,6 @@ private:
 	GLuint resize_flow_vs_obj;
 	GLuint resize_flow_fs_obj;
 	GLuint resize_flow_program;
-	GLuint resize_flow_vao;
 
 	GLuint uniform_flow_tex;
 	GLuint uniform_scale_factor;
@@ -1015,15 +890,6 @@ ResizeFlow::ResizeFlow()
 	resize_flow_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	resize_flow_fs_obj = compile_shader(read_file("resize_flow.frag"), GL_FRAGMENT_SHADER);
 	resize_flow_program = link_program(resize_flow_vs_obj, resize_flow_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &resize_flow_vao);
-	glBindVertexArray(resize_flow_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(resize_flow_program, "position");
-	glEnableVertexArrayAttrib(resize_flow_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_flow_tex = glGetUniformLocation(resize_flow_program, "flow_tex");
 	uniform_scale_factor = glGetUniformLocation(resize_flow_program, "scale_factor");
@@ -1039,7 +905,6 @@ void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int inpu
 
 	glViewport(0, 0, output_width, output_height);
 	glDisable(GL_BLEND);
-	glBindVertexArray(resize_flow_vao);
 	fbos.render_to(out_tex);
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -1080,6 +945,7 @@ public:
 private:
 	int width, height;
 	GLuint initial_flow_tex;
+	GLuint vertex_vbo, vao;
 	TexturePool pool;
 
 	// The various passes.
@@ -1127,6 +993,24 @@ DISComputeFlow::DISComputeFlow(int width, int height)
 	glCreateTextures(GL_TEXTURE_2D, 1, &initial_flow_tex);
 	glTextureStorage2D(initial_flow_tex, 1, GL_RG16F, 1, 1);
 	glClearTexImage(initial_flow_tex, 0, GL_RG, GL_FLOAT, nullptr);
+
+	// Set up the vertex data that will be shared between all passes.
+	float vertices[] = {
+		0.0f, 1.0f,
+		0.0f, 0.0f,
+		1.0f, 1.0f,
+		1.0f, 0.0f,
+	};
+	glCreateBuffers(1, &vertex_vbo);
+	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	glCreateVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = 0;  // Hard-coded in every vertex shader.
+	glEnableVertexArrayAttrib(vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 }
 
 GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_strategy)
@@ -1135,6 +1019,8 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 	GLuint prev_level_flow_tex = initial_flow_tex;
 
 	GPUTimers timers;
+
+	glBindVertexArray(vao);
 
 	ScopedTimer total_timer("Total", &timers);
 	for (int level = coarsest_level; level >= int(finest_level); --level) {
@@ -1322,7 +1208,6 @@ private:
 	GLuint splat_vs_obj;
 	GLuint splat_fs_obj;
 	GLuint splat_program;
-	GLuint splat_vao;
 
 	GLuint uniform_invert_flow, uniform_splat_size, uniform_alpha;
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
@@ -1334,15 +1219,6 @@ Splat::Splat()
 	splat_vs_obj = compile_shader(read_file("splat.vert"), GL_VERTEX_SHADER);
 	splat_fs_obj = compile_shader(read_file("splat.frag"), GL_FRAGMENT_SHADER);
 	splat_program = link_program(splat_vs_obj, splat_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &splat_vao);
-	glBindVertexArray(splat_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(splat_program, "position");
-	glEnableVertexArrayAttrib(splat_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_invert_flow = glGetUniformLocation(splat_program, "invert_flow");
 	uniform_splat_size = glGetUniformLocation(splat_program, "splat_size");
@@ -1373,7 +1249,6 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);  // We store the difference between I_0 and I_1, where less difference is good. (Default 1.0 is effectively +inf, which always loses.)
-	glBindVertexArray(splat_vao);
 
 	fbos.render_to(depth_tex, flow_tex);
 
@@ -1424,7 +1299,6 @@ private:
 	GLuint fill_vs_obj;
 	GLuint fill_fs_obj;
 	GLuint fill_program;
-	GLuint fill_vao;
 
 	GLuint uniform_tex;
 	GLuint uniform_z, uniform_sample_offset;
@@ -1435,15 +1309,6 @@ HoleFill::HoleFill()
 	fill_vs_obj = compile_shader(read_file("hole_fill.vert"), GL_VERTEX_SHADER);
 	fill_fs_obj = compile_shader(read_file("hole_fill.frag"), GL_FRAGMENT_SHADER);
 	fill_program = link_program(fill_vs_obj, fill_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &fill_vao);
-	glBindVertexArray(fill_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(fill_program, "position");
-	glEnableVertexArrayAttrib(fill_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_tex = glGetUniformLocation(fill_program, "tex");
 	uniform_z = glGetUniformLocation(fill_program, "z");
@@ -1462,7 +1327,6 @@ void HoleFill::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int w
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);  // Only update the values > 0.999f (ie., only invalid pixels).
-	glBindVertexArray(fill_vao);
 
 	fbos.render_to(depth_tex, flow_tex);  // NOTE: Reading and writing to the same texture.
 
@@ -1518,7 +1382,6 @@ private:
 	GLuint blend_vs_obj;
 	GLuint blend_fs_obj;
 	GLuint blend_program;
-	GLuint blend_vao;
 
 	GLuint uniform_left_tex, uniform_right_tex, uniform_up_tex, uniform_down_tex;
 	GLuint uniform_z, uniform_sample_offset;
@@ -1529,15 +1392,6 @@ HoleBlend::HoleBlend()
 	blend_vs_obj = compile_shader(read_file("hole_fill.vert"), GL_VERTEX_SHADER);  // Reuse the vertex shader from the fill.
 	blend_fs_obj = compile_shader(read_file("hole_blend.frag"), GL_FRAGMENT_SHADER);
 	blend_program = link_program(blend_vs_obj, blend_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &blend_vao);
-	glBindVertexArray(blend_vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
-
-	GLint position_attrib = glGetAttribLocation(blend_program, "position");
-	glEnableVertexArrayAttrib(blend_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_left_tex = glGetUniformLocation(blend_program, "left_tex");
 	uniform_right_tex = glGetUniformLocation(blend_program, "right_tex");
@@ -1563,7 +1417,6 @@ void HoleBlend::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int 
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);  // Skip over all of the pixels that were never holes to begin with.
-	glBindVertexArray(blend_vao);
 
 	fbos.render_to(depth_tex, flow_tex);  // NOTE: Reading and writing to the same texture.
 
@@ -1582,7 +1435,6 @@ private:
 	GLuint blend_vs_obj;
 	GLuint blend_fs_obj;
 	GLuint blend_program;
-	GLuint blend_vao;
 
 	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
 	GLuint uniform_alpha, uniform_flow_consistency_tolerance;
@@ -1593,14 +1445,6 @@ Blend::Blend()
 	blend_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
 	blend_fs_obj = compile_shader(read_file("blend.frag"), GL_FRAGMENT_SHADER);
 	blend_program = link_program(blend_vs_obj, blend_fs_obj);
-
-	// Set up the VAO containing all the required position/texcoord data.
-	glCreateVertexArrays(1, &blend_vao);
-	glBindVertexArray(blend_vao);
-
-	GLint position_attrib = glGetAttribLocation(blend_program, "position");
-	glEnableVertexArrayAttrib(blend_vao, position_attrib);
-	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
 	uniform_image0_tex = glGetUniformLocation(blend_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(blend_program, "image1_tex");
@@ -1620,7 +1464,6 @@ void Blend::exec(GLuint tex0, GLuint tex1, GLuint flow_tex, GLuint output_tex, i
 
 	glViewport(0, 0, level_width, level_height);
 	fbos.render_to(output_tex);
-	glBindVertexArray(blend_vao);
 	glUseProgram(blend_program);
 	glDisable(GL_BLEND);  // A bit ironic, perhaps.
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -1641,7 +1484,9 @@ public:
 
 private:
 	int width, height, flow_level;
+	GLuint vertex_vbo, vao;
 	TexturePool pool;
+
 	Splat splat;
 	HoleFill hole_fill;
 	HoleBlend hole_blend;
@@ -1649,13 +1494,33 @@ private:
 };
 
 Interpolate::Interpolate(int width, int height, int flow_level)
-	: width(width), height(height), flow_level(flow_level) {}
+	: width(width), height(height), flow_level(flow_level) {
+	// Set up the vertex data that will be shared between all passes.
+	float vertices[] = {
+		0.0f, 1.0f,
+		0.0f, 0.0f,
+		1.0f, 1.0f,
+		1.0f, 0.0f,
+	};
+	glCreateBuffers(1, &vertex_vbo);
+	glNamedBufferData(vertex_vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	glCreateVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_vbo);
+
+	GLint position_attrib = 0;  // Hard-coded in every vertex shader.
+	glEnableVertexArrayAttrib(vao, position_attrib);
+	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+}
 
 GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint width, GLuint height, float alpha)
 {
 	GPUTimers timers;
 
 	ScopedTimer total_timer("Total", &timers);
+
+	glBindVertexArray(vao);
 
 	// Pick out the right level to test splatting results on.
 	GLuint tex0_view, tex1_view;

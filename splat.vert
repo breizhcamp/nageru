@@ -1,6 +1,6 @@
 #version 450 core
 
-in vec2 position;
+layout(location=0) in vec2 position;
 out vec2 image_pos;
 flat out vec2 flow, I_0_check_offset, I_1_check_offset;
 
