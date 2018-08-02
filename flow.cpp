@@ -586,6 +586,8 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 	glBlendFunc(GL_ONE, GL_ONE);
 	glBindVertexArray(densify_vao);
 	fbos.render_to(dense_flow_tex);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches);
 }
 
@@ -713,7 +715,7 @@ void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, in
 class ComputeSmoothness {
 public:
 	ComputeSmoothness();
-	void exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height);
+	void exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, bool zero_diff_flow);
 
 private:
 	PersistentFBOSet<2> fbos;
@@ -724,7 +726,7 @@ private:
 	GLuint smoothness_vao;
 
 	GLuint uniform_flow_tex, uniform_diff_flow_tex;
-	GLuint uniform_alpha;
+	GLuint uniform_alpha, uniform_zero_diff_flow;
 };
 
 ComputeSmoothness::ComputeSmoothness()
@@ -745,15 +747,17 @@ ComputeSmoothness::ComputeSmoothness()
 	uniform_flow_tex = glGetUniformLocation(smoothness_program, "flow_tex");
 	uniform_diff_flow_tex = glGetUniformLocation(smoothness_program, "diff_flow_tex");
 	uniform_alpha = glGetUniformLocation(smoothness_program, "alpha");
+	uniform_zero_diff_flow = glGetUniformLocation(smoothness_program, "zero_diff_flow");
 }
 
-void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height)
+void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, bool zero_diff_flow)
 {
 	glUseProgram(smoothness_program);
 
 	bind_sampler(smoothness_program, uniform_flow_tex, 0, flow_tex, nearest_sampler);
 	bind_sampler(smoothness_program, uniform_diff_flow_tex, 1, diff_flow_tex, nearest_sampler);
 	glProgramUniform1f(smoothness_program, uniform_alpha, vr_alpha);
+	glProgramUniform1i(smoothness_program, uniform_zero_diff_flow, zero_diff_flow);
 
 	glViewport(0, 0, level_width, level_height);
 
@@ -783,7 +787,7 @@ void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoot
 class SetupEquations {
 public:
 	SetupEquations();
-	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height);
+	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height, bool zero_diff_flow);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -797,7 +801,7 @@ private:
 	GLuint uniform_diff_flow_tex, uniform_base_flow_tex;
 	GLuint uniform_beta_0_tex;
 	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
-	GLuint uniform_gamma, uniform_delta;
+	GLuint uniform_gamma, uniform_delta, uniform_zero_diff_flow;
 };
 
 SetupEquations::SetupEquations()
@@ -824,9 +828,10 @@ SetupEquations::SetupEquations()
 	uniform_smoothness_y_tex = glGetUniformLocation(equations_program, "smoothness_y_tex");
 	uniform_gamma = glGetUniformLocation(equations_program, "gamma");
 	uniform_delta = glGetUniformLocation(equations_program, "delta");
+	uniform_zero_diff_flow = glGetUniformLocation(equations_program, "zero_diff_flow");
 }
 
-void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height)
+void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height, bool zero_diff_flow)
 {
 	glUseProgram(equations_program);
 
@@ -839,6 +844,7 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 	bind_sampler(equations_program, uniform_smoothness_y_tex, 6, smoothness_y_tex, zero_border_sampler);
 	glProgramUniform1f(equations_program, uniform_delta, vr_delta);
 	glProgramUniform1f(equations_program, uniform_gamma, vr_gamma);
+	glProgramUniform1i(equations_program, uniform_zero_diff_flow, zero_diff_flow);
 
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
@@ -854,7 +860,7 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 class SOR {
 public:
 	SOR();
-	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations, ScopedTimer *sor_timer);
+	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -867,7 +873,7 @@ private:
 	GLuint uniform_diff_flow_tex;
 	GLuint uniform_equation_tex;
 	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
-	GLuint uniform_phase;
+	GLuint uniform_phase, uniform_zero_diff_flow;
 };
 
 SOR::SOR()
@@ -890,9 +896,10 @@ SOR::SOR()
 	uniform_smoothness_x_tex = glGetUniformLocation(sor_program, "smoothness_x_tex");
 	uniform_smoothness_y_tex = glGetUniformLocation(sor_program, "smoothness_y_tex");
 	uniform_phase = glGetUniformLocation(sor_program, "phase");
+	uniform_zero_diff_flow = glGetUniformLocation(sor_program, "zero_diff_flow");
 }
 
-void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations, ScopedTimer *sor_timer)
+void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer)
 {
 	glUseProgram(sor_program);
 
@@ -900,6 +907,8 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 	bind_sampler(sor_program, uniform_smoothness_x_tex, 1, smoothness_x_tex, zero_border_sampler);
 	bind_sampler(sor_program, uniform_smoothness_y_tex, 2, smoothness_y_tex, zero_border_sampler);
 	bind_sampler(sor_program, uniform_equation_tex, 3, equation_tex, nearest_sampler);
+
+	glProgramUniform1i(sor_program, uniform_zero_diff_flow, zero_diff_flow);
 
 	// NOTE: We bind to the texture we are rendering from, but we never write any value
 	// that we read in the same shader pass (we call discard for red values when we compute
@@ -919,6 +928,10 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 		}
 		{
 			ScopedTimer timer("Black pass", sor_timer);
+			if (zero_diff_flow && i == 0) {
+				// Not zero anymore.
+				glProgramUniform1i(sor_program, uniform_zero_diff_flow, 0);
+			}
 			glProgramUniform1i(sor_program, uniform_phase, 1);
 			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 			if (i != num_iterations - 1) {
@@ -1174,9 +1187,8 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 
 		// Densification.
 
-		// Set up an output texture (initially zero).
+		// Set up an output texture (cleared in Densify).
 		GLuint dense_flow_tex = pool.get_texture(GL_RGB16F, level_width, level_height);
-		glClearTexImage(dense_flow_tex, 0, GL_RGB, GL_FLOAT, nullptr);
 
 		// And draw.
 		{
@@ -1220,9 +1232,9 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 		pool.release_texture(I_tex);
 
 		// We need somewhere to store du and dv (the flow increment, relative
-		// to the non-refined base flow u0 and v0). It starts at zero.
+		// to the non-refined base flow u0 and v0). It's initially garbage,
+		// but not read until we've written something sane to it.
 		GLuint du_dv_tex = pool.get_texture(GL_RG16F, level_width, level_height);
-		glClearTexImage(du_dv_tex, 0, GL_RG, GL_FLOAT, nullptr);
 
 		// And for smoothness.
 		GLuint smoothness_x_tex = pool.get_texture(GL_R16F, level_width, level_height);
@@ -1237,20 +1249,20 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 			// both in x and y direction.
 			{
 				ScopedTimer timer("Compute smoothness", &varref_timer);
-				compute_smoothness.exec(base_flow_tex, du_dv_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height);
+				compute_smoothness.exec(base_flow_tex, du_dv_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, outer_idx == 0);
 			}
 
 			// Set up the 2x2 equation system for each pixel.
 			{
 				ScopedTimer timer("Set up equations", &varref_timer);
-				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height);
+				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height, outer_idx == 0);
 			}
 
 			// Run a few SOR (or quasi-SOR, since we're not really Jacobi) iterations.
 			// Note that these are to/from the same texture.
 			{
 				ScopedTimer timer("SOR", &varref_timer);
-				sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5, &timer);
+				sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5, outer_idx == 0, &timer);
 			}
 		}
 
@@ -1364,6 +1376,12 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	glBindVertexArray(splat_vao);
 
 	fbos.render_to(depth_tex, flow_tex);
+
+	// Evidently NVIDIA doesn't use fast clears for glClearTexImage, so clear now that
+	// we've got it bound.
+	glClearColor(1000.0f, 1000.0f, 0.0f, 1.0f);  // Invalid flow.
+	glClearDepth(1.0f);  // Effectively infinity.
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Do forward splatting.
 	bind_sampler(splat_program, uniform_flow_tex, 2, forward_flow_tex, nearest_sampler);
@@ -1651,13 +1669,6 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 
 	GLuint flow_tex = pool.get_texture(GL_RG16F, flow_width, flow_height);
 	GLuint depth_tex = pool.get_texture(GL_DEPTH_COMPONENT32F, flow_width, flow_height);  // Used for ranking flows.
-	{
-		ScopedTimer timer("Clear", &total_timer);
-		float invalid_flow[] = { 1000.0f, 1000.0f };
-		glClearTexImage(flow_tex, 0, GL_RG, GL_FLOAT, invalid_flow);
-		float infinity = 1.0f;
-		glClearTexImage(depth_tex, 0, GL_DEPTH_COMPONENT, GL_FLOAT, &infinity);
-	}
 
 	{
 		ScopedTimer timer("Splat", &total_timer);

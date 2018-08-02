@@ -8,6 +8,8 @@ uniform sampler2D diff_flow_tex, smoothness_x_tex, smoothness_y_tex;
 uniform usampler2D equation_tex;
 uniform int phase;
 
+uniform bool zero_diff_flow;
+
 // See pack_floats_shared() in equations.frag.
 vec2 unpack_floats_shared(uint c)
 {
@@ -43,21 +45,25 @@ void main()
 	float inv_A22 = uintBitsToFloat(equation.z);
 	vec2 b = unpack_floats_shared(equation.w);
 
-	// Subtract the missing terms from the right-hand side
-	// (it couldn't be done earlier, because we didn't know
-	// the values of the neighboring pixels; they change for
-	// each SOR iteration).
-	float smooth_l = textureOffset(smoothness_x_tex, tc, ivec2(-1,  0)).x;
-	float smooth_r = texture(smoothness_x_tex, tc).x;
-	float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
-	float smooth_u = texture(smoothness_y_tex, tc).x;
-	b += smooth_l * textureOffset(diff_flow_tex, tc, ivec2(-1,  0)).xy;
-	b += smooth_r * textureOffset(diff_flow_tex, tc, ivec2( 1,  0)).xy;
-	b += smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;
-	b += smooth_u * textureOffset(diff_flow_tex, tc, ivec2( 0,  1)).xy;
+	if (zero_diff_flow) {
+		diff_flow = vec2(0.0f);
+	} else {
+		// Subtract the missing terms from the right-hand side
+		// (it couldn't be done earlier, because we didn't know
+		// the values of the neighboring pixels; they change for
+		// each SOR iteration).
+		float smooth_l = textureOffset(smoothness_x_tex, tc, ivec2(-1,  0)).x;
+		float smooth_r = texture(smoothness_x_tex, tc).x;
+		float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
+		float smooth_u = texture(smoothness_y_tex, tc).x;
+		b += smooth_l * textureOffset(diff_flow_tex, tc, ivec2(-1,  0)).xy;
+		b += smooth_r * textureOffset(diff_flow_tex, tc, ivec2( 1,  0)).xy;
+		b += smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;
+		b += smooth_u * textureOffset(diff_flow_tex, tc, ivec2( 0,  1)).xy;
+		diff_flow = texture(diff_flow_tex, tc).xy;
+	}
 
 	const float omega = 1.8;  // Marginally better than 1.6, it seems.
-	diff_flow = texture(diff_flow_tex, tc).xy;
 
 	// From https://en.wikipedia.org/wiki/Successive_over-relaxation.
 	float sigma_u = A12 * diff_flow.y;

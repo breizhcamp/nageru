@@ -14,6 +14,8 @@ uniform float delta;
 // Relative weighting of gradient term.
 uniform float gamma;
 
+uniform bool zero_diff_flow;
+
 // Similar to packHalf2x16, but the two values share exponent, and are stored
 // as 12-bit fixed point numbers multiplied by that exponent (the leading one
 // can't be implicit in this kind of format). This allows us to store a much
@@ -56,9 +58,14 @@ uint pack_floats_shared(float a, float b)
 void main()
 {
 	// Read the flow (on top of the u0/v0 flow).
-	vec2 diff_flow = texture(diff_flow_tex, tc).xy;
-	float du = diff_flow.x;
-	float dv = diff_flow.y;
+	float du, dv;
+	if (zero_diff_flow) {
+		du = dv = 0.0f;
+	} else {
+		vec2 diff_flow = texture(diff_flow_tex, tc).xy;
+		du = diff_flow.x;
+		dv = diff_flow.y;
+	}
 
 	// Read the first derivatives.
 	vec2 I_x_y = texture(I_x_y_tex, tc).xy;
