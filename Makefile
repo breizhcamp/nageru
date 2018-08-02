@@ -31,7 +31,7 @@ mainwindow.o: ui_mainwindow.h
 
 futatabi: $(OBJS) $(CEF_LIBS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
-flow: flow.o
+flow: flow.o gpu_timers.o
 	$(CXX) -o $@ $^ -lepoxy -lSDL2 -lSDL2_image
 eval: eval.o util.o
 	$(CXX) -o $@ $^

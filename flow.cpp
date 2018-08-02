@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "gpu_timers.h"
 #include "util.h"
 
 #include <algorithm>
@@ -970,90 +971,6 @@ void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int inpu
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
-
-class GPUTimers {
-public:
-	void print();
-	pair<GLuint, GLuint> begin_timer(const string &name, int level);
-
-private:
-	struct Timer {
-		string name;
-		int level;
-		pair<GLuint, GLuint> query;
-	};
-	vector<Timer> timers;
-};
-
-pair<GLuint, GLuint> GPUTimers::begin_timer(const string &name, int level)
-{
-	if (!enable_timing) {
-		return make_pair(0, 0);
-	}
-
-	GLuint queries[2];
-	glGenQueries(2, queries);
-	glQueryCounter(queries[0], GL_TIMESTAMP);
-
-	Timer timer;
-	timer.name = name;
-	timer.level = level;
-	timer.query.first = queries[0];
-	timer.query.second = queries[1];
-	timers.push_back(timer);
-	return timer.query;
-}
-
-void GPUTimers::print()
-{
-	for (const Timer &timer : timers) {
-		// NOTE: This makes the CPU wait for the GPU.
-		GLuint64 time_start, time_end;
-		glGetQueryObjectui64v(timer.query.first, GL_QUERY_RESULT, &time_start);
-		glGetQueryObjectui64v(timer.query.second, GL_QUERY_RESULT, &time_end);
-		//fprintf(stderr, "GPU time used = %.1f ms\n", time_elapsed / 1e6);
-		for (int i = 0; i < timer.level * 2; ++i) {
-			fprintf(stderr, " ");
-		}
-		fprintf(stderr, "%-30s %4.1f ms\n", timer.name.c_str(), GLint64(time_end - time_start) / 1e6);
-	}
-}
-
-// A simple RAII class for timing until the end of the scope.
-class ScopedTimer {
-public:
-	ScopedTimer(const string &name, GPUTimers *timers)
-		: timers(timers), level(0)
-	{
-		query = timers->begin_timer(name, level);
-	}
-
-	ScopedTimer(const string &name, ScopedTimer *parent_timer)
-		: timers(parent_timer->timers),
-		  level(parent_timer->level + 1)
-	{
-		query = timers->begin_timer(name, level);
-	}
-
-	~ScopedTimer()
-	{
-		end();
-	}
-
-	void end()
-	{
-		if (enable_timing && !ended) {
-			glQueryCounter(query.second, GL_TIMESTAMP);
-			ended = true;
-		}
-	}
-
-private:
-	GPUTimers *timers;
-	int level;
-	pair<GLuint, GLuint> query;
-	bool ended = false;
-};
 
 class TexturePool {
 public:
