@@ -1460,7 +1460,6 @@ void Blend::exec(GLuint tex0, GLuint tex1, GLuint flow_tex, GLuint output_tex, i
 	bind_sampler(blend_program, uniform_image1_tex, 1, tex1, linear_sampler);
 	bind_sampler(blend_program, uniform_flow_tex, 2, flow_tex, linear_sampler);  // May be upsampled.
 	glProgramUniform1f(blend_program, uniform_alpha, alpha);
-	//glProgramUniform1f(blend_program, uniform_flow_consistency_tolerance, 1.0f / 
 
 	glViewport(0, 0, level_width, level_height);
 	fbos.render_to(output_tex);
