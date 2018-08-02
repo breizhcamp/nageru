@@ -268,19 +268,19 @@ public:
 	void render_to(const array<GLuint, num_elements> &textures);
 
 	// Convenience wrappers.
-	void render_to(GLuint texture0, enable_if<num_elements == 1> * = nullptr) {
+	void render_to(GLuint texture0) {
 		render_to({{texture0}});
 	}
 
-	void render_to(GLuint texture0, GLuint texture1, enable_if<num_elements == 2> * = nullptr) {
+	void render_to(GLuint texture0, GLuint texture1) {
 		render_to({{texture0, texture1}});
 	}
 
-	void render_to(GLuint texture0, GLuint texture1, GLuint texture2, enable_if<num_elements == 3> * = nullptr) {
+	void render_to(GLuint texture0, GLuint texture1, GLuint texture2) {
 		render_to({{texture0, texture1, texture2}});
 	}
 
-	void render_to(GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3, enable_if<num_elements == 4> * = nullptr) {
+	void render_to(GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3) {
 		render_to({{texture0, texture1, texture2, texture3}});
 	}
 
