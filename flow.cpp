@@ -47,6 +47,7 @@ constexpr unsigned patch_size_pixels = 12;
 float vr_alpha = 1.0f, vr_delta = 0.25f, vr_gamma = 0.25f;
 
 bool enable_timing = true;
+bool detailed_timing = false;
 bool enable_variational_refinement = true;  // Just for debugging.
 bool enable_interpolation = false;
 
@@ -800,7 +801,7 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 class SOR {
 public:
 	SOR();
-	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations);
+	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations, ScopedTimer *sor_timer);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -838,7 +839,7 @@ SOR::SOR()
 	uniform_phase = glGetUniformLocation(sor_program, "phase");
 }
 
-void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations)
+void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations, ScopedTimer *sor_timer)
 {
 	glUseProgram(sor_program);
 
@@ -857,13 +858,19 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_te
 	fbos.render_to(diff_flow_tex);
 
 	for (int i = 0; i < num_iterations; ++i) {
-		glProgramUniform1i(sor_program, uniform_phase, 0);
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-		glTextureBarrier();
-		glProgramUniform1i(sor_program, uniform_phase, 1);
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-		if (i != num_iterations - 1) {
+		{
+			ScopedTimer timer("Red pass", sor_timer);
+			glProgramUniform1i(sor_program, uniform_phase, 0);
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 			glTextureBarrier();
+		}
+		{
+			ScopedTimer timer("Black pass", sor_timer);
+			glProgramUniform1i(sor_program, uniform_phase, 1);
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+			if (i != num_iterations - 1) {
+				glTextureBarrier();
+			}
 		}
 	}
 }
@@ -1190,7 +1197,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 			// Note that these are to/from the same texture.
 			{
 				ScopedTimer timer("SOR", &varref_timer);
-				sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5);
+				sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5, &timer);
 			}
 		}
 
@@ -1974,6 +1981,7 @@ int main(int argc, char **argv)
 		{ "intensity-relative-weight", required_argument, 0, 'i' },  // delta.
 		{ "gradient-relative-weight", required_argument, 0, 'g' },  // gamma.
 		{ "disable-timing", no_argument, 0, 1000 },
+		{ "detailed-timing", no_argument, 0, 1003 },
 		{ "ignore-variational-refinement", no_argument, 0, 1001 },  // Still calculates it, just doesn't apply it.
 		{ "interpolate", no_argument, 0, 1002 }
 	};
@@ -2003,6 +2011,9 @@ int main(int argc, char **argv)
 			break;
 		case 1002:
 			enable_interpolation = true;
+			break;
+		case 1003:
+			detailed_timing = true;
 			break;
 		default:
 			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);

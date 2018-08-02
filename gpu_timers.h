@@ -8,6 +8,7 @@
 #include <epoxy/gl.h>
 
 extern bool enable_timing;
+extern bool detailed_timing;
 
 class GPUTimers {
 public:
