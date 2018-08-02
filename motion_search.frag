@@ -124,7 +124,7 @@ void main()
 		//   sum(S^T * (x - y)) = [what we calculated] - (µ1 - µ2) sum(S^T)
 		//
 		// so we can just subtract away the mean difference here.
-		mean_diff = (warped_sum - template_sum) * (1.0 / (patch_size * patch_size));
+		mean_diff = (warped_sum - template_sum) * (1.0 / float(patch_size * patch_size));
 		du -= grad_sum * mean_diff;
 
 		if (i == 0) {
