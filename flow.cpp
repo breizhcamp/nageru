@@ -311,6 +311,59 @@ void PersistentFBOSet<num_elements>::render_to(const array<GLuint, num_elements>
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 }
 
+// Same, but with a depth texture.
+template<size_t num_elements>
+class PersistentFBOSetWithDepth {
+public:
+	void render_to(GLuint depth_tex, const array<GLuint, num_elements> &textures);
+
+	// Convenience wrappers.
+	void render_to(GLuint depth_tex, GLuint texture0) {
+		render_to(depth_tex, {{texture0}});
+	}
+
+	void render_to(GLuint depth_tex, GLuint texture0, GLuint texture1) {
+		render_to(depth_tex, {{texture0, texture1}});
+	}
+
+	void render_to(GLuint depth_tex, GLuint texture0, GLuint texture1, GLuint texture2) {
+		render_to(depth_tex, {{texture0, texture1, texture2}});
+	}
+
+	void render_to(GLuint depth_tex, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3) {
+		render_to(depth_tex, {{texture0, texture1, texture2, texture3}});
+	}
+
+private:
+	// TODO: Delete these on destruction.
+	map<pair<GLuint, array<GLuint, num_elements>>, GLuint> fbos;
+};
+
+template<size_t num_elements>
+void PersistentFBOSetWithDepth<num_elements>::render_to(GLuint depth_tex, const array<GLuint, num_elements> &textures)
+{
+	auto key = make_pair(depth_tex, textures);
+
+	auto it = fbos.find(key);
+	if (it != fbos.end()) {
+		glBindFramebuffer(GL_FRAMEBUFFER, it->second);
+		return;
+	}
+
+	GLuint fbo;
+	glCreateFramebuffers(1, &fbo);
+	GLenum bufs[num_elements];
+	glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, depth_tex, 0);
+	for (size_t i = 0; i < num_elements; ++i) {
+		glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0 + i, textures[i], 0);
+		bufs[i] = GL_COLOR_ATTACHMENT0 + i;
+	}
+	glNamedFramebufferDrawBuffers(fbo, num_elements, bufs);
+
+	fbos[key] = fbo;
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+}
+
 // Convert RGB to grayscale, using Rec. 709 coefficients.
 class GrayscaleConversion {
 public:
@@ -1252,7 +1305,7 @@ public:
 	void exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_tex, int width, int height, float alpha);
 
 private:
-	PersistentFBOSet<2> fbos;
+	PersistentFBOSetWithDepth<1> fbos;
 
 	GLuint splat_vs_obj;
 	GLuint splat_fs_obj;
@@ -1310,12 +1363,7 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	glDepthFunc(GL_LESS);  // We store the difference between I_0 and I_1, where less difference is good. (Default 1.0 is effectively +inf, which always loses.)
 	glBindVertexArray(splat_vao);
 
-	// FIXME: Get this into FBOSet, so we can reuse FBOs across frames.
-	GLuint fbo;
-	glCreateFramebuffers(1, &fbo);
-	glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, flow_tex, 0);
-	glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, depth_tex, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	fbos.render_to(depth_tex, flow_tex);
 
 	// Do forward splatting.
 	bind_sampler(splat_program, uniform_flow_tex, 2, forward_flow_tex, nearest_sampler);
@@ -1328,8 +1376,6 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width * height);
 
 	glDisable(GL_DEPTH_TEST);
-
-	glDeleteFramebuffers(1, &fbo);
 }
 
 // Doing good and fast hole-filling on a GPU is nontrivial. We choose an option
@@ -1355,7 +1401,7 @@ public:
 	void exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height);
 
 private:
-	PersistentFBOSet<2> fbos;
+	PersistentFBOSetWithDepth<1> fbos;
 
 	GLuint fill_vs_obj;
 	GLuint fill_fs_obj;
@@ -1400,12 +1446,7 @@ void HoleFill::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int w
 	glDepthFunc(GL_LESS);  // Only update the values > 0.999f (ie., only invalid pixels).
 	glBindVertexArray(fill_vao);
 
-	// FIXME: Get this into FBOSet, so we can reuse FBOs across frames.
-	GLuint fbo;
-	glCreateFramebuffers(1, &fbo);
-	glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, flow_tex, 0);  // NOTE: Reading and writing to the same texture.
-	glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, depth_tex, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	fbos.render_to(depth_tex, flow_tex);  // NOTE: Reading and writing to the same texture.
 
 	// Fill holes from the left, by shifting 1, 2, 4, 8, etc. pixels to the right.
 	for (int offs = 1; offs < width; offs *= 2) {
@@ -1443,8 +1484,6 @@ void HoleFill::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int w
 	}
 
 	glDisable(GL_DEPTH_TEST);
-
-	glDeleteFramebuffers(1, &fbo);
 }
 
 // Blend the four directions from HoleFill into one pixel, so that single-pixel
@@ -1456,7 +1495,7 @@ public:
 	void exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height);
 
 private:
-	PersistentFBOSet<2> fbos;
+	PersistentFBOSetWithDepth<1> fbos;
 
 	GLuint blend_vs_obj;
 	GLuint blend_fs_obj;
@@ -1508,18 +1547,11 @@ void HoleBlend::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int 
 	glDepthFunc(GL_LEQUAL);  // Skip over all of the pixels that were never holes to begin with.
 	glBindVertexArray(blend_vao);
 
-	// FIXME: Get this into FBOSet, so we can reuse FBOs across frames.
-	GLuint fbo;
-	glCreateFramebuffers(1, &fbo);
-	glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, flow_tex, 0);  // NOTE: Reading and writing to the same texture.
-	glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, depth_tex, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	fbos.render_to(depth_tex, flow_tex);  // NOTE: Reading and writing to the same texture.
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	glDisable(GL_DEPTH_TEST);
-
-	glDeleteFramebuffers(1, &fbo);
 }
 
 class Blend {
