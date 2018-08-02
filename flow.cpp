@@ -1073,7 +1073,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 	ScopedTimer total_timer("Total", &timers);
 	for (int level = coarsest_level; level >= int(finest_level); --level) {
 		char timer_name[256];
-		snprintf(timer_name, sizeof(timer_name), "Level %d", level);
+		snprintf(timer_name, sizeof(timer_name), "Level %d (%d x %d)", level, width >> level, height >> level);
 		ScopedTimer level_timer(timer_name, &total_timer);
 
 		int level_width = width >> level;
