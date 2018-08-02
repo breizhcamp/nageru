@@ -27,7 +27,7 @@ void main()
 	}
 	full_flow *= inv_flow_size;
 	
-	vec2 patch_center = (ivec2(x, y) + 0.5) / textureSize(flow_tex, 0) + full_flow * splat_alpha;
+	vec2 patch_center = (ivec2(x, y) + 0.5) * inv_flow_size + full_flow * splat_alpha;
 	image_pos = patch_center + splat_size * (position - 0.5);
 
 	flow = full_flow;
