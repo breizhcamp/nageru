@@ -2042,6 +2042,8 @@ int main(int argc, char **argv)
 	SDL_GLContext context = SDL_GL_CreateContext(window);
 	assert(context != nullptr);
 
+	glDisable(GL_DITHER);
+
 	// FIXME: Should be part of DISComputeFlow (but needs to be initialized
 	// before all the render passes).
 	float vertices[] = {
