@@ -1,12 +1,12 @@
 #version 450 core
 
-in vec2 tc;
+in vec2 tc, tc_left, tc_down;
 out uvec4 equation;
 
 uniform sampler2D I_x_y_tex, I_t_tex;
 uniform sampler2D diff_flow_tex, base_flow_tex;
 uniform sampler2D beta_0_tex;
-uniform sampler2D smoothness_x_tex, smoothness_y_tex;
+uniform sampler2D diffusivity_tex;
 
 // Relative weighting of intensity term.
 uniform float delta;
@@ -53,6 +53,16 @@ uint pack_floats_shared(float a, float b)
 	uint qb = uint(int(round(b * (normalizer * 2047.0))));
 
 	return (qa & 0xfffu) | ((qb & 0xfffu) << 12) | e;
+}
+
+float zero_if_outside_border(vec4 val)
+{
+	if (val.w < 1.0f) {
+		// We hit the border (or more like half-way to it), so zero smoothness.
+		return 0.0f;
+	} else {
+		return val.x;
+	}
 }
 
 void main()
@@ -128,10 +138,15 @@ void main()
 
 	// E_S term, sans the part on the right-hand side that deals with
 	// the neighboring pixels. The gamma is multiplied in in smoothness.frag.
-	float smooth_l = textureOffset(smoothness_x_tex, tc, ivec2(-1,  0)).x;
-	float smooth_r = texture(smoothness_x_tex, tc).x;
-	float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
-	float smooth_u = texture(smoothness_y_tex, tc).x;
+	//
+	// Note that we sample in-between two texels, which gives us the 0.5 *
+	// (x[-1] + x[0]) part for free. If one of the texels is a border
+	// texel, it will have zero alpha, and zero_if_outside_border() will
+	// set smoothness to zero.
+	float smooth_l = zero_if_outside_border(texture(diffusivity_tex, tc_left));
+	float smooth_r = zero_if_outside_border(textureOffset(diffusivity_tex, tc_left, ivec2(1, 0)));
+	float smooth_d = zero_if_outside_border(texture(diffusivity_tex, tc_down));
+	float smooth_u = zero_if_outside_border(textureOffset(diffusivity_tex, tc_down, ivec2(0, 1)));
 	A11 += smooth_l + smooth_r + smooth_d + smooth_u;
 	A22 += smooth_l + smooth_r + smooth_d + smooth_u;
 

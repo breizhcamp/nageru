@@ -1,10 +1,10 @@
 #version 450 core
 
-in vec2 tc;
+in vec2 tc, tc_left, tc_down;
 in float element_sum_idx;
 out vec2 diff_flow;
 
-uniform sampler2D diff_flow_tex, smoothness_x_tex, smoothness_y_tex;
+uniform sampler2D diff_flow_tex, diffusivity_tex;
 uniform usampler2D equation_tex;
 uniform int phase;
 
@@ -25,6 +25,16 @@ vec2 unpack_floats_shared(uint c)
 	float b = int(uint(c & 0xfff000u) << 8) * normalizer;
 
 	return vec2(a, b);
+}
+
+float zero_if_outside_border(vec4 val)
+{
+	if (val.w < 1.0f) {
+		// We hit the border (or more like half-way to it), so zero smoothness.
+		return 0.0f;
+	} else {
+		return val.x;
+	}
 }
 
 void main()
@@ -52,10 +62,10 @@ void main()
 		// (it couldn't be done earlier, because we didn't know
 		// the values of the neighboring pixels; they change for
 		// each SOR iteration).
-		float smooth_l = textureOffset(smoothness_x_tex, tc, ivec2(-1,  0)).x;
-		float smooth_r = texture(smoothness_x_tex, tc).x;
-		float smooth_d = textureOffset(smoothness_y_tex, tc, ivec2( 0, -1)).x;
-		float smooth_u = texture(smoothness_y_tex, tc).x;
+		float smooth_l = zero_if_outside_border(texture(diffusivity_tex, tc_left));
+		float smooth_r = zero_if_outside_border(textureOffset(diffusivity_tex, tc_left, ivec2(1, 0)));
+		float smooth_d = zero_if_outside_border(texture(diffusivity_tex, tc_down));
+		float smooth_u = zero_if_outside_border(textureOffset(diffusivity_tex, tc_down, ivec2(0, 1)));
 		b += smooth_l * textureOffset(diff_flow_tex, tc, ivec2(-1,  0)).xy;
 		b += smooth_r * textureOffset(diff_flow_tex, tc, ivec2( 1,  0)).xy;
 		b += smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;

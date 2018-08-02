@@ -625,62 +625,54 @@ void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, in
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
-// Calculate the smoothness constraints between neighboring pixels;
-// s_x(x,y) stores smoothness between pixel (x,y) and (x+1,y),
-// and s_y(x,y) stores between (x,y) and (x,y+1). We'll sample with
-// border color (0,0) later, so that there's zero diffusion out of
-// the border.
+// Calculate the diffusivity for each pixels, g(x,y). Smoothness (s) will
+// be calculated in the shaders on-the-fly by sampling in-between two
+// neighboring g(x,y) pixels, plus a border tweak to make sure we get
+// zero smoothness at the border.
 //
 // See variational_refinement.txt for more information.
-class ComputeSmoothness {
+class ComputeDiffusivity {
 public:
-	ComputeSmoothness();
-	void exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, bool zero_diff_flow);
+	ComputeDiffusivity();
+	void exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diffusivity_tex, int level_width, int level_height, bool zero_diff_flow);
 
 private:
-	PersistentFBOSet<2> fbos;
+	PersistentFBOSet<1> fbos;
 
-	GLuint smoothness_vs_obj;
-	GLuint smoothness_fs_obj;
-	GLuint smoothness_program;
+	GLuint diffusivity_vs_obj;
+	GLuint diffusivity_fs_obj;
+	GLuint diffusivity_program;
 
 	GLuint uniform_flow_tex, uniform_diff_flow_tex;
 	GLuint uniform_alpha, uniform_zero_diff_flow;
 };
 
-ComputeSmoothness::ComputeSmoothness()
+ComputeDiffusivity::ComputeDiffusivity()
 {
-	smoothness_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	smoothness_fs_obj = compile_shader(read_file("smoothness.frag"), GL_FRAGMENT_SHADER);
-	smoothness_program = link_program(smoothness_vs_obj, smoothness_fs_obj);
+	diffusivity_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	diffusivity_fs_obj = compile_shader(read_file("diffusivity.frag"), GL_FRAGMENT_SHADER);
+	diffusivity_program = link_program(diffusivity_vs_obj, diffusivity_fs_obj);
 
-	uniform_flow_tex = glGetUniformLocation(smoothness_program, "flow_tex");
-	uniform_diff_flow_tex = glGetUniformLocation(smoothness_program, "diff_flow_tex");
-	uniform_alpha = glGetUniformLocation(smoothness_program, "alpha");
-	uniform_zero_diff_flow = glGetUniformLocation(smoothness_program, "zero_diff_flow");
+	uniform_flow_tex = glGetUniformLocation(diffusivity_program, "flow_tex");
+	uniform_diff_flow_tex = glGetUniformLocation(diffusivity_program, "diff_flow_tex");
+	uniform_alpha = glGetUniformLocation(diffusivity_program, "alpha");
+	uniform_zero_diff_flow = glGetUniformLocation(diffusivity_program, "zero_diff_flow");
 }
 
-void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, bool zero_diff_flow)
+void ComputeDiffusivity::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diffusivity_tex, int level_width, int level_height, bool zero_diff_flow)
 {
-	glUseProgram(smoothness_program);
+	glUseProgram(diffusivity_program);
 
-	bind_sampler(smoothness_program, uniform_flow_tex, 0, flow_tex, nearest_sampler);
-	bind_sampler(smoothness_program, uniform_diff_flow_tex, 1, diff_flow_tex, nearest_sampler);
-	glProgramUniform1f(smoothness_program, uniform_alpha, vr_alpha);
-	glProgramUniform1i(smoothness_program, uniform_zero_diff_flow, zero_diff_flow);
+	bind_sampler(diffusivity_program, uniform_flow_tex, 0, flow_tex, nearest_sampler);
+	bind_sampler(diffusivity_program, uniform_diff_flow_tex, 1, diff_flow_tex, nearest_sampler);
+	glProgramUniform1f(diffusivity_program, uniform_alpha, vr_alpha);
+	glProgramUniform1i(diffusivity_program, uniform_zero_diff_flow, zero_diff_flow);
 
 	glViewport(0, 0, level_width, level_height);
 
 	glDisable(GL_BLEND);
-	fbos.render_to(smoothness_x_tex, smoothness_y_tex);
+	fbos.render_to(diffusivity_tex);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-	// Make sure the smoothness on the right and upper borders is zero.
-	// We could have done this by making (W-1)xH and Wx(H-1) textures instead
-	// (we're sampling smoothness with all-zero border color), but we'd
-	// have to adjust the sampling coordinates, which is annoying.
-	glClearTexSubImage(smoothness_x_tex, 0,  level_width - 1, 0, 0,   1, level_height, 1,  GL_RED, GL_FLOAT, nullptr);
-	glClearTexSubImage(smoothness_y_tex, 0,  0, level_height - 1, 0,  level_width, 1, 1,   GL_RED, GL_FLOAT, nullptr);
 }
 
 // Set up the equations set (two equations in two unknowns, per pixel).
@@ -696,7 +688,7 @@ void ComputeSmoothness::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint smoot
 class SetupEquations {
 public:
 	SetupEquations();
-	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height, bool zero_diff_flow);
+	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_tex, int level_width, int level_height, bool zero_diff_flow);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -708,13 +700,13 @@ private:
 	GLuint uniform_I_x_y_tex, uniform_I_t_tex;
 	GLuint uniform_diff_flow_tex, uniform_base_flow_tex;
 	GLuint uniform_beta_0_tex;
-	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
+	GLuint uniform_diffusivity_tex;
 	GLuint uniform_gamma, uniform_delta, uniform_zero_diff_flow;
 };
 
 SetupEquations::SetupEquations()
 {
-	equations_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	equations_vs_obj = compile_shader(read_file("equations.vert"), GL_VERTEX_SHADER);
 	equations_fs_obj = compile_shader(read_file("equations.frag"), GL_FRAGMENT_SHADER);
 	equations_program = link_program(equations_vs_obj, equations_fs_obj);
 
@@ -723,14 +715,13 @@ SetupEquations::SetupEquations()
 	uniform_diff_flow_tex = glGetUniformLocation(equations_program, "diff_flow_tex");
 	uniform_base_flow_tex = glGetUniformLocation(equations_program, "base_flow_tex");
 	uniform_beta_0_tex = glGetUniformLocation(equations_program, "beta_0_tex");
-	uniform_smoothness_x_tex = glGetUniformLocation(equations_program, "smoothness_x_tex");
-	uniform_smoothness_y_tex = glGetUniformLocation(equations_program, "smoothness_y_tex");
+	uniform_diffusivity_tex = glGetUniformLocation(equations_program, "diffusivity_tex");
 	uniform_gamma = glGetUniformLocation(equations_program, "gamma");
 	uniform_delta = glGetUniformLocation(equations_program, "delta");
 	uniform_zero_diff_flow = glGetUniformLocation(equations_program, "zero_diff_flow");
 }
 
-void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, GLuint equation_tex, int level_width, int level_height, bool zero_diff_flow)
+void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_tex, int level_width, int level_height, bool zero_diff_flow)
 {
 	glUseProgram(equations_program);
 
@@ -739,8 +730,7 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 	bind_sampler(equations_program, uniform_diff_flow_tex, 2, diff_flow_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_base_flow_tex, 3, base_flow_tex, nearest_sampler);
 	bind_sampler(equations_program, uniform_beta_0_tex, 4, beta_0_tex, nearest_sampler);
-	bind_sampler(equations_program, uniform_smoothness_x_tex, 5, smoothness_x_tex, zero_border_sampler);
-	bind_sampler(equations_program, uniform_smoothness_y_tex, 6, smoothness_y_tex, zero_border_sampler);
+	bind_sampler(equations_program, uniform_diffusivity_tex, 5, diffusivity_tex, zero_border_sampler);
 	glProgramUniform1f(equations_program, uniform_delta, vr_delta);
 	glProgramUniform1f(equations_program, uniform_gamma, vr_gamma);
 	glProgramUniform1i(equations_program, uniform_zero_diff_flow, zero_diff_flow);
@@ -758,7 +748,7 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 class SOR {
 public:
 	SOR();
-	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer);
+	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -769,7 +759,7 @@ private:
 
 	GLuint uniform_diff_flow_tex;
 	GLuint uniform_equation_tex;
-	GLuint uniform_smoothness_x_tex, uniform_smoothness_y_tex;
+	GLuint uniform_diffusivity_tex;
 	GLuint uniform_phase, uniform_zero_diff_flow;
 };
 
@@ -781,20 +771,18 @@ SOR::SOR()
 
 	uniform_diff_flow_tex = glGetUniformLocation(sor_program, "diff_flow_tex");
 	uniform_equation_tex = glGetUniformLocation(sor_program, "equation_tex");
-	uniform_smoothness_x_tex = glGetUniformLocation(sor_program, "smoothness_x_tex");
-	uniform_smoothness_y_tex = glGetUniformLocation(sor_program, "smoothness_y_tex");
+	uniform_diffusivity_tex = glGetUniformLocation(sor_program, "diffusivity_tex");
 	uniform_phase = glGetUniformLocation(sor_program, "phase");
 	uniform_zero_diff_flow = glGetUniformLocation(sor_program, "zero_diff_flow");
 }
 
-void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint smoothness_x_tex, GLuint smoothness_y_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer)
+void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer)
 {
 	glUseProgram(sor_program);
 
 	bind_sampler(sor_program, uniform_diff_flow_tex, 0, diff_flow_tex, nearest_sampler);
-	bind_sampler(sor_program, uniform_smoothness_x_tex, 1, smoothness_x_tex, zero_border_sampler);
-	bind_sampler(sor_program, uniform_smoothness_y_tex, 2, smoothness_y_tex, zero_border_sampler);
-	bind_sampler(sor_program, uniform_equation_tex, 3, equation_tex, nearest_sampler);
+	bind_sampler(sor_program, uniform_diffusivity_tex, 1, diffusivity_tex, zero_border_sampler);
+	bind_sampler(sor_program, uniform_equation_tex, 2, equation_tex, nearest_sampler);
 
 	glProgramUniform1i(sor_program, uniform_zero_diff_flow, zero_diff_flow);
 
@@ -954,7 +942,7 @@ private:
 	Densify densify;
 	Prewarp prewarp;
 	Derivatives derivatives;
-	ComputeSmoothness compute_smoothness;
+	ComputeDiffusivity compute_diffusivity;
 	SetupEquations setup_equations;
 	SOR sor;
 	AddBaseFlow add_base_flow;
@@ -982,11 +970,11 @@ DISComputeFlow::DISComputeFlow(int width, int height)
 	// Similarly, gradients are zero outside the border, since the edge is taken
 	// to be constant.
 	glCreateSamplers(1, &zero_border_sampler);
-	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glSamplerParameteri(zero_border_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	float zero[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float zero[] = { 0.0f, 0.0f, 0.0f, 0.0f };  // Note that zero alpha means we can also see whether we sampled outside the border or not.
 	glSamplerParameterfv(zero_border_sampler, GL_TEXTURE_BORDER_COLOR, zero);
 
 	// Initial flow is zero, 1x1.
@@ -1122,41 +1110,38 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 		// but not read until we've written something sane to it.
 		GLuint du_dv_tex = pool.get_texture(GL_RG16F, level_width, level_height);
 
-		// And for smoothness.
-		GLuint smoothness_x_tex = pool.get_texture(GL_R16F, level_width, level_height);
-		GLuint smoothness_y_tex = pool.get_texture(GL_R16F, level_width, level_height);
+		// And for diffusivity.
+		GLuint diffusivity_tex = pool.get_texture(GL_R16F, level_width, level_height);
 
 		// And finally for the equation set. See SetupEquations for
 		// the storage format.
 		GLuint equation_tex = pool.get_texture(GL_RGBA32UI, level_width, level_height);
 
 		for (int outer_idx = 0; outer_idx < level + 1; ++outer_idx) {
-			// Calculate the smoothness terms between the neighboring pixels,
-			// both in x and y direction.
+			// Calculate the diffusivity term for each pixel.
 			{
-				ScopedTimer timer("Compute smoothness", &varref_timer);
-				compute_smoothness.exec(base_flow_tex, du_dv_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, outer_idx == 0);
+				ScopedTimer timer("Compute diffusivity", &varref_timer);
+				compute_diffusivity.exec(base_flow_tex, du_dv_tex, diffusivity_tex, level_width, level_height, outer_idx == 0);
 			}
 
 			// Set up the 2x2 equation system for each pixel.
 			{
 				ScopedTimer timer("Set up equations", &varref_timer);
-				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, smoothness_x_tex, smoothness_y_tex, equation_tex, level_width, level_height, outer_idx == 0);
+				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_tex, level_width, level_height, outer_idx == 0);
 			}
 
 			// Run a few SOR (or quasi-SOR, since we're not really Jacobi) iterations.
 			// Note that these are to/from the same texture.
 			{
 				ScopedTimer timer("SOR", &varref_timer);
-				sor.exec(du_dv_tex, equation_tex, smoothness_x_tex, smoothness_y_tex, level_width, level_height, 5, outer_idx == 0, &timer);
+				sor.exec(du_dv_tex, equation_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, &timer);
 			}
 		}
 
 		pool.release_texture(I_t_tex);
 		pool.release_texture(I_x_y_tex);
 		pool.release_texture(beta_0_tex);
-		pool.release_texture(smoothness_x_tex);
-		pool.release_texture(smoothness_y_tex);
+		pool.release_texture(diffusivity_tex);
 		pool.release_texture(equation_tex);
 
 		// Add the differential flow found by the variational refinement to the base flow,
