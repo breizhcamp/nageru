@@ -1,9 +1,20 @@
 #version 450 core
 
 in vec2 tc;
-out vec2 gradients;
+out uint packed_gradients;
 
 uniform sampler2D tex;
+
+uint pack_gradients(float x, float y, float v)
+{
+	x = clamp(x, -0.5f, 0.5f);
+	y = clamp(y, -0.5f, 0.5f);
+
+	uint vi = uint(round(v * 255.0f));
+	uint xi = uint(round((x + 0.5f) * 4095.0f));
+	uint yi = uint(round((y + 0.5f) * 4095.0f));
+	return vi | (xi << 8) | (yi << 20);
+}
 
 void main()
 {
@@ -36,10 +47,18 @@ void main()
 	float right        = textureOffset(tex, tc, ivec2( 1,  0)).x;
 	float bottom_right = textureOffset(tex, tc, ivec2( 1, -1)).x;
 
+	vec2 gradients;
 	gradients.x = (top_right + 2.0f * right + bottom_right) - (top_left + 2.0f * left + bottom_left);
 	gradients.y = (top_left + 2.0 * top + top_right) - (bottom_left + 2.0f * bottom + bottom_right);
 
 	// Normalize so that we have a normalized unit of intensity levels per pixel.
 	gradients.x *= 0.125;
 	gradients.y *= 0.125;
+
+	// Also store the actual pixel value, so that we get it “for free”
+	// when we sample the gradients in motion_search.frag later.
+	float center = texture(tex, tc).x;
+
+	// Pack everything into a single 32-bit value, using simple fixed-point.
+	packed_gradients = pack_gradients(gradients.x, gradients.y, center);
 }

@@ -439,7 +439,7 @@ private:
 	GLuint motion_search_program;
 
 	GLuint uniform_inv_image_size, uniform_inv_prev_level_size;
-	GLuint uniform_image0_tex, uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
+	GLuint uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
 };
 
 MotionSearch::MotionSearch()
@@ -450,7 +450,6 @@ MotionSearch::MotionSearch()
 
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
 	uniform_inv_prev_level_size = glGetUniformLocation(motion_search_program, "inv_prev_level_size");
-	uniform_image0_tex = glGetUniformLocation(motion_search_program, "image0_tex");
 	uniform_image1_tex = glGetUniformLocation(motion_search_program, "image1_tex");
 	uniform_grad0_tex = glGetUniformLocation(motion_search_program, "grad0_tex");
 	uniform_flow_tex = glGetUniformLocation(motion_search_program, "flow_tex");
@@ -460,9 +459,8 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 {
 	glUseProgram(motion_search_program);
 
-	bind_sampler(motion_search_program, uniform_image0_tex, 0, tex0_view, nearest_sampler);
 	bind_sampler(motion_search_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
-	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, zero_border_sampler);
+	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, linear_sampler);
 	bind_sampler(motion_search_program, uniform_flow_tex, 3, flow_tex, linear_sampler);
 
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
@@ -1035,7 +1033,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 
 		// Create a new texture; we could be fancy and render use a multi-level
 		// texture, but meh.
-		GLuint grad0_tex = pool.get_texture(GL_RG16F, level_width, level_height);
+		GLuint grad0_tex = pool.get_texture(GL_R32UI, level_width, level_height);
 
 		// Find the derivative.
 		{
