@@ -379,7 +379,6 @@ void GrayscaleConversion::exec(GLint tex, GLint gray_tex, int width, int height)
 	glViewport(0, 0, width, height);
 	fbos.render_to(gray_tex);
 	glBindVertexArray(gray_vao);
-	glUseProgram(gray_program);
 	glDisable(GL_BLEND);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -422,7 +421,6 @@ void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_he
 
 	glViewport(0, 0, level_width, level_height);
 	fbos.render_to(grad0_tex);
-	glUseProgram(sobel_program);
 	glDisable(GL_BLEND);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -472,7 +470,6 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 
 	glViewport(0, 0, width_patches, height_patches);
 	fbos.render_to(flow_out_tex);
-	glUseProgram(motion_search_program);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -1448,7 +1445,6 @@ void Blend::exec(GLuint tex0, GLuint tex1, GLuint flow_tex, GLuint output_tex, i
 
 	glViewport(0, 0, level_width, level_height);
 	fbos.render_to(output_tex);
-	glUseProgram(blend_program);
 	glDisable(GL_BLEND);  // A bit ironic, perhaps.
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
