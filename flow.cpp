@@ -460,7 +460,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 	glUseProgram(motion_search_program);
 
 	bind_sampler(motion_search_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
-	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, linear_sampler);
+	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, nearest_sampler);
 	bind_sampler(motion_search_program, uniform_flow_tex, 3, flow_tex, linear_sampler);
 
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
