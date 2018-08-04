@@ -1,7 +1,9 @@
 #version 450 core
 
-in vec2 tc, tc_left, tc_down;
-out uvec4 equation;
+in vec2 tc0, tc_left0, tc_down0;
+in vec2 tc1, tc_left1, tc_down1;
+in float line_offset;
+out uvec4 equation_red, equation_black;
 
 uniform sampler2D I_x_y_tex, I_t_tex;
 uniform sampler2D diff_flow_tex, base_flow_tex;
@@ -65,7 +67,7 @@ float zero_if_outside_border(vec4 val)
 	}
 }
 
-void main()
+uvec4 compute_equation(vec2 tc, vec2 tc_left, vec2 tc_down)
 {
 	// Read the flow (on top of the u0/v0 flow).
 	float du, dv;
@@ -161,8 +163,25 @@ void main()
 	b2 += laplacian.y;
 
 	// Encode the equation down into four uint32s.
-	equation.x = floatBitsToUint(1.0 / A11);
-	equation.y = floatBitsToUint(A12);
-	equation.z = floatBitsToUint(1.0 / A22);
-	equation.w = pack_floats_shared(b1, b2);
+	uvec4 ret;
+	ret.x = floatBitsToUint(1.0 / A11);
+	ret.y = floatBitsToUint(A12);
+	ret.z = floatBitsToUint(1.0 / A22);
+	ret.w = pack_floats_shared(b1, b2);
+	return ret;
+}
+
+void main()
+{
+	uvec4 eq0 = compute_equation(tc0, tc_left0, tc_down0);
+	uvec4 eq1 = compute_equation(tc1, tc_left1, tc_down1);
+
+	if ((int(round(line_offset)) & 1) == 1) {
+		// Odd line, so the right value is red.
+		equation_red = eq1;
+		equation_black = eq0;
+	} else {
+		equation_red = eq0;
+		equation_black = eq1;
+	}
 }

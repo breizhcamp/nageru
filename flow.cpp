@@ -679,14 +679,23 @@ void ComputeDiffusivity::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diff
 // All the values of the energy term (E_I, E_G, E_S), except the smoothness
 // terms that depend on other pixels, are calculated in one pass.
 //
-// See variational_refinement.txt for more information.
+// The equation set is split in two; one contains only the pixels needed for
+// the red pass, and one only for the black pass (see sor.frag). This reduces
+// the amount of data the SOR shader has to pull in, at the cost of some
+// complexity when the equation texture ends up with half the size and we need
+// to adjust texture coordinates.  The contraction is done along the horizontal
+// axis, so that on even rows (0, 2, 4, ...), the “red” texture will contain
+// pixels 0, 2, 4, 6, etc., and on odd rows 1, 3, 5, etc..
+//
+// See variational_refinement.txt for more information about the actual
+// equations in use.
 class SetupEquations {
 public:
 	SetupEquations();
-	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_tex, int level_width, int level_height, bool zero_diff_flow);
+	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_red_tex, GLuint equation_black_tex, int level_width, int level_height, bool zero_diff_flow);
 
 private:
-	PersistentFBOSet<1> fbos;
+	PersistentFBOSet<2> fbos;
 
 	GLuint equations_vs_obj;
 	GLuint equations_fs_obj;
@@ -716,7 +725,7 @@ SetupEquations::SetupEquations()
 	uniform_zero_diff_flow = glGetUniformLocation(equations_program, "zero_diff_flow");
 }
 
-void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_tex, int level_width, int level_height, bool zero_diff_flow)
+void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_red_tex, GLuint equation_black_tex, int level_width, int level_height, bool zero_diff_flow)
 {
 	glUseProgram(equations_program);
 
@@ -730,9 +739,9 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 	glProgramUniform1f(equations_program, uniform_gamma, vr_gamma);
 	glProgramUniform1i(equations_program, uniform_zero_diff_flow, zero_diff_flow);
 
-	glViewport(0, 0, level_width, level_height);
+	glViewport(0, 0, (level_width + 1) / 2, level_height);
 	glDisable(GL_BLEND);
-	fbos.render_to(equation_tex);
+	fbos.render_to({equation_red_tex, equation_black_tex});
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -743,7 +752,7 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 class SOR {
 public:
 	SOR();
-	void exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer);
+	void exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_black_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -753,7 +762,7 @@ private:
 	GLuint sor_program;
 
 	GLuint uniform_diff_flow_tex;
-	GLuint uniform_equation_tex;
+	GLuint uniform_equation_red_tex, uniform_equation_black_tex;
 	GLuint uniform_diffusivity_tex;
 	GLuint uniform_phase, uniform_zero_diff_flow;
 };
@@ -765,19 +774,21 @@ SOR::SOR()
 	sor_program = link_program(sor_vs_obj, sor_fs_obj);
 
 	uniform_diff_flow_tex = glGetUniformLocation(sor_program, "diff_flow_tex");
-	uniform_equation_tex = glGetUniformLocation(sor_program, "equation_tex");
+	uniform_equation_red_tex = glGetUniformLocation(sor_program, "equation_red_tex");
+	uniform_equation_black_tex = glGetUniformLocation(sor_program, "equation_black_tex");
 	uniform_diffusivity_tex = glGetUniformLocation(sor_program, "diffusivity_tex");
 	uniform_phase = glGetUniformLocation(sor_program, "phase");
 	uniform_zero_diff_flow = glGetUniformLocation(sor_program, "zero_diff_flow");
 }
 
-void SOR::exec(GLuint diff_flow_tex, GLuint equation_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer)
+void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_black_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer)
 {
 	glUseProgram(sor_program);
 
 	bind_sampler(sor_program, uniform_diff_flow_tex, 0, diff_flow_tex, nearest_sampler);
 	bind_sampler(sor_program, uniform_diffusivity_tex, 1, diffusivity_tex, zero_border_sampler);
-	bind_sampler(sor_program, uniform_equation_tex, 2, equation_tex, nearest_sampler);
+	bind_sampler(sor_program, uniform_equation_red_tex, 2, equation_red_tex, nearest_sampler);
+	bind_sampler(sor_program, uniform_equation_black_tex, 3, equation_black_tex, nearest_sampler);
 
 	glProgramUniform1i(sor_program, uniform_zero_diff_flow, zero_diff_flow);
 
@@ -1110,7 +1121,8 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 
 		// And finally for the equation set. See SetupEquations for
 		// the storage format.
-		GLuint equation_tex = pool.get_texture(GL_RGBA32UI, level_width, level_height);
+		GLuint equation_red_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height);
+		GLuint equation_black_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height);
 
 		for (int outer_idx = 0; outer_idx < level + 1; ++outer_idx) {
 			// Calculate the diffusivity term for each pixel.
@@ -1122,14 +1134,14 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 			// Set up the 2x2 equation system for each pixel.
 			{
 				ScopedTimer timer("Set up equations", &varref_timer);
-				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_tex, level_width, level_height, outer_idx == 0);
+				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_red_tex, equation_black_tex, level_width, level_height, outer_idx == 0);
 			}
 
 			// Run a few SOR (or quasi-SOR, since we're not really Jacobi) iterations.
 			// Note that these are to/from the same texture.
 			{
 				ScopedTimer timer("SOR", &varref_timer);
-				sor.exec(du_dv_tex, equation_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, &timer);
+				sor.exec(du_dv_tex, equation_red_tex, equation_black_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, &timer);
 			}
 		}
 
@@ -1137,7 +1149,8 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 		pool.release_texture(I_x_y_tex);
 		pool.release_texture(beta_0_tex);
 		pool.release_texture(diffusivity_tex);
-		pool.release_texture(equation_tex);
+		pool.release_texture(equation_red_tex);
+		pool.release_texture(equation_black_tex);
 
 		// Add the differential flow found by the variational refinement to the base flow,
 		// giving the final flow estimate for this level.

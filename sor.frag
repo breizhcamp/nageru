@@ -1,11 +1,12 @@
 #version 450 core
 
 in vec2 tc, tc_left, tc_down;
-in float element_sum_idx;
+in vec2 equation_tc_assuming_left, equation_tc_assuming_right;
+in float element_x_idx, element_sum_idx;
 out vec2 diff_flow;
 
 uniform sampler2D diff_flow_tex, diffusivity_tex;
-uniform usampler2D equation_tex;
+uniform usampler2D equation_red_tex, equation_black_tex;
 uniform int phase;
 
 uniform bool zero_diff_flow;
@@ -49,7 +50,18 @@ void main()
 	int color = int(round(element_sum_idx)) & 1;
 	if (color != phase) discard;
 
-	uvec4 equation = texture(equation_tex, tc);
+	uvec4 equation;
+	vec2 equation_tc;
+	if ((int(round(element_x_idx)) & 1) == 0) {
+		equation_tc = equation_tc_assuming_left;
+	} else {
+		equation_tc = equation_tc_assuming_right;
+	}
+	if (phase == 0) {
+		equation = texture(equation_red_tex, equation_tc);
+	} else {
+		equation = texture(equation_black_tex, equation_tc);
+	}
 	float inv_A11 = uintBitsToFloat(equation.x);
 	float A12 = uintBitsToFloat(equation.y);
 	float inv_A22 = uintBitsToFloat(equation.z);
