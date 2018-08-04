@@ -67,8 +67,12 @@ void main()
 	float inv_A22 = uintBitsToFloat(equation.z);
 	vec2 b = unpack_floats_shared(equation.w);
 
+	const float omega = 1.8;  // Marginally better than 1.6, it seems.
+
 	if (zero_diff_flow) {
-		diff_flow = vec2(0.0f);
+		// Simplified version of the code below, assuming diff_flow == 0.0f everywhere.
+		diff_flow.x = omega * b.x * inv_A11;
+		diff_flow.y = omega * b.y * inv_A22;
 	} else {
 		// Subtract the missing terms from the right-hand side
 		// (it couldn't be done earlier, because we didn't know
@@ -83,13 +87,11 @@ void main()
 		b += smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;
 		b += smooth_u * textureOffset(diff_flow_tex, tc, ivec2( 0,  1)).xy;
 		diff_flow = texture(diff_flow_tex, tc).xy;
+
+		// From https://en.wikipedia.org/wiki/Successive_over-relaxation.
+		float sigma_u = A12 * diff_flow.y;
+		diff_flow.x += omega * ((b.x - sigma_u) * inv_A11 - diff_flow.x);
+		float sigma_v = A12 * diff_flow.x;
+		diff_flow.y += omega * ((b.y - sigma_v) * inv_A22 - diff_flow.y);
 	}
-
-	const float omega = 1.8;  // Marginally better than 1.6, it seems.
-
-	// From https://en.wikipedia.org/wiki/Successive_over-relaxation.
-	float sigma_u = A12 * diff_flow.y;
-	diff_flow.x += omega * ((b.x - sigma_u) * inv_A11 - diff_flow.x);
-	float sigma_v = A12 * diff_flow.x;
-	diff_flow.y += omega * ((b.y - sigma_v) * inv_A22 - diff_flow.y);
 }
