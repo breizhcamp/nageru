@@ -45,8 +45,9 @@ void main()
 	// just immediately throws away half of the warp, but it helps convergence
 	// a _lot_ (rough testing indicates that five iterations of SOR is as good
 	// as ~50 iterations of Jacobi). We could probably do better by reorganizing
-	// the data into two-values-per-pixel, so-called “twinning buffering”,
-	// but it makes for rather annoying code in the rest of the pipeline.
+	// the data into two-values-per-pixel, so-called “twinned buffering”;
+	// seemingly, it helps Haswell by ~15% on the SOR code, but GTX 950 not at all
+	// (at least not on 720p). Presumably the latter is already bandwidth bound.
 	int color = int(round(element_sum_idx)) & 1;
 	if (color != phase) discard;
 
