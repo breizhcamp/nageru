@@ -764,7 +764,7 @@ private:
 	GLuint uniform_diff_flow_tex;
 	GLuint uniform_equation_red_tex, uniform_equation_black_tex;
 	GLuint uniform_diffusivity_tex;
-	GLuint uniform_phase, uniform_zero_diff_flow;
+	GLuint uniform_phase, uniform_num_nonzero_phases;
 };
 
 SOR::SOR()
@@ -778,7 +778,7 @@ SOR::SOR()
 	uniform_equation_black_tex = glGetUniformLocation(sor_program, "equation_black_tex");
 	uniform_diffusivity_tex = glGetUniformLocation(sor_program, "diffusivity_tex");
 	uniform_phase = glGetUniformLocation(sor_program, "phase");
-	uniform_zero_diff_flow = glGetUniformLocation(sor_program, "zero_diff_flow");
+	uniform_num_nonzero_phases = glGetUniformLocation(sor_program, "num_nonzero_phases");
 }
 
 void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_black_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer)
@@ -790,7 +790,9 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_bl
 	bind_sampler(sor_program, uniform_equation_red_tex, 2, equation_red_tex, nearest_sampler);
 	bind_sampler(sor_program, uniform_equation_black_tex, 3, equation_black_tex, nearest_sampler);
 
-	glProgramUniform1i(sor_program, uniform_zero_diff_flow, zero_diff_flow);
+	if (!zero_diff_flow) {
+		glProgramUniform1i(sor_program, uniform_num_nonzero_phases, 2);
+	}
 
 	// NOTE: We bind to the texture we are rendering from, but we never write any value
 	// that we read in the same shader pass (we call discard for red values when we compute
@@ -803,6 +805,9 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_bl
 	for (int i = 0; i < num_iterations; ++i) {
 		{
 			ScopedTimer timer("Red pass", sor_timer);
+			if (zero_diff_flow && i == 0) {
+				glProgramUniform1i(sor_program, uniform_num_nonzero_phases, 0);
+			}
 			glProgramUniform1i(sor_program, uniform_phase, 0);
 			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 			glTextureBarrier();
@@ -810,11 +815,13 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_bl
 		{
 			ScopedTimer timer("Black pass", sor_timer);
 			if (zero_diff_flow && i == 0) {
-				// Not zero anymore.
-				glProgramUniform1i(sor_program, uniform_zero_diff_flow, 0);
+				glProgramUniform1i(sor_program, uniform_num_nonzero_phases, 1);
 			}
 			glProgramUniform1i(sor_program, uniform_phase, 1);
 			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+			if (zero_diff_flow && i == 0) {
+				glProgramUniform1i(sor_program, uniform_num_nonzero_phases, 2);
+			}
 			if (i != num_iterations - 1) {
 				glTextureBarrier();
 			}

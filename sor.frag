@@ -9,7 +9,7 @@ uniform sampler2D diff_flow_tex, diffusivity_tex;
 uniform usampler2D equation_red_tex, equation_black_tex;
 uniform int phase;
 
-uniform bool zero_diff_flow;
+uniform int num_nonzero_phases;
 
 // See pack_floats_shared() in equations.frag.
 vec2 unpack_floats_shared(uint c)
@@ -70,7 +70,7 @@ void main()
 
 	const float omega = 1.8;  // Marginally better than 1.6, it seems.
 
-	if (zero_diff_flow) {
+	if (num_nonzero_phases == 0) {
 		// Simplified version of the code below, assuming diff_flow == 0.0f everywhere.
 		diff_flow.x = omega * b.x * inv_A11;
 		diff_flow.y = omega * b.y * inv_A22;
@@ -87,7 +87,12 @@ void main()
 		b += smooth_r * textureOffset(diff_flow_tex, tc, ivec2( 1,  0)).xy;
 		b += smooth_d * textureOffset(diff_flow_tex, tc, ivec2( 0, -1)).xy;
 		b += smooth_u * textureOffset(diff_flow_tex, tc, ivec2( 0,  1)).xy;
-		diff_flow = texture(diff_flow_tex, tc).xy;
+
+		if (num_nonzero_phases == 1) {
+			diff_flow = vec2(0.0f);
+		} else {
+			diff_flow = texture(diff_flow_tex, tc).xy;
+		}
 
 		// From https://en.wikipedia.org/wiki/Successive_over-relaxation.
 		float sigma_u = A12 * diff_flow.y;
