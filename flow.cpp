@@ -1114,7 +1114,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 		// We need somewhere to store du and dv (the flow increment, relative
 		// to the non-refined base flow u0 and v0). It's initially garbage,
 		// but not read until we've written something sane to it.
-		GLuint du_dv_tex = pool.get_texture(GL_RG16F, level_width, level_height);
+		GLuint diff_flow_tex = pool.get_texture(GL_RG16F, level_width, level_height);
 
 		// And for diffusivity.
 		GLuint diffusivity_tex = pool.get_texture(GL_R16F, level_width, level_height);
@@ -1128,19 +1128,19 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 			// Calculate the diffusivity term for each pixel.
 			{
 				ScopedTimer timer("Compute diffusivity", &varref_timer);
-				compute_diffusivity.exec(base_flow_tex, du_dv_tex, diffusivity_tex, level_width, level_height, outer_idx == 0);
+				compute_diffusivity.exec(base_flow_tex, diff_flow_tex, diffusivity_tex, level_width, level_height, outer_idx == 0);
 			}
 
 			// Set up the 2x2 equation system for each pixel.
 			{
 				ScopedTimer timer("Set up equations", &varref_timer);
-				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_red_tex, equation_black_tex, level_width, level_height, outer_idx == 0);
+				setup_equations.exec(I_x_y_tex, I_t_tex, diff_flow_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_red_tex, equation_black_tex, level_width, level_height, outer_idx == 0);
 			}
 
 			// Run a few SOR iterations. Note that these are to/from the same texture.
 			{
 				ScopedTimer timer("SOR", &varref_timer);
-				sor.exec(du_dv_tex, equation_red_tex, equation_black_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, &timer);
+				sor.exec(diff_flow_tex, equation_red_tex, equation_black_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, &timer);
 			}
 		}
 
@@ -1159,9 +1159,9 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 		// it is more efficient), but it helps debug the motion search.
 		if (enable_variational_refinement) {
 			ScopedTimer timer("Add differential flow", &varref_timer);
-			add_base_flow.exec(base_flow_tex, du_dv_tex, level_width, level_height);
+			add_base_flow.exec(base_flow_tex, diff_flow_tex, level_width, level_height);
 		}
-		pool.release_texture(du_dv_tex);
+		pool.release_texture(diff_flow_tex);
 
 		if (prev_level_flow_tex != initial_flow_tex) {
 			pool.release_texture(prev_level_flow_tex);
