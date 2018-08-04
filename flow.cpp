@@ -48,6 +48,8 @@ float vr_alpha = 1.0f, vr_delta = 0.25f, vr_gamma = 0.25f;
 
 bool enable_timing = true;
 bool detailed_timing = false;
+bool enable_warmup = false;
+bool in_warmup = false;
 bool enable_variational_refinement = true;  // Just for debugging.
 bool enable_interpolation = false;
 
@@ -1179,7 +1181,9 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 	}
 	total_timer.end();
 
-	timers.print();
+	if (!in_warmup) {
+		timers.print();
+	}
 
 	// Scale up the flow to the final size (if needed).
 	if (finest_level == 0 || resize_strategy == DO_NOT_RESIZE_FLOW) {
@@ -1562,7 +1566,9 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	}
 	pool.release_texture(flow_tex);
 	total_timer.end();
-	timers.print();
+	if (!in_warmup) {
+		timers.print();
+	}
 
 	return output_tex;
 }
@@ -1767,6 +1773,16 @@ void compute_flow_only(int argc, char **argv, int optind)
 	glGenerateTextureMipmap(tex1_gray);
 
 	DISComputeFlow compute_flow(width1, height1);
+
+	if (enable_warmup) {
+		in_warmup = true;
+		for (int i = 0; i < 10; ++i) {
+			GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
+			compute_flow.release_texture(final_tex);
+		}
+		in_warmup = false;
+	}
+
 	GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
 
 	schedule_read<FlowType>(final_tex, width1, height1, filename0, filename1, flow_filename, "flow.ppm");
@@ -1861,6 +1877,19 @@ void interpolate_image(int argc, char **argv, int optind)
 	gray.exec(tex1, tex1_gray, width1, height1);
 	glGenerateTextureMipmap(tex1_gray);
 
+	if (enable_warmup) {
+		in_warmup = true;
+		for (int i = 0; i < 10; ++i) {
+			GLuint forward_flow_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
+			GLuint backward_flow_tex = compute_flow.exec(tex1_gray, tex0_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
+			GLuint interpolated_tex = interpolate.exec(tex0, tex1, forward_flow_tex, backward_flow_tex, width1, height1, 0.5f);
+			compute_flow.release_texture(forward_flow_tex);
+			compute_flow.release_texture(backward_flow_tex);
+			interpolate.release_texture(interpolated_tex);
+		}
+		in_warmup = false;
+	}
+
 	GLuint forward_flow_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 	GLuint backward_flow_tex = compute_flow.exec(tex1_gray, tex0_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 
@@ -1889,7 +1918,8 @@ int main(int argc, char **argv)
 		{ "disable-timing", no_argument, 0, 1000 },
 		{ "detailed-timing", no_argument, 0, 1003 },
 		{ "ignore-variational-refinement", no_argument, 0, 1001 },  // Still calculates it, just doesn't apply it.
-		{ "interpolate", no_argument, 0, 1002 }
+		{ "interpolate", no_argument, 0, 1002 },
+		{ "warmup", no_argument, 0, 1004 }
 	};
 
 	for ( ;; ) {
@@ -1920,6 +1950,9 @@ int main(int argc, char **argv)
 			break;
 		case 1003:
 			detailed_timing = true;
+			break;
+		case 1004:
+			enable_warmup = true;
 			break;
 		default:
 			fprintf(stderr, "Unknown option '%s'\n", argv[option_index]);
