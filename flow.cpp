@@ -1137,8 +1137,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 				setup_equations.exec(I_x_y_tex, I_t_tex, du_dv_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_red_tex, equation_black_tex, level_width, level_height, outer_idx == 0);
 			}
 
-			// Run a few SOR (or quasi-SOR, since we're not really Jacobi) iterations.
-			// Note that these are to/from the same texture.
+			// Run a few SOR iterations. Note that these are to/from the same texture.
 			{
 				ScopedTimer timer("SOR", &varref_timer);
 				sor.exec(du_dv_tex, equation_red_tex, equation_black_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, &timer);
