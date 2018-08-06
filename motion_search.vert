@@ -5,6 +5,7 @@ out vec2 flow_tc;
 out vec2 patch_center;
 
 uniform sampler2D flow_tex;
+uniform vec2 out_flow_size;
 
 void main()
 {
@@ -23,9 +24,8 @@ void main()
 	//
 	//   a = 1 / (w - 1)
 	//   b = w / 2 (w - 1)
-	vec2 flow_size = textureSize(flow_tex, 0);
-	vec2 a = flow_size / (flow_size - 1);
-	vec2 b = -1.0 / (2 * (flow_size - 1.0));
+	vec2 a = out_flow_size / (out_flow_size - 1);
+	vec2 b = -1.0 / (2 * (out_flow_size - 1.0));
 	patch_center = a * position + b;
 
 	// The result of glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0) is:

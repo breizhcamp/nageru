@@ -440,7 +440,7 @@ private:
 	GLuint motion_fs_obj;
 	GLuint motion_search_program;
 
-	GLuint uniform_inv_image_size, uniform_inv_prev_level_size;
+	GLuint uniform_inv_image_size, uniform_inv_prev_level_size, uniform_out_flow_size;
 	GLuint uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
 };
 
@@ -452,6 +452,7 @@ MotionSearch::MotionSearch()
 
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
 	uniform_inv_prev_level_size = glGetUniformLocation(motion_search_program, "inv_prev_level_size");
+	uniform_out_flow_size = glGetUniformLocation(motion_search_program, "out_flow_size");
 	uniform_image1_tex = glGetUniformLocation(motion_search_program, "image1_tex");
 	uniform_grad0_tex = glGetUniformLocation(motion_search_program, "grad0_tex");
 	uniform_flow_tex = glGetUniformLocation(motion_search_program, "flow_tex");
@@ -467,6 +468,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 	glProgramUniform2f(motion_search_program, uniform_inv_prev_level_size, 1.0f / prev_level_width, 1.0f / prev_level_height);
+	glProgramUniform2f(motion_search_program, uniform_out_flow_size, width_patches, height_patches);
 
 	glViewport(0, 0, width_patches, height_patches);
 	fbos.render_to(flow_out_tex);
