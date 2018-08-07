@@ -1027,7 +1027,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 
 	glBindVertexArray(vao);
 
-	ScopedTimer total_timer("Total", &timers);
+	ScopedTimer total_timer("Compute flow", &timers);
 	for (int level = coarsest_level; level >= int(finest_level); --level) {
 		char timer_name[256];
 		snprintf(timer_name, sizeof(timer_name), "Level %d (%d x %d)", level, width >> level, height >> level);
@@ -1521,7 +1521,7 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 {
 	GPUTimers timers;
 
-	ScopedTimer total_timer("Total", &timers);
+	ScopedTimer total_timer("Interpolate", &timers);
 
 	glBindVertexArray(vao);
 
