@@ -48,8 +48,8 @@ uniform vec2 inv_image_size, inv_prev_level_size;
 
 vec3 unpack_gradients(uint v)
 {
-	uint vi = v & 0xff;
-	uint xi = (v >> 8) & 0xfff;
+	uint vi = v & 0xffu;
+	uint xi = (v >> 8) & 0xfffu;
 	uint yi = v >> 20;
 	vec3 r = vec3(xi * (1.0f / 4095.0f) - 0.5f, yi * (1.0f / 4095.0f) - 0.5f, vi * (1.0f / 255.0f));
 	return r;
