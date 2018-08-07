@@ -1,10 +1,10 @@
 #version 450 core
 
-in vec2 tc;
+in vec3 tc;
 out float g;
 const float eps_sq = 0.001 * 0.001;
 
-uniform sampler2D flow_tex, diff_flow_tex;
+uniform sampler2DArray flow_tex, diff_flow_tex;
 
 // Relative weighting of smoothness term.
 uniform float alpha;

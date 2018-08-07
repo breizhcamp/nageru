@@ -1,9 +1,9 @@
 #version 450 core
 
-in vec2 tc;
+in vec3 tc;
 out uint packed_gradients;
 
-uniform sampler2D tex;
+uniform sampler2DArray tex;
 
 uint pack_gradients(float x, float y, float v)
 {

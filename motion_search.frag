@@ -38,12 +38,13 @@
 const uint patch_size = 12;
 const uint num_iterations = 8;
 
-in vec2 flow_tc;
+in vec3 flow_tc;
 in vec2 patch_center;
+flat in int ref_layer, search_layer;
 out vec3 out_flow;
 
-uniform sampler2D flow_tex, image1_tex;
-uniform usampler2D grad0_tex;  // Also contains image0.
+uniform sampler2DArray flow_tex, image_tex;
+uniform usampler2DArray grad_tex;  // Also contains the corresponding reference image.
 uniform vec2 inv_image_size, inv_prev_level_size;
 
 vec3 unpack_gradients(uint v)
@@ -56,14 +57,14 @@ vec3 unpack_gradients(uint v)
 }
 
 // Note: The third variable is the actual pixel value.
-vec3 get_gradients(vec2 tc)
+vec3 get_gradients(vec3 tc)
 {
-	vec3 grad = unpack_gradients(texture(grad0_tex, tc).x);
+	vec3 grad = unpack_gradients(texture(grad_tex, tc).x);
 
 	// Zero gradients outside the image. (We'd do this with a sampler,
 	// but we want the repeat behavior for the actual texels, in the
 	// z channel.)
-	if (any(lessThan(tc, vec2(0.0f))) || any(greaterThan(tc, vec2(1.0f)))) {
+	if (any(lessThan(tc.xy, vec2(0.0f))) || any(greaterThan(tc.xy, vec2(1.0f)))) {
 		grad.xy = vec2(0.0f);
 	}
 
@@ -72,7 +73,7 @@ vec3 get_gradients(vec2 tc)
 
 void main()
 {
-	vec2 image_size = textureSize(grad0_tex, 0);
+	vec2 image_size = textureSize(grad_tex, 0).xy;
 
 	// Lock the patch center to an integer, so that we never get
 	// any bilinear artifacts for the gradient. (NOTE: This assumes an
@@ -96,7 +97,7 @@ void main()
 	for (uint y = 0; y < patch_size; ++y) {
 		for (uint x = 0; x < patch_size; ++x) {
 			vec2 tc = base + uvec2(x, y) * inv_image_size;
-			vec3 grad = get_gradients(tc);
+			vec3 grad = get_gradients(vec3(tc, ref_layer));
 			H[0][0] += grad.x * grad.x;
 			H[1][1] += grad.y * grad.y;
 			H[0][1] += grad.x * grad.y;
@@ -130,9 +131,9 @@ void main()
 		for (uint y = 0; y < patch_size; ++y) {
 			for (uint x = 0; x < patch_size; ++x) {
 				vec2 tc = base + uvec2(x, y) * inv_image_size;
-				vec3 grad = get_gradients(tc);
+				vec3 grad = get_gradients(vec3(tc, ref_layer));
 				float t = grad.z;
-				float warped = texture(image1_tex, tc + u_norm).x;
+				float warped = texture(image_tex, vec3(tc + u_norm, search_layer)).x;
 				du += grad.xy * (warped - t);
 				warped_sum += warped;
 			}

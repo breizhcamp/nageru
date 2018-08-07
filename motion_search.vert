@@ -1,10 +1,12 @@
 #version 450 core
+#extension GL_ARB_shader_viewport_layer_array : require
 
 layout(location=0) in vec2 position;
-out vec2 flow_tc;
+out vec3 flow_tc;
 out vec2 patch_center;
+flat out int ref_layer, search_layer;
 
-uniform sampler2D flow_tex;
+uniform sampler2DArray flow_tex;
 uniform vec2 out_flow_size;
 
 void main()
@@ -35,5 +37,11 @@ void main()
 	//   0.000  0.000 -2.000 -1.000
 	//   0.000  0.000  0.000  1.000
 	gl_Position = vec4(2.0 * position.x - 1.0, 2.0 * position.y - 1.0, -1.0, 1.0);
-	flow_tc = position;
+	flow_tc = vec3(position, gl_InstanceID);
+
+	gl_Layer = gl_InstanceID;
+
+	// Forward flow (0) goes from 0 to 1. Backward flow (1) goes from 1 to 0.
+	ref_layer = gl_InstanceID;
+	search_layer = 1 - gl_InstanceID;
 }

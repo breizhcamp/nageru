@@ -344,7 +344,7 @@ void PersistentFBOSetWithDepth<num_elements>::render_to(GLuint depth_rb, const a
 class GrayscaleConversion {
 public:
 	GrayscaleConversion();
-	void exec(GLint tex, GLint gray_tex, int width, int height);
+	void exec(GLint tex, GLint gray_tex, int width, int height, int num_layers);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -373,7 +373,7 @@ GrayscaleConversion::GrayscaleConversion()
 	uniform_tex = glGetUniformLocation(gray_program, "tex");
 }
 
-void GrayscaleConversion::exec(GLint tex, GLint gray_tex, int width, int height)
+void GrayscaleConversion::exec(GLint tex, GLint gray_tex, int width, int height, int num_layers)
 {
 	glUseProgram(gray_program);
 	bind_sampler(gray_program, uniform_tex, 0, tex, nearest_sampler);
@@ -382,7 +382,7 @@ void GrayscaleConversion::exec(GLint tex, GLint gray_tex, int width, int height)
 	fbos.render_to(gray_tex);
 	glBindVertexArray(gray_vao);
 	glDisable(GL_BLEND);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 // Compute gradients in every point, used for the motion search.
@@ -396,7 +396,7 @@ void GrayscaleConversion::exec(GLint tex, GLint gray_tex, int width, int height)
 class Sobel {
 public:
 	Sobel();
-	void exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_height);
+	void exec(GLint tex_view, GLint grad_tex, int level_width, int level_height, int num_layers);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -416,22 +416,22 @@ Sobel::Sobel()
 	uniform_tex = glGetUniformLocation(sobel_program, "tex");
 }
 
-void Sobel::exec(GLint tex0_view, GLint grad0_tex, int level_width, int level_height)
+void Sobel::exec(GLint tex_view, GLint grad_tex, int level_width, int level_height, int num_layers)
 {
 	glUseProgram(sobel_program);
-	bind_sampler(sobel_program, uniform_tex, 0, tex0_view, nearest_sampler);
+	bind_sampler(sobel_program, uniform_tex, 0, tex_view, nearest_sampler);
 
 	glViewport(0, 0, level_width, level_height);
-	fbos.render_to(grad0_tex);
+	fbos.render_to(grad_tex);
 	glDisable(GL_BLEND);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 // Motion search to find the initial flow. See motion_search.frag for documentation.
 class MotionSearch {
 public:
 	MotionSearch();
-	void exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches);
+	void exec(GLuint tex_view, GLuint grad_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches, int num_layers);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -441,7 +441,7 @@ private:
 	GLuint motion_search_program;
 
 	GLuint uniform_inv_image_size, uniform_inv_prev_level_size, uniform_out_flow_size;
-	GLuint uniform_image1_tex, uniform_grad0_tex, uniform_flow_tex;
+	GLuint uniform_image_tex, uniform_grad_tex, uniform_flow_tex;
 };
 
 MotionSearch::MotionSearch()
@@ -453,18 +453,18 @@ MotionSearch::MotionSearch()
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
 	uniform_inv_prev_level_size = glGetUniformLocation(motion_search_program, "inv_prev_level_size");
 	uniform_out_flow_size = glGetUniformLocation(motion_search_program, "out_flow_size");
-	uniform_image1_tex = glGetUniformLocation(motion_search_program, "image1_tex");
-	uniform_grad0_tex = glGetUniformLocation(motion_search_program, "grad0_tex");
+	uniform_image_tex = glGetUniformLocation(motion_search_program, "image_tex");
+	uniform_grad_tex = glGetUniformLocation(motion_search_program, "grad_tex");
 	uniform_flow_tex = glGetUniformLocation(motion_search_program, "flow_tex");
 }
 
-void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches)
+void MotionSearch::exec(GLuint tex_view, GLuint grad_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches, int num_layers)
 {
 	glUseProgram(motion_search_program);
 
-	bind_sampler(motion_search_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
-	bind_sampler(motion_search_program, uniform_grad0_tex, 2, grad0_tex, nearest_sampler);
-	bind_sampler(motion_search_program, uniform_flow_tex, 3, flow_tex, linear_sampler);
+	bind_sampler(motion_search_program, uniform_image_tex, 0, tex_view, linear_sampler);
+	bind_sampler(motion_search_program, uniform_grad_tex, 1, grad_tex, nearest_sampler);
+	bind_sampler(motion_search_program, uniform_flow_tex, 2, flow_tex, linear_sampler);
 
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 	glProgramUniform2f(motion_search_program, uniform_inv_prev_level_size, 1.0f / prev_level_width, 1.0f / prev_level_height);
@@ -472,7 +472,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 
 	glViewport(0, 0, width_patches, height_patches);
 	fbos.render_to(flow_out_tex);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 // Do “densification”, ie., upsampling of the flow patches to the flow field
@@ -486,7 +486,7 @@ void MotionSearch::exec(GLuint tex0_view, GLuint tex1_view, GLuint grad0_tex, GL
 class Densify {
 public:
 	Densify();
-	void exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches);
+	void exec(GLuint tex_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches, int num_layers);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -496,7 +496,7 @@ private:
 	GLuint densify_program;
 
 	GLuint uniform_patch_size;
-	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+	GLuint uniform_image_tex, uniform_flow_tex;
 };
 
 Densify::Densify()
@@ -506,18 +506,16 @@ Densify::Densify()
 	densify_program = link_program(densify_vs_obj, densify_fs_obj);
 
 	uniform_patch_size = glGetUniformLocation(densify_program, "patch_size");
-	uniform_image0_tex = glGetUniformLocation(densify_program, "image0_tex");
-	uniform_image1_tex = glGetUniformLocation(densify_program, "image1_tex");
+	uniform_image_tex = glGetUniformLocation(densify_program, "image_tex");
 	uniform_flow_tex = glGetUniformLocation(densify_program, "flow_tex");
 }
 
-void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches)
+void Densify::exec(GLuint tex_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches, int num_layers)
 {
 	glUseProgram(densify_program);
 
-	bind_sampler(densify_program, uniform_image0_tex, 0, tex0_view, nearest_sampler);
-	bind_sampler(densify_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
-	bind_sampler(densify_program, uniform_flow_tex, 2, flow_tex, nearest_sampler);
+	bind_sampler(densify_program, uniform_image_tex, 0, tex_view, linear_sampler);
+	bind_sampler(densify_program, uniform_flow_tex, 1, flow_tex, nearest_sampler);
 
 	glProgramUniform2f(densify_program, uniform_patch_size,
 		float(patch_size_pixels) / level_width,
@@ -529,7 +527,7 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 	fbos.render_to(dense_flow_tex);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width_patches * height_patches * num_layers);
 }
 
 // Warp I_1 to I_w, and then compute the mean (I) and difference (I_t) of
@@ -543,7 +541,7 @@ void Densify::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint d
 class Prewarp {
 public:
 	Prewarp();
-	void exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint normalized_flow_tex, GLuint I_tex, GLuint I_t_tex, int level_width, int level_height);
+	void exec(GLuint tex_view, GLuint flow_tex, GLuint normalized_flow_tex, GLuint I_tex, GLuint I_t_tex, int level_width, int level_height, int num_layers);
 
 private:
 	PersistentFBOSet<3> fbos;
@@ -552,7 +550,7 @@ private:
 	GLuint prewarp_fs_obj;
 	GLuint prewarp_program;
 
-	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+	GLuint uniform_image_tex, uniform_flow_tex;
 };
 
 Prewarp::Prewarp()
@@ -561,23 +559,21 @@ Prewarp::Prewarp()
 	prewarp_fs_obj = compile_shader(read_file("prewarp.frag"), GL_FRAGMENT_SHADER);
 	prewarp_program = link_program(prewarp_vs_obj, prewarp_fs_obj);
 
-	uniform_image0_tex = glGetUniformLocation(prewarp_program, "image0_tex");
-	uniform_image1_tex = glGetUniformLocation(prewarp_program, "image1_tex");
+	uniform_image_tex = glGetUniformLocation(prewarp_program, "image_tex");
 	uniform_flow_tex = glGetUniformLocation(prewarp_program, "flow_tex");
 }
 
-void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_tex, GLuint normalized_flow_tex, int level_width, int level_height)
+void Prewarp::exec(GLuint tex_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_tex, GLuint normalized_flow_tex, int level_width, int level_height, int num_layers)
 {
 	glUseProgram(prewarp_program);
 
-	bind_sampler(prewarp_program, uniform_image0_tex, 0, tex0_view, nearest_sampler);
-	bind_sampler(prewarp_program, uniform_image1_tex, 1, tex1_view, linear_sampler);
-	bind_sampler(prewarp_program, uniform_flow_tex, 2, flow_tex, nearest_sampler);
+	bind_sampler(prewarp_program, uniform_image_tex, 0, tex_view, linear_sampler);
+	bind_sampler(prewarp_program, uniform_flow_tex, 1, flow_tex, nearest_sampler);
 
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
 	fbos.render_to(I_tex, I_t_tex, normalized_flow_tex);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 // From I, calculate the partial derivatives I_x and I_y. We use a four-tap
@@ -591,7 +587,7 @@ void Prewarp::exec(GLuint tex0_view, GLuint tex1_view, GLuint flow_tex, GLuint I
 class Derivatives {
 public:
 	Derivatives();
-	void exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, int level_width, int level_height);
+	void exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, int level_width, int level_height, int num_layers);
 
 private:
 	PersistentFBOSet<2> fbos;
@@ -612,7 +608,7 @@ Derivatives::Derivatives()
 	uniform_tex = glGetUniformLocation(derivatives_program, "tex");
 }
 
-void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, int level_width, int level_height)
+void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, int level_width, int level_height, int num_layers)
 {
 	glUseProgram(derivatives_program);
 
@@ -621,7 +617,7 @@ void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, in
 	glViewport(0, 0, level_width, level_height);
 	glDisable(GL_BLEND);
 	fbos.render_to(I_x_y_tex, beta_0_tex);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 // Calculate the diffusivity for each pixels, g(x,y). Smoothness (s) will
@@ -633,7 +629,7 @@ void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, in
 class ComputeDiffusivity {
 public:
 	ComputeDiffusivity();
-	void exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diffusivity_tex, int level_width, int level_height, bool zero_diff_flow);
+	void exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diffusivity_tex, int level_width, int level_height, bool zero_diff_flow, int num_layers);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -658,7 +654,7 @@ ComputeDiffusivity::ComputeDiffusivity()
 	uniform_zero_diff_flow = glGetUniformLocation(diffusivity_program, "zero_diff_flow");
 }
 
-void ComputeDiffusivity::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diffusivity_tex, int level_width, int level_height, bool zero_diff_flow)
+void ComputeDiffusivity::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diffusivity_tex, int level_width, int level_height, bool zero_diff_flow, int num_layers)
 {
 	glUseProgram(diffusivity_program);
 
@@ -671,7 +667,7 @@ void ComputeDiffusivity::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diff
 
 	glDisable(GL_BLEND);
 	fbos.render_to(diffusivity_tex);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 // Set up the equations set (two equations in two unknowns, per pixel).
@@ -696,7 +692,7 @@ void ComputeDiffusivity::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diff
 class SetupEquations {
 public:
 	SetupEquations();
-	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_red_tex, GLuint equation_black_tex, int level_width, int level_height, bool zero_diff_flow);
+	void exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_red_tex, GLuint equation_black_tex, int level_width, int level_height, bool zero_diff_flow, int num_layers);
 
 private:
 	PersistentFBOSet<2> fbos;
@@ -729,7 +725,7 @@ SetupEquations::SetupEquations()
 	uniform_zero_diff_flow = glGetUniformLocation(equations_program, "zero_diff_flow");
 }
 
-void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_red_tex, GLuint equation_black_tex, int level_width, int level_height, bool zero_diff_flow)
+void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex, GLuint base_flow_tex, GLuint beta_0_tex, GLuint diffusivity_tex, GLuint equation_red_tex, GLuint equation_black_tex, int level_width, int level_height, bool zero_diff_flow, int num_layers)
 {
 	glUseProgram(equations_program);
 
@@ -745,8 +741,8 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 
 	glViewport(0, 0, (level_width + 1) / 2, level_height);
 	glDisable(GL_BLEND);
-	fbos.render_to({equation_red_tex, equation_black_tex});
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	fbos.render_to(equation_red_tex, equation_black_tex);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 // Actually solve the equation sets made by SetupEquations, by means of
@@ -756,7 +752,7 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 class SOR {
 public:
 	SOR();
-	void exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_black_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer);
+	void exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_black_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, int num_layers, ScopedTimer *sor_timer);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -785,7 +781,7 @@ SOR::SOR()
 	uniform_num_nonzero_phases = glGetUniformLocation(sor_program, "num_nonzero_phases");
 }
 
-void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_black_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, ScopedTimer *sor_timer)
+void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_black_tex, GLuint diffusivity_tex, int level_width, int level_height, int num_iterations, bool zero_diff_flow, int num_layers, ScopedTimer *sor_timer)
 {
 	glUseProgram(sor_program);
 
@@ -813,7 +809,7 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_bl
 				glProgramUniform1i(sor_program, uniform_num_nonzero_phases, 0);
 			}
 			glProgramUniform1i(sor_program, uniform_phase, 0);
-			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+			glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 			glTextureBarrier();
 		}
 		{
@@ -822,7 +818,7 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_bl
 				glProgramUniform1i(sor_program, uniform_num_nonzero_phases, 1);
 			}
 			glProgramUniform1i(sor_program, uniform_phase, 1);
-			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+			glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 			if (zero_diff_flow && i == 0) {
 				glProgramUniform1i(sor_program, uniform_num_nonzero_phases, 2);
 			}
@@ -838,7 +834,7 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_bl
 class AddBaseFlow {
 public:
 	AddBaseFlow();
-	void exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_width, int level_height);
+	void exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_width, int level_height, int num_layers);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -859,7 +855,7 @@ AddBaseFlow::AddBaseFlow()
 	uniform_diff_flow_tex = glGetUniformLocation(add_flow_program, "diff_flow_tex");
 }
 
-void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_width, int level_height)
+void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_width, int level_height, int num_layers)
 {
 	glUseProgram(add_flow_program);
 
@@ -870,14 +866,14 @@ void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_wid
 	glBlendFunc(GL_ONE, GL_ONE);
 	fbos.render_to(base_flow_tex);
 
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 // Take a copy of the flow, bilinearly interpolated and scaled up.
 class ResizeFlow {
 public:
 	ResizeFlow();
-	void exec(GLuint in_tex, GLuint out_tex, int input_width, int input_height, int output_width, int output_height);
+	void exec(GLuint in_tex, GLuint out_tex, int input_width, int input_height, int output_width, int output_height, int num_layers);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -900,7 +896,7 @@ ResizeFlow::ResizeFlow()
 	uniform_scale_factor = glGetUniformLocation(resize_flow_program, "scale_factor");
 }
 
-void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int input_height, int output_width, int output_height)
+void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int input_height, int output_width, int output_height, int num_layers)
 {
 	glUseProgram(resize_flow_program);
 
@@ -912,12 +908,12 @@ void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int inpu
 	glDisable(GL_BLEND);
 	fbos.render_to(out_tex);
 
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
 class TexturePool {
 public:
-	GLuint get_texture(GLenum format, GLuint width, GLuint height);
+	GLuint get_texture(GLenum format, GLuint width, GLuint height, GLuint num_layers = 0);
 	void release_texture(GLuint tex_num);
 	GLuint get_renderbuffer(GLenum format, GLuint width, GLuint height);
 	void release_renderbuffer(GLuint tex_num);
@@ -926,7 +922,7 @@ private:
 	struct Texture {
 		GLuint tex_num;
 		GLenum format;
-		GLuint width, height;
+		GLuint width, height, num_layers;
 		bool in_use = false;
 		bool is_renderbuffer = false;
 	};
@@ -937,14 +933,19 @@ class DISComputeFlow {
 public:
 	DISComputeFlow(int width, int height);
 
+	enum FlowDirection {
+		FORWARD,
+		FORWARD_AND_BACKWARD
+	};
 	enum ResizeStrategy {
 		DO_NOT_RESIZE_FLOW,
 		RESIZE_FLOW_TO_FULL_SIZE
 	};
 
+	// The texture must have two layers (first and second frame).
 	// Returns a texture that must be released with release_texture()
 	// after use.
-	GLuint exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_strategy);
+	GLuint exec(GLuint tex, FlowDirection flow_direction, ResizeStrategy resize_strategy);
 
 	void release_texture(GLuint tex) {
 		pool.release_texture(tex);
@@ -998,8 +999,8 @@ DISComputeFlow::DISComputeFlow(int width, int height)
 	glSamplerParameterfv(zero_border_sampler, GL_TEXTURE_BORDER_COLOR, zero);
 
 	// Initial flow is zero, 1x1.
-	glCreateTextures(GL_TEXTURE_2D, 1, &initial_flow_tex);
-	glTextureStorage2D(initial_flow_tex, 1, GL_RG16F, 1, 1);
+	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &initial_flow_tex);
+	glTextureStorage3D(initial_flow_tex, 1, GL_RG16F, 1, 1, 1);
 	glClearTexImage(initial_flow_tex, 0, GL_RG, GL_FLOAT, nullptr);
 
 	// Set up the vertex data that will be shared between all passes.
@@ -1021,8 +1022,9 @@ DISComputeFlow::DISComputeFlow(int width, int height)
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 }
 
-GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_strategy)
+GLuint DISComputeFlow::exec(GLuint tex, FlowDirection flow_direction, ResizeStrategy resize_strategy)
 {
+	int num_layers = (flow_direction == FORWARD_AND_BACKWARD) ? 2 : 1;
 	int prev_level_width = 1, prev_level_height = 1;
 	GLuint prev_level_flow_tex = initial_flow_tex;
 
@@ -1050,44 +1052,41 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 		// Make sure we always read from the correct level; the chosen
 		// mipmapping could otherwise be rather unpredictable, especially
 		// during motion search.
-		GLuint tex0_view, tex1_view;
-		glGenTextures(1, &tex0_view);
-		glTextureView(tex0_view, GL_TEXTURE_2D, tex0, GL_R8, level, 1, 0, 1);
-		glGenTextures(1, &tex1_view);
-		glTextureView(tex1_view, GL_TEXTURE_2D, tex1, GL_R8, level, 1, 0, 1);
+		GLuint tex_view;
+		glGenTextures(1, &tex_view);
+		glTextureView(tex_view, GL_TEXTURE_2D_ARRAY, tex, GL_R8, level, 1, 0, 2);
 
-		// Create a new texture; we could be fancy and render use a multi-level
-		// texture, but meh.
-		GLuint grad0_tex = pool.get_texture(GL_R32UI, level_width, level_height);
+		// Create a new texture to hold the gradients.
+		GLuint grad_tex = pool.get_texture(GL_R32UI, level_width, level_height, num_layers);
 
 		// Find the derivative.
 		{
 			ScopedTimer timer("Sobel", &level_timer);
-			sobel.exec(tex0_view, grad0_tex, level_width, level_height);
+			sobel.exec(tex_view, grad_tex, level_width, level_height, num_layers);
 		}
 
 		// Motion search to find the initial flow. We use the flow from the previous
 		// level (sampled bilinearly; no fancy tricks) as a guide, then search from there.
 
 		// Create an output flow texture.
-		GLuint flow_out_tex = pool.get_texture(GL_RGB16F, width_patches, height_patches);
+		GLuint flow_out_tex = pool.get_texture(GL_RGB16F, width_patches, height_patches, num_layers);
 
 		// And draw.
 		{
 			ScopedTimer timer("Motion search", &level_timer);
-			motion_search.exec(tex0_view, tex1_view, grad0_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, prev_level_width, prev_level_height, width_patches, height_patches);
+			motion_search.exec(tex_view, grad_tex, prev_level_flow_tex, flow_out_tex, level_width, level_height, prev_level_width, prev_level_height, width_patches, height_patches, num_layers);
 		}
-		pool.release_texture(grad0_tex);
+		pool.release_texture(grad_tex);
 
 		// Densification.
 
 		// Set up an output texture (cleared in Densify).
-		GLuint dense_flow_tex = pool.get_texture(GL_RGB16F, level_width, level_height);
+		GLuint dense_flow_tex = pool.get_texture(GL_RGB16F, level_width, level_height, num_layers);
 
 		// And draw.
 		{
 			ScopedTimer timer("Densification", &level_timer);
-			densify.exec(tex0_view, tex1_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches);
+			densify.exec(tex_view, flow_out_tex, dense_flow_tex, level_width, level_height, width_patches, height_patches, num_layers);
 		}
 		pool.release_texture(flow_out_tex);
 
@@ -1101,60 +1100,59 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 		// in pixels, not 0..1 normalized OpenGL texture coordinates.
 		// This is because variational refinement depends so heavily on derivatives,
 		// which are measured in intensity levels per pixel.
-		GLuint I_tex = pool.get_texture(GL_R16F, level_width, level_height);
-		GLuint I_t_tex = pool.get_texture(GL_R16F, level_width, level_height);
-		GLuint base_flow_tex = pool.get_texture(GL_RG16F, level_width, level_height);
+		GLuint I_tex = pool.get_texture(GL_R16F, level_width, level_height, num_layers);
+		GLuint I_t_tex = pool.get_texture(GL_R16F, level_width, level_height, num_layers);
+		GLuint base_flow_tex = pool.get_texture(GL_RG16F, level_width, level_height, num_layers);
 		{
 			ScopedTimer timer("Prewarping", &varref_timer);
-			prewarp.exec(tex0_view, tex1_view, dense_flow_tex, I_tex, I_t_tex, base_flow_tex, level_width, level_height);
+			prewarp.exec(tex_view, dense_flow_tex, I_tex, I_t_tex, base_flow_tex, level_width, level_height, num_layers);
 		}
 		pool.release_texture(dense_flow_tex);
-		glDeleteTextures(1, &tex0_view);
-		glDeleteTextures(1, &tex1_view);
+		glDeleteTextures(1, &tex_view);
 
 		// Calculate I_x and I_y. We're only calculating first derivatives;
 		// the others will be taken on-the-fly in order to sample from fewer
 		// textures overall, since sampling from the L1 cache is cheap.
 		// (TODO: Verify that this is indeed faster than making separate
 		// double-derivative textures.)
-		GLuint I_x_y_tex = pool.get_texture(GL_RG16F, level_width, level_height);
-		GLuint beta_0_tex = pool.get_texture(GL_R16F, level_width, level_height);
+		GLuint I_x_y_tex = pool.get_texture(GL_RG16F, level_width, level_height, num_layers);
+		GLuint beta_0_tex = pool.get_texture(GL_R16F, level_width, level_height, num_layers);
 		{
 			ScopedTimer timer("First derivatives", &varref_timer);
-			derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height);
+			derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height, num_layers);
 		}
 		pool.release_texture(I_tex);
 
 		// We need somewhere to store du and dv (the flow increment, relative
 		// to the non-refined base flow u0 and v0). It's initially garbage,
 		// but not read until we've written something sane to it.
-		GLuint diff_flow_tex = pool.get_texture(GL_RG16F, level_width, level_height);
+		GLuint diff_flow_tex = pool.get_texture(GL_RG16F, level_width, level_height, num_layers);
 
 		// And for diffusivity.
-		GLuint diffusivity_tex = pool.get_texture(GL_R16F, level_width, level_height);
+		GLuint diffusivity_tex = pool.get_texture(GL_R16F, level_width, level_height, num_layers);
 
 		// And finally for the equation set. See SetupEquations for
 		// the storage format.
-		GLuint equation_red_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height);
-		GLuint equation_black_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height);
+		GLuint equation_red_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height, num_layers);
+		GLuint equation_black_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height, num_layers);
 
 		for (int outer_idx = 0; outer_idx < level + 1; ++outer_idx) {
 			// Calculate the diffusivity term for each pixel.
 			{
 				ScopedTimer timer("Compute diffusivity", &varref_timer);
-				compute_diffusivity.exec(base_flow_tex, diff_flow_tex, diffusivity_tex, level_width, level_height, outer_idx == 0);
+				compute_diffusivity.exec(base_flow_tex, diff_flow_tex, diffusivity_tex, level_width, level_height, outer_idx == 0, num_layers);
 			}
 
 			// Set up the 2x2 equation system for each pixel.
 			{
 				ScopedTimer timer("Set up equations", &varref_timer);
-				setup_equations.exec(I_x_y_tex, I_t_tex, diff_flow_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_red_tex, equation_black_tex, level_width, level_height, outer_idx == 0);
+				setup_equations.exec(I_x_y_tex, I_t_tex, diff_flow_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_red_tex, equation_black_tex, level_width, level_height, outer_idx == 0, num_layers);
 			}
 
 			// Run a few SOR iterations. Note that these are to/from the same texture.
 			{
 				ScopedTimer timer("SOR", &varref_timer);
-				sor.exec(diff_flow_tex, equation_red_tex, equation_black_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, &timer);
+				sor.exec(diff_flow_tex, equation_red_tex, equation_black_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, num_layers, &timer);
 			}
 		}
 
@@ -1173,7 +1171,7 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 		// it is more efficient), but it helps debug the motion search.
 		if (enable_variational_refinement) {
 			ScopedTimer timer("Add differential flow", &varref_timer);
-			add_base_flow.exec(base_flow_tex, diff_flow_tex, level_width, level_height);
+			add_base_flow.exec(base_flow_tex, diff_flow_tex, level_width, level_height, num_layers);
 		}
 		pool.release_texture(diff_flow_tex);
 
@@ -1194,8 +1192,8 @@ GLuint DISComputeFlow::exec(GLuint tex0, GLuint tex1, ResizeStrategy resize_stra
 	if (finest_level == 0 || resize_strategy == DO_NOT_RESIZE_FLOW) {
 		return prev_level_flow_tex;
 	} else {
-		GLuint final_tex = pool.get_texture(GL_RG16F, width, height);
-		resize_flow.exec(prev_level_flow_tex, final_tex, prev_level_width, prev_level_height, width, height);
+		GLuint final_tex = pool.get_texture(GL_RG16F, width, height, num_layers);
+		resize_flow.exec(prev_level_flow_tex, final_tex, prev_level_width, prev_level_height, width, height, num_layers);
 		pool.release_texture(prev_level_flow_tex);
 		return final_tex;
 	}
@@ -1208,7 +1206,7 @@ public:
 	Splat();
 
 	// alpha is the time of the interpolated frame (0..1).
-	void exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha);
+	void exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha);
 
 private:
 	PersistentFBOSetWithDepth<1> fbos;
@@ -1217,8 +1215,8 @@ private:
 	GLuint splat_fs_obj;
 	GLuint splat_program;
 
-	GLuint uniform_invert_flow, uniform_splat_size, uniform_alpha;
-	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+	GLuint uniform_splat_size, uniform_alpha;
+	GLuint uniform_image_tex, uniform_flow_tex;
 	GLuint uniform_inv_flow_size;
 };
 
@@ -1228,21 +1226,19 @@ Splat::Splat()
 	splat_fs_obj = compile_shader(read_file("splat.frag"), GL_FRAGMENT_SHADER);
 	splat_program = link_program(splat_vs_obj, splat_fs_obj);
 
-	uniform_invert_flow = glGetUniformLocation(splat_program, "invert_flow");
 	uniform_splat_size = glGetUniformLocation(splat_program, "splat_size");
 	uniform_alpha = glGetUniformLocation(splat_program, "alpha");
-	uniform_image0_tex = glGetUniformLocation(splat_program, "image0_tex");
-	uniform_image1_tex = glGetUniformLocation(splat_program, "image1_tex");
+	uniform_image_tex = glGetUniformLocation(splat_program, "image_tex");
 	uniform_flow_tex = glGetUniformLocation(splat_program, "flow_tex");
 	uniform_inv_flow_size = glGetUniformLocation(splat_program, "inv_flow_size");
 }
 
-void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha)
+void Splat::exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha)
 {
 	glUseProgram(splat_program);
 
-	bind_sampler(splat_program, uniform_image0_tex, 0, tex0, linear_sampler);
-	bind_sampler(splat_program, uniform_image1_tex, 1, tex1, linear_sampler);
+	bind_sampler(splat_program, uniform_image_tex, 0, image_tex, linear_sampler);
+	bind_sampler(splat_program, uniform_flow_tex, 1, bidirectional_flow_tex, nearest_sampler);
 
 	// FIXME: This is set to 1.0 right now so not to trigger Haswell's “PMA stall”.
 	// Move to 2.0 later, or even 4.0.
@@ -1266,15 +1262,7 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	glClearDepth(1.0f);  // Effectively infinity.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// Do forward splatting.
-	bind_sampler(splat_program, uniform_flow_tex, 2, forward_flow_tex, nearest_sampler);
-	glProgramUniform1i(splat_program, uniform_invert_flow, 0);
-	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width * height);
-
-	// Do backward splatting.
-	bind_sampler(splat_program, uniform_flow_tex, 2, backward_flow_tex, nearest_sampler);
-	glProgramUniform1i(splat_program, uniform_invert_flow, 1);
-	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width * height);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, width * height * 2);
 
 	glDisable(GL_DEPTH_TEST);
 }
@@ -1436,7 +1424,7 @@ void HoleBlend::exec(GLuint flow_tex, GLuint depth_rb, GLuint temp_tex[3], int w
 class Blend {
 public:
 	Blend();
-	void exec(GLuint tex0, GLuint tex1, GLuint flow_tex, GLuint output_tex, int width, int height, float alpha);
+	void exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, int width, int height, float alpha);
 
 private:
 	PersistentFBOSet<1> fbos;
@@ -1444,7 +1432,7 @@ private:
 	GLuint blend_fs_obj;
 	GLuint blend_program;
 
-	GLuint uniform_image0_tex, uniform_image1_tex, uniform_flow_tex;
+	GLuint uniform_image_tex, uniform_flow_tex;
 	GLuint uniform_alpha, uniform_flow_consistency_tolerance;
 };
 
@@ -1454,19 +1442,17 @@ Blend::Blend()
 	blend_fs_obj = compile_shader(read_file("blend.frag"), GL_FRAGMENT_SHADER);
 	blend_program = link_program(blend_vs_obj, blend_fs_obj);
 
-	uniform_image0_tex = glGetUniformLocation(blend_program, "image0_tex");
-	uniform_image1_tex = glGetUniformLocation(blend_program, "image1_tex");
+	uniform_image_tex = glGetUniformLocation(blend_program, "image_tex");
 	uniform_flow_tex = glGetUniformLocation(blend_program, "flow_tex");
 	uniform_alpha = glGetUniformLocation(blend_program, "alpha");
 	uniform_flow_consistency_tolerance = glGetUniformLocation(blend_program, "flow_consistency_tolerance");
 }
 
-void Blend::exec(GLuint tex0, GLuint tex1, GLuint flow_tex, GLuint output_tex, int level_width, int level_height, float alpha)
+void Blend::exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, int level_width, int level_height, float alpha)
 {
 	glUseProgram(blend_program);
-	bind_sampler(blend_program, uniform_image0_tex, 0, tex0, linear_sampler);
-	bind_sampler(blend_program, uniform_image1_tex, 1, tex1, linear_sampler);
-	bind_sampler(blend_program, uniform_flow_tex, 2, flow_tex, linear_sampler);  // May be upsampled.
+	bind_sampler(blend_program, uniform_image_tex, 0, image_tex, linear_sampler);
+	bind_sampler(blend_program, uniform_flow_tex, 1, flow_tex, linear_sampler);  // May be upsampled.
 	glProgramUniform1f(blend_program, uniform_alpha, alpha);
 
 	glViewport(0, 0, level_width, level_height);
@@ -1480,9 +1466,9 @@ public:
 	Interpolate(int width, int height, int flow_level);
 
 	// Returns a texture that must be released with release_texture()
-	// after use. tex0 and tex1 must be RGBA8 textures with mipmaps
+	// after use. image_tex must be a two-layer RGBA8 texture with mipmaps
 	// (unless flow_level == 0).
-	GLuint exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint width, GLuint height, float alpha);
+	GLuint exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha);
 
 	void release_texture(GLuint tex) {
 		pool.release_texture(tex);
@@ -1520,7 +1506,7 @@ Interpolate::Interpolate(int width, int height, int flow_level)
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 }
 
-GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint width, GLuint height, float alpha)
+GLuint Interpolate::exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha)
 {
 	GPUTimers timers;
 
@@ -1529,11 +1515,9 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	glBindVertexArray(vao);
 
 	// Pick out the right level to test splatting results on.
-	GLuint tex0_view, tex1_view;
-	glGenTextures(1, &tex0_view);
-	glTextureView(tex0_view, GL_TEXTURE_2D, tex0, GL_RGBA8, flow_level, 1, 0, 1);
-	glGenTextures(1, &tex1_view);
-	glTextureView(tex1_view, GL_TEXTURE_2D, tex1, GL_RGBA8, flow_level, 1, 0, 1);
+	GLuint tex_view;
+	glGenTextures(1, &tex_view);
+	glTextureView(tex_view, GL_TEXTURE_2D_ARRAY, image_tex, GL_RGBA8, flow_level, 1, 0, 2);
 
 	int flow_width = width >> flow_level;
 	int flow_height = height >> flow_level;
@@ -1543,10 +1527,9 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 
 	{
 		ScopedTimer timer("Splat", &total_timer);
-		splat.exec(tex0_view, tex1_view, forward_flow_tex, backward_flow_tex, flow_tex, depth_rb, flow_width, flow_height, alpha);
+		splat.exec(tex_view, bidirectional_flow_tex, flow_tex, depth_rb, flow_width, flow_height, alpha);
 	}
-	glDeleteTextures(1, &tex0_view);
-	glDeleteTextures(1, &tex1_view);
+	glDeleteTextures(1, &tex_view);
 
 	GLuint temp_tex[3];
 	temp_tex[0] = pool.get_texture(GL_RG16F, flow_width, flow_height);
@@ -1567,7 +1550,7 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	GLuint output_tex = pool.get_texture(GL_RGBA8, width, height);
 	{
 		ScopedTimer timer("Blend", &total_timer);
-		blend.exec(tex0, tex1, flow_tex, output_tex, width, height, alpha);
+		blend.exec(image_tex, flow_tex, output_tex, width, height, alpha);
 	}
 	pool.release_texture(flow_tex);
 	total_timer.end();
@@ -1578,22 +1561,28 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	return output_tex;
 }
 
-GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height)
+GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height, GLuint num_layers)
 {
 	for (Texture &tex : textures) {
 		if (!tex.in_use && !tex.is_renderbuffer && tex.format == format &&
-		    tex.width == width && tex.height == height) {
+		    tex.width == width && tex.height == height && tex.num_layers == num_layers) {
 			tex.in_use = true;
 			return tex.tex_num;
 		}
 	}
 
 	Texture tex;
-	glCreateTextures(GL_TEXTURE_2D, 1, &tex.tex_num);
-	glTextureStorage2D(tex.tex_num, 1, format, width, height);
+	if (num_layers == 0) {
+		glCreateTextures(GL_TEXTURE_2D, 1, &tex.tex_num);
+		glTextureStorage2D(tex.tex_num, 1, format, width, height);
+	} else {
+		glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex.tex_num);
+		glTextureStorage3D(tex.tex_num, 1, format, width, height, num_layers);
+	}
 	tex.format = format;
 	tex.width = width;
 	tex.height = height;
+	tex.num_layers = num_layers;
 	tex.in_use = true;
 	tex.is_renderbuffer = false;
 	textures.push_back(tex);
@@ -1644,7 +1633,7 @@ void TexturePool::release_renderbuffer(GLuint tex_num)
 			return;
 		}
 	}
-	assert(false);
+	//assert(false);
 }
 
 // OpenGL uses a bottom-left coordinate system, .flo files use a top-left coordinate system.
@@ -1789,42 +1778,47 @@ void compute_flow_only(int argc, char **argv, int optind)
 		exit(1);
 	}
 
+	// Move them into an array texture, since that's how the rest of the code
+	// would like them.
+	GLuint image_tex;
+	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &image_tex);
+	glTextureStorage3D(image_tex, 1, GL_RGBA8, width1, height1, 2);
+	glCopyImageSubData(tex0, GL_TEXTURE_2D, 0, 0, 0, 0, image_tex, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, width1, height1, 1);
+	glCopyImageSubData(tex1, GL_TEXTURE_2D, 0, 0, 0, 0, image_tex, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 1, width1, height1, 1);
+	glDeleteTextures(1, &tex0);
+	glDeleteTextures(1, &tex1);
+
 	// Set up some PBOs to do asynchronous readback.
 	GLuint pbos[5];
 	glCreateBuffers(5, pbos);
 	for (int i = 0; i < 5; ++i) {
-		glNamedBufferData(pbos[i], width1 * height1 * 2 * sizeof(float), nullptr, GL_STREAM_READ);
+		glNamedBufferData(pbos[i], width1 * height1 * 2 * 2 * sizeof(float), nullptr, GL_STREAM_READ);
 		spare_pbos.push(pbos[i]);
 	}
 
 	int levels = find_num_levels(width1, height1);
-	GLuint tex0_gray, tex1_gray;
-	glCreateTextures(GL_TEXTURE_2D, 1, &tex0_gray);
-	glCreateTextures(GL_TEXTURE_2D, 1, &tex1_gray);
-	glTextureStorage2D(tex0_gray, levels, GL_R8, width1, height1);
-	glTextureStorage2D(tex1_gray, levels, GL_R8, width1, height1);
+
+	GLuint tex_gray;
+	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex_gray);
+	glTextureStorage3D(tex_gray, levels, GL_R8, width1, height1, 2);
 
 	GrayscaleConversion gray;
-	gray.exec(tex0, tex0_gray, width1, height1);
-	glDeleteTextures(1, &tex0);
-	glGenerateTextureMipmap(tex0_gray);
-
-	gray.exec(tex1, tex1_gray, width1, height1);
-	glDeleteTextures(1, &tex1);
-	glGenerateTextureMipmap(tex1_gray);
+	gray.exec(image_tex, tex_gray, width1, height1, /*num_layers=*/2);
+	glGenerateTextureMipmap(tex_gray);
 
 	DISComputeFlow compute_flow(width1, height1);
 
 	if (enable_warmup) {
 		in_warmup = true;
 		for (int i = 0; i < 10; ++i) {
-			GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
+			GLuint final_tex = compute_flow.exec(tex_gray, DISComputeFlow::FORWARD, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
 			compute_flow.release_texture(final_tex);
 		}
 		in_warmup = false;
 	}
 
-	GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
+	GLuint final_tex = compute_flow.exec(tex_gray, DISComputeFlow::FORWARD, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
+	//GLuint final_tex = compute_flow.exec(tex_gray, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
 
 	schedule_read<FlowType>(final_tex, width1, height1, filename0, filename1, flow_filename, "flow.ppm");
 	compute_flow.release_texture(final_tex);
@@ -1843,8 +1837,7 @@ void compute_flow_only(int argc, char **argv, int optind)
 				filename0, width, height, width1, height1);
 			exit(1);
 		}
-		gray.exec(tex0, tex0_gray, width, height);
-		glGenerateTextureMipmap(tex0_gray);
+		glCopyImageSubData(tex0, GL_TEXTURE_2D, 0, 0, 0, 0, image_tex, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, width1, height1, 1);
 		glDeleteTextures(1, &tex0);
 
 		GLuint tex1 = load_texture(filename1, &width, &height, WITHOUT_MIPMAPS);
@@ -1853,17 +1846,18 @@ void compute_flow_only(int argc, char **argv, int optind)
 				filename1, width, height, width1, height1);
 			exit(1);
 		}
-		gray.exec(tex1, tex1_gray, width, height);
-		glGenerateTextureMipmap(tex1_gray);
+		glCopyImageSubData(tex1, GL_TEXTURE_2D, 0, 0, 0, 0, image_tex, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 1, width1, height1, 1);
 		glDeleteTextures(1, &tex1);
 
-		GLuint final_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
+		gray.exec(image_tex, tex_gray, width1, height1, /*num_layers=*/2);
+		glGenerateTextureMipmap(tex_gray);
+
+		GLuint final_tex = compute_flow.exec(tex_gray, DISComputeFlow::FORWARD, DISComputeFlow::RESIZE_FLOW_TO_FULL_SIZE);
 
 		schedule_read<FlowType>(final_tex, width1, height1, filename0, filename1, flow_filename, "");
 		compute_flow.release_texture(final_tex);
 	}
-	glDeleteTextures(1, &tex0_gray);
-	glDeleteTextures(1, &tex1_gray);
+	glDeleteTextures(1, &tex_gray);
 
 	while (!reads_in_progress.empty()) {
 		finish_one_read<FlowType>(width1, height1);
@@ -1893,6 +1887,18 @@ void interpolate_image(int argc, char **argv, int optind)
 		exit(1);
 	}
 
+	// Move them into an array texture, since that's how the rest of the code
+	// would like them.
+	int levels = find_num_levels(width1, height1);
+	GLuint image_tex;
+	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &image_tex);
+	glTextureStorage3D(image_tex, levels, GL_RGBA8, width1, height1, 2);
+	glCopyImageSubData(tex0, GL_TEXTURE_2D, 0, 0, 0, 0, image_tex, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, width1, height1, 1);
+	glCopyImageSubData(tex1, GL_TEXTURE_2D, 0, 0, 0, 0, image_tex, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 1, width1, height1, 1);
+	glDeleteTextures(1, &tex0);
+	glDeleteTextures(1, &tex1);
+	glGenerateTextureMipmap(image_tex);
+
 	// Set up some PBOs to do asynchronous readback.
 	GLuint pbos[5];
 	glCreateBuffers(5, pbos);
@@ -1905,41 +1911,31 @@ void interpolate_image(int argc, char **argv, int optind)
 	GrayscaleConversion gray;
 	Interpolate interpolate(width1, height1, finest_level);
 
-	int levels = find_num_levels(width1, height1);
-	GLuint tex0_gray, tex1_gray;
-	glCreateTextures(GL_TEXTURE_2D, 1, &tex0_gray);
-	glCreateTextures(GL_TEXTURE_2D, 1, &tex1_gray);
-	glTextureStorage2D(tex0_gray, levels, GL_R8, width1, height1);
-	glTextureStorage2D(tex1_gray, levels, GL_R8, width1, height1);
-
-	gray.exec(tex0, tex0_gray, width1, height1);
-	glGenerateTextureMipmap(tex0_gray);
-
-	gray.exec(tex1, tex1_gray, width1, height1);
-	glGenerateTextureMipmap(tex1_gray);
+	GLuint tex_gray;
+	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex_gray);
+	glTextureStorage3D(tex_gray, levels, GL_R8, width1, height1, 2);
+	gray.exec(image_tex, tex_gray, width1, height1, /*num_layers=*/2);
+	glGenerateTextureMipmap(tex_gray);
 
 	if (enable_warmup) {
 		in_warmup = true;
 		for (int i = 0; i < 10; ++i) {
-			GLuint forward_flow_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
-			GLuint backward_flow_tex = compute_flow.exec(tex1_gray, tex0_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
-			GLuint interpolated_tex = interpolate.exec(tex0, tex1, forward_flow_tex, backward_flow_tex, width1, height1, 0.5f);
-			compute_flow.release_texture(forward_flow_tex);
-			compute_flow.release_texture(backward_flow_tex);
+			GLuint bidirectional_flow_tex = compute_flow.exec(tex_gray, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
+			GLuint interpolated_tex = interpolate.exec(image_tex, bidirectional_flow_tex, width1, height1, 0.5f);
+			compute_flow.release_texture(bidirectional_flow_tex);
 			interpolate.release_texture(interpolated_tex);
 		}
 		in_warmup = false;
 	}
 
-	GLuint forward_flow_tex = compute_flow.exec(tex0_gray, tex1_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
-	GLuint backward_flow_tex = compute_flow.exec(tex1_gray, tex0_gray, DISComputeFlow::DO_NOT_RESIZE_FLOW);
+	GLuint bidirectional_flow_tex = compute_flow.exec(tex_gray, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 
 	for (int frameno = 1; frameno < 60; ++frameno) {
 		char ppm_filename[256];
 		snprintf(ppm_filename, sizeof(ppm_filename), "interp%04d.ppm", frameno);
 
 		float alpha = frameno / 60.0f;
-		GLuint interpolated_tex = interpolate.exec(tex0, tex1, forward_flow_tex, backward_flow_tex, width1, height1, alpha);
+		GLuint interpolated_tex = interpolate.exec(image_tex, bidirectional_flow_tex, width1, height1, alpha);
 
 		schedule_read<RGBAType>(interpolated_tex, width1, height1, filename0, filename1, "", ppm_filename);
 		interpolate.release_texture(interpolated_tex);

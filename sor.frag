@@ -1,12 +1,12 @@
 #version 450 core
 
-in vec2 tc, tc_left, tc_down;
-in vec2 equation_tc_assuming_left, equation_tc_assuming_right;
+in vec3 tc, tc_left, tc_down;
+in vec3 equation_tc_assuming_left, equation_tc_assuming_right;
 in float element_x_idx, element_sum_idx;
 out vec2 diff_flow;
 
-uniform sampler2D diff_flow_tex, diffusivity_tex;
-uniform usampler2D equation_red_tex, equation_black_tex;
+uniform sampler2DArray diff_flow_tex, diffusivity_tex;
+uniform usampler2DArray equation_red_tex, equation_black_tex;
 uniform int phase;
 
 uniform int num_nonzero_phases;
@@ -52,7 +52,7 @@ void main()
 	if (color != phase) discard;
 
 	uvec4 equation;
-	vec2 equation_tc;
+	vec3 equation_tc;
 	if ((int(round(element_x_idx)) & 1) == 0) {
 		equation_tc = equation_tc_assuming_left;
 	} else {

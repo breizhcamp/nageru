@@ -1,10 +1,10 @@
 #version 450 core
 
-in vec2 tc;
+in vec3 tc;
 out vec2 derivatives;
 out float beta_0;
 
-uniform sampler2D tex;
+uniform sampler2DArray tex;
 
 void main()
 {

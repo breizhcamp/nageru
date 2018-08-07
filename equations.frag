@@ -1,14 +1,14 @@
 #version 450 core
 
-in vec2 tc0, tc_left0, tc_down0;
-in vec2 tc1, tc_left1, tc_down1;
+in vec3 tc0, tc_left0, tc_down0;
+in vec3 tc1, tc_left1, tc_down1;
 in float line_offset;
 out uvec4 equation_red, equation_black;
 
-uniform sampler2D I_x_y_tex, I_t_tex;
-uniform sampler2D diff_flow_tex, base_flow_tex;
-uniform sampler2D beta_0_tex;
-uniform sampler2D diffusivity_tex;
+uniform sampler2DArray I_x_y_tex, I_t_tex;
+uniform sampler2DArray diff_flow_tex, base_flow_tex;
+uniform sampler2DArray beta_0_tex;
+uniform sampler2DArray diffusivity_tex;
 
 // Relative weighting of intensity term.
 uniform float delta;
@@ -67,7 +67,7 @@ float zero_if_outside_border(vec4 val)
 	}
 }
 
-uvec4 compute_equation(vec2 tc, vec2 tc_left, vec2 tc_down)
+uvec4 compute_equation(vec3 tc, vec3 tc_left, vec3 tc_down)
 {
 	// Read the flow (on top of the u0/v0 flow).
 	float du, dv;
