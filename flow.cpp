@@ -291,23 +291,23 @@ void PersistentFBOSet<num_elements>::render_to(const array<GLuint, num_elements>
 template<size_t num_elements>
 class PersistentFBOSetWithDepth {
 public:
-	void render_to(GLuint depth_tex, const array<GLuint, num_elements> &textures);
+	void render_to(GLuint depth_rb, const array<GLuint, num_elements> &textures);
 
 	// Convenience wrappers.
-	void render_to(GLuint depth_tex, GLuint texture0) {
-		render_to(depth_tex, {{texture0}});
+	void render_to(GLuint depth_rb, GLuint texture0) {
+		render_to(depth_rb, {{texture0}});
 	}
 
-	void render_to(GLuint depth_tex, GLuint texture0, GLuint texture1) {
-		render_to(depth_tex, {{texture0, texture1}});
+	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1) {
+		render_to(depth_rb, {{texture0, texture1}});
 	}
 
-	void render_to(GLuint depth_tex, GLuint texture0, GLuint texture1, GLuint texture2) {
-		render_to(depth_tex, {{texture0, texture1, texture2}});
+	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1, GLuint texture2) {
+		render_to(depth_rb, {{texture0, texture1, texture2}});
 	}
 
-	void render_to(GLuint depth_tex, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3) {
-		render_to(depth_tex, {{texture0, texture1, texture2, texture3}});
+	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3) {
+		render_to(depth_rb, {{texture0, texture1, texture2, texture3}});
 	}
 
 private:
@@ -316,9 +316,9 @@ private:
 };
 
 template<size_t num_elements>
-void PersistentFBOSetWithDepth<num_elements>::render_to(GLuint depth_tex, const array<GLuint, num_elements> &textures)
+void PersistentFBOSetWithDepth<num_elements>::render_to(GLuint depth_rb, const array<GLuint, num_elements> &textures)
 {
-	auto key = make_pair(depth_tex, textures);
+	auto key = make_pair(depth_rb, textures);
 
 	auto it = fbos.find(key);
 	if (it != fbos.end()) {
@@ -329,7 +329,7 @@ void PersistentFBOSetWithDepth<num_elements>::render_to(GLuint depth_tex, const 
 	GLuint fbo;
 	glCreateFramebuffers(1, &fbo);
 	GLenum bufs[num_elements];
-	glNamedFramebufferTexture(fbo, GL_DEPTH_ATTACHMENT, depth_tex, 0);
+	glNamedFramebufferRenderbuffer(fbo, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_rb);
 	for (size_t i = 0; i < num_elements; ++i) {
 		glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0 + i, textures[i], 0);
 		bufs[i] = GL_COLOR_ATTACHMENT0 + i;
@@ -919,6 +919,8 @@ class TexturePool {
 public:
 	GLuint get_texture(GLenum format, GLuint width, GLuint height);
 	void release_texture(GLuint tex_num);
+	GLuint get_renderbuffer(GLenum format, GLuint width, GLuint height);
+	void release_renderbuffer(GLuint tex_num);
 
 private:
 	struct Texture {
@@ -926,6 +928,7 @@ private:
 		GLenum format;
 		GLuint width, height;
 		bool in_use = false;
+		bool is_renderbuffer = false;
 	};
 	vector<Texture> textures;
 };
@@ -1205,7 +1208,7 @@ public:
 	Splat();
 
 	// alpha is the time of the interpolated frame (0..1).
-	void exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_tex, int width, int height, float alpha);
+	void exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha);
 
 private:
 	PersistentFBOSetWithDepth<1> fbos;
@@ -1234,7 +1237,7 @@ Splat::Splat()
 	uniform_inv_flow_size = glGetUniformLocation(splat_program, "inv_flow_size");
 }
 
-void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_tex, int width, int height, float alpha)
+void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backward_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha)
 {
 	glUseProgram(splat_program);
 
@@ -1255,7 +1258,7 @@ void Splat::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLuint backw
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);  // We store the difference between I_0 and I_1, where less difference is good. (Default 1.0 is effectively +inf, which always loses.)
 
-	fbos.render_to(depth_tex, flow_tex);
+	fbos.render_to(depth_rb, flow_tex);
 
 	// Evidently NVIDIA doesn't use fast clears for glClearTexImage, so clear now that
 	// we've got it bound.
@@ -1296,7 +1299,7 @@ public:
 	// Output will be in flow_tex, temp_tex[0, 1, 2], representing the filling
 	// from the down, left, right and up, respectively. Use HoleBlend to merge
 	// them into one.
-	void exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height);
+	void exec(GLuint flow_tex, GLuint depth_rb, GLuint temp_tex[3], int width, int height);
 
 private:
 	PersistentFBOSetWithDepth<1> fbos;
@@ -1320,7 +1323,7 @@ HoleFill::HoleFill()
 	uniform_sample_offset = glGetUniformLocation(fill_program, "sample_offset");
 }
 
-void HoleFill::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height)
+void HoleFill::exec(GLuint flow_tex, GLuint depth_rb, GLuint temp_tex[3], int width, int height)
 {
 	glUseProgram(fill_program);
 
@@ -1333,7 +1336,7 @@ void HoleFill::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int w
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);  // Only update the values > 0.999f (ie., only invalid pixels).
 
-	fbos.render_to(depth_tex, flow_tex);  // NOTE: Reading and writing to the same texture.
+	fbos.render_to(depth_rb, flow_tex);  // NOTE: Reading and writing to the same texture.
 
 	// Fill holes from the left, by shifting 1, 2, 4, 8, etc. pixels to the right.
 	for (int offs = 1; offs < width; offs *= 2) {
@@ -1379,7 +1382,7 @@ class HoleBlend {
 public:
 	HoleBlend();
 
-	void exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height);
+	void exec(GLuint flow_tex, GLuint depth_rb, GLuint temp_tex[3], int width, int height);
 
 private:
 	PersistentFBOSetWithDepth<1> fbos;
@@ -1406,7 +1409,7 @@ HoleBlend::HoleBlend()
 	uniform_sample_offset = glGetUniformLocation(blend_program, "sample_offset");
 }
 
-void HoleBlend::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int width, int height)
+void HoleBlend::exec(GLuint flow_tex, GLuint depth_rb, GLuint temp_tex[3], int width, int height)
 {
 	glUseProgram(blend_program);
 
@@ -1423,7 +1426,7 @@ void HoleBlend::exec(GLuint flow_tex, GLuint depth_tex, GLuint temp_tex[3], int 
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);  // Skip over all of the pixels that were never holes to begin with.
 
-	fbos.render_to(depth_tex, flow_tex);  // NOTE: Reading and writing to the same texture.
+	fbos.render_to(depth_rb, flow_tex);  // NOTE: Reading and writing to the same texture.
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
@@ -1536,11 +1539,11 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	int flow_height = height >> flow_level;
 
 	GLuint flow_tex = pool.get_texture(GL_RG16F, flow_width, flow_height);
-	GLuint depth_tex = pool.get_texture(GL_DEPTH_COMPONENT32F, flow_width, flow_height);  // Used for ranking flows.
+	GLuint depth_rb = pool.get_renderbuffer(GL_DEPTH_COMPONENT32F, flow_width, flow_height);  // Used for ranking flows.
 
 	{
 		ScopedTimer timer("Splat", &total_timer);
-		splat.exec(tex0_view, tex1_view, forward_flow_tex, backward_flow_tex, flow_tex, depth_tex, flow_width, flow_height, alpha);
+		splat.exec(tex0_view, tex1_view, forward_flow_tex, backward_flow_tex, flow_tex, depth_rb, flow_width, flow_height, alpha);
 	}
 	glDeleteTextures(1, &tex0_view);
 	glDeleteTextures(1, &tex1_view);
@@ -1552,14 +1555,14 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 
 	{
 		ScopedTimer timer("Fill holes", &total_timer);
-		hole_fill.exec(flow_tex, depth_tex, temp_tex, flow_width, flow_height);
-		hole_blend.exec(flow_tex, depth_tex, temp_tex, flow_width, flow_height);
+		hole_fill.exec(flow_tex, depth_rb, temp_tex, flow_width, flow_height);
+		hole_blend.exec(flow_tex, depth_rb, temp_tex, flow_width, flow_height);
 	}
 
 	pool.release_texture(temp_tex[0]);
 	pool.release_texture(temp_tex[1]);
 	pool.release_texture(temp_tex[2]);
-	pool.release_texture(depth_tex);
+	pool.release_renderbuffer(depth_rb);
 
 	GLuint output_tex = pool.get_texture(GL_RGBA8, width, height);
 	{
@@ -1578,7 +1581,7 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height)
 {
 	for (Texture &tex : textures) {
-		if (!tex.in_use && tex.format == format &&
+		if (!tex.in_use && !tex.is_renderbuffer && tex.format == format &&
 		    tex.width == width && tex.height == height) {
 			tex.in_use = true;
 			return tex.tex_num;
@@ -1592,6 +1595,30 @@ GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height)
 	tex.width = width;
 	tex.height = height;
 	tex.in_use = true;
+	tex.is_renderbuffer = false;
+	textures.push_back(tex);
+	return tex.tex_num;
+}
+
+GLuint TexturePool::get_renderbuffer(GLenum format, GLuint width, GLuint height)
+{
+	for (Texture &tex : textures) {
+		if (!tex.in_use && tex.is_renderbuffer && tex.format == format &&
+		    tex.width == width && tex.height == height) {
+			tex.in_use = true;
+			return tex.tex_num;
+		}
+	}
+
+	Texture tex;
+	glCreateRenderbuffers(1, &tex.tex_num);
+	glNamedRenderbufferStorage(tex.tex_num, format, width, height);
+
+	tex.format = format;
+	tex.width = width;
+	tex.height = height;
+	tex.in_use = true;
+	tex.is_renderbuffer = true;
 	textures.push_back(tex);
 	return tex.tex_num;
 }
@@ -1599,7 +1626,19 @@ GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height)
 void TexturePool::release_texture(GLuint tex_num)
 {
 	for (Texture &tex : textures) {
-		if (tex.tex_num == tex_num) {
+		if (!tex.is_renderbuffer && tex.tex_num == tex_num) {
+			assert(tex.in_use);
+			tex.in_use = false;
+			return;
+		}
+	}
+	assert(false);
+}
+
+void TexturePool::release_renderbuffer(GLuint tex_num)
+{
+	for (Texture &tex : textures) {
+		if (tex.is_renderbuffer && tex.tex_num == tex_num) {
 			assert(tex.in_use);
 			tex.in_use = false;
 			return;
