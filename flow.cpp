@@ -1539,7 +1539,7 @@ GLuint Interpolate::exec(GLuint tex0, GLuint tex1, GLuint forward_flow_tex, GLui
 	int flow_height = height >> flow_level;
 
 	GLuint flow_tex = pool.get_texture(GL_RG16F, flow_width, flow_height);
-	GLuint depth_rb = pool.get_renderbuffer(GL_DEPTH_COMPONENT32F, flow_width, flow_height);  // Used for ranking flows.
+	GLuint depth_rb = pool.get_renderbuffer(GL_DEPTH_COMPONENT16, flow_width, flow_height);  // Used for ranking flows.
 
 	{
 		ScopedTimer timer("Splat", &total_timer);
