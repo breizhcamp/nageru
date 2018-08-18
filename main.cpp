@@ -45,7 +45,6 @@ int record_thread_func();
 
 int main(int argc, char **argv)
 {
-	av_register_all();
 	avformat_network_init();
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
