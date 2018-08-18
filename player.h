@@ -7,7 +7,12 @@
 #include <functional>
 #include <mutex>
 
+extern "C" {
+#include <libavformat/avio.h>
+}
+
 class JPEGFrameView;
+class Mux;
 
 class Player {
 public:
@@ -23,6 +28,9 @@ public:
 
 private:
 	void thread_func();
+	void open_output_stream();
+	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
+	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 
 	JPEGFrameView *destination;
 	done_callback_func done_callback;
@@ -36,6 +44,11 @@ private:
 	bool new_clip_ready = false;  // Under queue_state_mu.
 	bool playing = false;  // Under queue_state_mu.
 	int override_stream_idx = -1;  // Under queue_state_mu.
+
+	// For streaming.
+	std::unique_ptr<Mux> stream_mux;  // To HTTP.
+	std::string stream_mux_header;
+	bool seen_sync_markers = false;
 };
 
 #endif  // !defined(_PLAYER_H)

@@ -42,6 +42,7 @@ public:
 	enum Codec {
 		CODEC_H264,
 		CODEC_NV12,  // Uncompressed 4:2:0.
+		CODEC_MJPEG
 	};
 	enum WriteStrategy {
 		// add_packet() will write the packet immediately, unless plugged.

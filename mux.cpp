@@ -58,10 +58,12 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 	avstream_video->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
 	if (video_codec == CODEC_H264) {
 		avstream_video->codecpar->codec_id = AV_CODEC_ID_H264;
-	} else {
-		assert(video_codec == CODEC_NV12);
+	} else if (video_codec == CODEC_NV12) {
 		avstream_video->codecpar->codec_id = AV_CODEC_ID_RAWVIDEO;
 		avstream_video->codecpar->codec_tag = avcodec_pix_fmt_to_codec_tag(AV_PIX_FMT_NV12);
+	} else {
+		assert(video_codec == CODEC_MJPEG);
+		avstream_video->codecpar->codec_id = AV_CODEC_ID_MJPEG;
 	}
 	avstream_video->codecpar->width = width;
 	avstream_video->codecpar->height = height;
@@ -86,6 +88,8 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 		memcpy(avstream_video->codecpar->extradata, video_extradata.data(), video_extradata.size());
 	}
 
+	avstream_audio = nullptr;
+#if 0
 	avstream_audio = avformat_new_stream(avctx, nullptr);
 	if (avstream_audio == nullptr) {
 		fprintf(stderr, "avformat_new_stream() failed\n");
@@ -96,6 +100,7 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 		fprintf(stderr, "avcodec_parameters_copy() failed\n");
 		exit(1);
 	}
+#endif
 
 	AVDictionary *options = NULL;
 	vector<pair<string, string>> opts = MUX_OPTS;

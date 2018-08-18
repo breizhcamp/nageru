@@ -20,8 +20,6 @@
 using namespace movit;
 using namespace std;
 
-string filename_for_frame(unsigned stream_idx, int64_t pts);
-
 struct JPEGID {
 	unsigned stream_idx;
 	int64_t pts;

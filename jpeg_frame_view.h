@@ -11,6 +11,8 @@
 
 #include <memory>
 
+std::string filename_for_frame(unsigned stream_idx, int64_t pts);
+
 struct Frame {
 	std::unique_ptr<uint8_t[]> y, cb, cr;
 	unsigned width, height;
