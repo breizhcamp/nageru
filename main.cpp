@@ -20,6 +20,7 @@ extern "C" {
 #include "defs.h"
 #include "mainwindow.h"
 #include "ffmpeg_raii.h"
+#include "httpd.h"
 #include "player.h"
 #include "post_to_main_thread.h"
 #include "ui_mainwindow.h"
@@ -40,12 +41,15 @@ string filename_for_frame(unsigned stream_idx, int64_t pts)
 mutex frame_mu;
 vector<int64_t> frames[MAX_STREAMS];
 QGLWidget *global_share_widget;
+HTTPD *global_httpd;
 
 int record_thread_func();
 
 int main(int argc, char **argv)
 {
 	avformat_network_init();
+	global_httpd = new HTTPD;
+	global_httpd->start(DEFAULT_HTTPD_PORT);
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
 
