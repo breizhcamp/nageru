@@ -2,17 +2,13 @@
 #define _PLAYER_H 1
 
 #include "clip_list.h"
+#include "video_stream.h"
 
 #include <condition_variable>
 #include <functional>
 #include <mutex>
 
-extern "C" {
-#include <libavformat/avio.h>
-}
-
 class JPEGFrameView;
-class Mux;
 
 class Player {
 public:
@@ -45,10 +41,7 @@ private:
 	bool playing = false;  // Under queue_state_mu.
 	int override_stream_idx = -1;  // Under queue_state_mu.
 
-	// For streaming.
-	std::unique_ptr<Mux> stream_mux;  // To HTTP.
-	std::string stream_mux_header;
-	bool seen_sync_markers = false;
+	VideoStream video_stream;
 };
 
 #endif  // !defined(_PLAYER_H)
