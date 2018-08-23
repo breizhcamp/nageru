@@ -32,12 +32,6 @@ using namespace std;
 
 SDL_Window *window;
 
-// Operating point 3 (10 Hz on CPU, excluding preprocessing).
-constexpr float patch_overlap_ratio = 0.75f;
-constexpr unsigned coarsest_level = 5;
-constexpr unsigned finest_level = 1;
-constexpr unsigned patch_size_pixels = 12;
-
 // Weighting constants for the different parts of the variational refinement.
 // These don't correspond 1:1 to the values given in the DIS paper,
 // since we have different normalizations and ranges in some cases.
@@ -45,7 +39,7 @@ constexpr unsigned patch_size_pixels = 12;
 // although the error (EPE) seems to be fairly insensitive to the precise values.
 // Only the relative values matter, so we fix alpha (the smoothness constant)
 // at unity and tweak the others.
-float vr_alpha = 1.0f, vr_delta = 0.25f, vr_gamma = 0.25f;
+static float vr_alpha = 1.0f, vr_delta = 0.25f, vr_gamma = 0.25f;
 
 bool enable_timing = true;
 bool detailed_timing = false;
@@ -363,7 +357,8 @@ void MotionSearch::exec(GLuint tex_view, GLuint grad_tex, GLuint flow_tex, GLuin
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
-Densify::Densify()
+Densify::Densify(const OperatingPoint &op)
+	: op(op)
 {
 	densify_vs_obj = compile_shader(read_file("densify.vert"), GL_VERTEX_SHADER);
 	densify_fs_obj = compile_shader(read_file("densify.frag"), GL_FRAGMENT_SHADER);
@@ -382,8 +377,8 @@ void Densify::exec(GLuint tex_view, GLuint flow_tex, GLuint dense_flow_tex, int 
 	bind_sampler(densify_program, uniform_flow_tex, 1, flow_tex, nearest_sampler);
 
 	glProgramUniform2f(densify_program, uniform_patch_size,
-		float(patch_size_pixels) / level_width,
-		float(patch_size_pixels) / level_height);
+		float(op.patch_size_pixels) / level_width,
+		float(op.patch_size_pixels) / level_height);
 
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
@@ -613,8 +608,8 @@ void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int inpu
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
-DISComputeFlow::DISComputeFlow(int width, int height)
-	: width(width), height(height)
+DISComputeFlow::DISComputeFlow(int width, int height, const OperatingPoint &op)
+	: width(width), height(height), op(op), densify(op)
 {
 	// Make some samplers.
 	glCreateSamplers(1, &nearest_sampler);
@@ -676,14 +671,14 @@ GLuint DISComputeFlow::exec(GLuint tex, FlowDirection flow_direction, ResizeStra
 	glBindVertexArray(vao);
 
 	ScopedTimer total_timer("Compute flow", &timers);
-	for (int level = coarsest_level; level >= int(finest_level); --level) {
+	for (int level = op.coarsest_level; level >= int(op.finest_level); --level) {
 		char timer_name[256];
 		snprintf(timer_name, sizeof(timer_name), "Level %d (%d x %d)", level, width >> level, height >> level);
 		ScopedTimer level_timer(timer_name, &total_timer);
 
 		int level_width = width >> level;
 		int level_height = height >> level;
-		float patch_spacing_pixels = patch_size_pixels * (1.0f - patch_overlap_ratio);
+		float patch_spacing_pixels = op.patch_size_pixels * (1.0f - op.patch_overlap_ratio);
 
 		// Make sure we have patches at least every Nth pixel, e.g. for width=9
 		// and patch_spacing=3 (the default), we put out patch centers in
@@ -812,7 +807,7 @@ GLuint DISComputeFlow::exec(GLuint tex, FlowDirection flow_direction, ResizeStra
 		//
 		// Disabling this doesn't save any time (although we could easily make it so that
 		// it is more efficient), but it helps debug the motion search.
-		if (enable_variational_refinement) {
+		if (op.variational_refinement) {
 			ScopedTimer timer("Add differential flow", &varref_timer);
 			add_base_flow.exec(base_flow_tex, diff_flow_tex, level_width, level_height, num_layers);
 		}
@@ -832,7 +827,7 @@ GLuint DISComputeFlow::exec(GLuint tex, FlowDirection flow_direction, ResizeStra
 	}
 
 	// Scale up the flow to the final size (if needed).
-	if (finest_level == 0 || resize_strategy == DO_NOT_RESIZE_FLOW) {
+	if (op.finest_level == 0 || resize_strategy == DO_NOT_RESIZE_FLOW) {
 		return prev_level_flow_tex;
 	} else {
 		GLuint final_tex = pool.get_texture(GL_RG16F, width, height, num_layers);
@@ -842,7 +837,8 @@ GLuint DISComputeFlow::exec(GLuint tex, FlowDirection flow_direction, ResizeStra
 	}
 }
 
-Splat::Splat()
+Splat::Splat(const OperatingPoint &op)
+	: op(op)
 {
 	splat_vs_obj = compile_shader(read_file("splat.vert"), GL_VERTEX_SHADER);
 	splat_fs_obj = compile_shader(read_file("splat.frag"), GL_FRAGMENT_SHADER);
@@ -862,12 +858,7 @@ void Splat::exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint flow_te
 	bind_sampler(splat_program, uniform_image_tex, 0, image_tex, linear_sampler);
 	bind_sampler(splat_program, uniform_flow_tex, 1, bidirectional_flow_tex, nearest_sampler);
 
-	// FIXME: This is set to 1.0 right now so not to trigger Haswell's “PMA stall”.
-	// Move to 2.0 later, or even 4.0.
-	// (Since we have hole filling, it's not critical, but larger values seem to do
-	// better than hole filling for large motion, blurs etc.)
-	float splat_size = 1.0f;  // 4x4 splat means 16x overdraw, 2x2 splat means 4x overdraw.
-	glProgramUniform2f(splat_program, uniform_splat_size, splat_size / width, splat_size / height);
+	glProgramUniform2f(splat_program, uniform_splat_size, op.splat_size / width, op.splat_size / height);
 	glProgramUniform1f(splat_program, uniform_alpha, alpha);
 	glProgramUniform2f(splat_program, uniform_inv_flow_size, 1.0f / width, 1.0f / height);
 
@@ -1016,8 +1007,8 @@ void Blend::exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, int level
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
-Interpolate::Interpolate(int width, int height, int flow_level)
-	: width(width), height(height), flow_level(flow_level) {
+Interpolate::Interpolate(int width, int height, const OperatingPoint &op)
+	: width(width), height(height), flow_level(op.finest_level), op(op), splat(op) {
 	// Set up the vertex data that will be shared between all passes.
 	float vertices[] = {
 		0.0f, 1.0f,
@@ -1337,7 +1328,11 @@ void compute_flow_only(int argc, char **argv, int optind)
 	gray.exec(image_tex, tex_gray, width1, height1, /*num_layers=*/2);
 	glGenerateTextureMipmap(tex_gray);
 
-	DISComputeFlow compute_flow(width1, height1);
+	OperatingPoint op = operating_point3;
+	if (!enable_variational_refinement) {
+		op.variational_refinement = false;
+	}
+	DISComputeFlow compute_flow(width1, height1, op);
 
 	if (enable_warmup) {
 		in_warmup = true;
@@ -1438,9 +1433,13 @@ void interpolate_image(int argc, char **argv, int optind)
 		spare_pbos.push(pbos[i]);
 	}
 
-	DISComputeFlow compute_flow(width1, height1);
+	OperatingPoint op = operating_point3;
+	if (!enable_variational_refinement) {
+		op.variational_refinement = false;
+	}
+	DISComputeFlow compute_flow(width1, height1, op);
 	GrayscaleConversion gray;
-	Interpolate interpolate(width1, height1, finest_level);
+	Interpolate interpolate(width1, height1, op);
 
 	GLuint tex_gray;
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex_gray);

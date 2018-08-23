@@ -2,7 +2,8 @@
 #define _FLOW_H 1
 
 // Code for computing optical flow between two images, and using it to interpolate
-// in-between frames. The main user interface is the Interpolate class.
+// in-between frames. The main user interface is the DISComputeFlow and Interpolate
+// classes (also GrayscaleConversion can be useful).
 
 #include <stdint.h>
 #include <epoxy/gl.h>
@@ -12,6 +13,70 @@
 #include <utility>
 
 class ScopedTimer;
+
+// Predefined operating points from the paper.
+struct OperatingPoint {
+	unsigned coarsest_level;  // TODO: Adjust dynamically based on the resolution?
+	unsigned finest_level;
+	unsigned search_iterations;  // TODO: Not implemented yet! Halved from the paper.
+	unsigned patch_size_pixels;  // TODO: Not implemented in the shader yet!
+	float patch_overlap_ratio;
+	bool variational_refinement;  // TODO: Actually disabling this is not implemented yet!
+
+	// Not part of the original paper; used for interpolation.
+	// NOTE: Values much larger than 1.0 seems to trigger Haswell's “PMA stall”;
+	// the problem is not present on Broadwell and higher (there's a mitigation
+	// in the hardware, but Mesa doesn't enable it at the time of writing).
+	// Since we have hole filling, the holes from 1.0 are not critical,
+	// but larger values seem to do better than hole filling for large
+	// motion, blurs etc. since we have more candidates.
+	float splat_size;
+};
+
+// Operating point 1 (600 Hz on CPU, excluding preprocessing).
+static constexpr OperatingPoint operating_point1 = {
+	5,      // Coarsest level.
+	3,      // Finest level.
+	8,      // Search iterations.
+	8,      // Patch size (pixels).
+	0.30f,  // Overlap ratio.
+	false,  // Variational refinement.
+	1.0f	// Splat size (pixels).
+};
+
+// Operating point 2 (300 Hz on CPU, excluding preprocessing).
+static constexpr OperatingPoint operating_point2 = {
+	5,      // Coarsest level.
+	3,      // Finest level.
+	6,      // Search iterations.
+	8,      // Patch size (pixels).
+	0.40f,  // Overlap ratio.
+	true,   // Variational refinement.
+	1.0f	// Splat size (pixels).
+};
+
+// Operating point 3 (10 Hz on CPU, excluding preprocessing).
+// This is the only one that has been thorougly tested.
+static constexpr OperatingPoint operating_point3 = {
+	5,      // Coarsest level.
+	1,      // Finest level.
+	8,      // Search iterations.
+	12,     // Patch size (pixels).
+	0.75f,  // Overlap ratio.
+	true,   // Variational refinement.
+	4.0f	// Splat size (pixels).
+};
+
+// Operating point 4 (0.5 Hz on CPU, excluding preprocessing).
+static constexpr OperatingPoint operating_point4 = {
+	5,      // Coarsest level.
+	0,      // Finest level.
+	128,    // Search iterations.
+	12,     // Patch size (pixels).
+	0.75f,  // Overlap ratio.
+	true,   // Variational refinement.
+	8.0f	// Splat size (pixels).
+};
 
 // A class that caches FBOs that render to a given set of textures.
 // It never frees anything, so it is only suitable for rendering to
@@ -137,10 +202,11 @@ private:
 // weight in the B channel. Dividing R and G by B gives the normalized values.
 class Densify {
 public:
-	Densify();
+	Densify(const OperatingPoint &op);
 	void exec(GLuint tex_view, GLuint flow_tex, GLuint dense_flow_tex, int level_width, int level_height, int width_patches, int height_patches, int num_layers);
 
 private:
+	OperatingPoint op;
 	PersistentFBOSet<1> fbos;
 
 	GLuint densify_vs_obj;
@@ -333,7 +399,7 @@ private:
 
 class DISComputeFlow {
 public:
-	DISComputeFlow(int width, int height);
+	DISComputeFlow(int width, int height, const OperatingPoint &op);
 
 	enum FlowDirection {
 		FORWARD,
@@ -358,6 +424,7 @@ private:
 	GLuint initial_flow_tex;
 	GLuint vertex_vbo, vao;
 	TexturePool pool;
+	const OperatingPoint op;
 
 	// The various passes.
 	Sobel sobel;
@@ -376,12 +443,13 @@ private:
 // radius fills most of the holes.
 class Splat {
 public:
-	Splat();
+	Splat(const OperatingPoint &op);
 
 	// alpha is the time of the interpolated frame (0..1).
 	void exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha);
 
 private:
+	const OperatingPoint op;
 	PersistentFBOSetWithDepth<1> fbos;
 
 	GLuint splat_vs_obj;
@@ -462,7 +530,7 @@ private:
 
 class Interpolate {
 public:
-	Interpolate(int width, int height, int flow_level);
+	Interpolate(int width, int height, const OperatingPoint &op);
 
 	// Returns a texture that must be released with release_texture()
 	// after use. image_tex must be a two-layer RGBA8 texture with mipmaps
@@ -477,6 +545,7 @@ private:
 	int width, height, flow_level;
 	GLuint vertex_vbo, vao;
 	TexturePool pool;
+	const OperatingPoint op;
 
 	Splat splat;
 	HoleFill hole_fill;
