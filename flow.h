@@ -78,6 +78,8 @@ static constexpr OperatingPoint operating_point4 = {
 	8.0f	// Splat size (pixels).
 };
 
+int find_num_levels(int width, int height);
+
 // A class that caches FBOs that render to a given set of textures.
 // It never frees anything, so it is only suitable for rendering to
 // the same (small) set of textures over and over again.

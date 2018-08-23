@@ -9,6 +9,7 @@
 
 extern bool enable_timing;
 extern bool detailed_timing;
+extern bool in_warmup;
 
 class GPUTimers {
 public:

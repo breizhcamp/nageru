@@ -4,6 +4,10 @@
 
 using namespace std;
 
+bool enable_timing = false;
+bool detailed_timing = false;
+bool in_warmup = false;
+
 pair<GLuint, GLuint> GPUTimers::begin_timer(const string &name, int level)
 {
 	if (!enable_timing) {
