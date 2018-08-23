@@ -753,70 +753,71 @@ GLuint DISComputeFlow::exec(GLuint tex, FlowDirection flow_direction, ResizeStra
 		pool.release_texture(dense_flow_tex);
 		glDeleteTextures(1, &tex_view);
 
-		// Calculate I_x and I_y. We're only calculating first derivatives;
-		// the others will be taken on-the-fly in order to sample from fewer
-		// textures overall, since sampling from the L1 cache is cheap.
-		// (TODO: Verify that this is indeed faster than making separate
-		// double-derivative textures.)
-		GLuint I_x_y_tex = pool.get_texture(GL_RG16F, level_width, level_height, num_layers);
-		GLuint beta_0_tex = pool.get_texture(GL_R16F, level_width, level_height, num_layers);
-		{
-			ScopedTimer timer("First derivatives", &varref_timer);
-			derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height, num_layers);
-		}
-		pool.release_texture(I_tex);
-
-		// We need somewhere to store du and dv (the flow increment, relative
-		// to the non-refined base flow u0 and v0). It's initially garbage,
-		// but not read until we've written something sane to it.
-		GLuint diff_flow_tex = pool.get_texture(GL_RG16F, level_width, level_height, num_layers);
-
-		// And for diffusivity.
-		GLuint diffusivity_tex = pool.get_texture(GL_R16F, level_width, level_height, num_layers);
-
-		// And finally for the equation set. See SetupEquations for
-		// the storage format.
-		GLuint equation_red_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height, num_layers);
-		GLuint equation_black_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height, num_layers);
-
-		for (int outer_idx = 0; outer_idx < level + 1; ++outer_idx) {
-			// Calculate the diffusivity term for each pixel.
-			{
-				ScopedTimer timer("Compute diffusivity", &varref_timer);
-				compute_diffusivity.exec(base_flow_tex, diff_flow_tex, diffusivity_tex, level_width, level_height, outer_idx == 0, num_layers);
-			}
-
-			// Set up the 2x2 equation system for each pixel.
-			{
-				ScopedTimer timer("Set up equations", &varref_timer);
-				setup_equations.exec(I_x_y_tex, I_t_tex, diff_flow_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_red_tex, equation_black_tex, level_width, level_height, outer_idx == 0, num_layers);
-			}
-
-			// Run a few SOR iterations. Note that these are to/from the same texture.
-			{
-				ScopedTimer timer("SOR", &varref_timer);
-				sor.exec(diff_flow_tex, equation_red_tex, equation_black_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, num_layers, &timer);
-			}
-		}
-
-		pool.release_texture(I_t_tex);
-		pool.release_texture(I_x_y_tex);
-		pool.release_texture(beta_0_tex);
-		pool.release_texture(diffusivity_tex);
-		pool.release_texture(equation_red_tex);
-		pool.release_texture(equation_black_tex);
-
-		// Add the differential flow found by the variational refinement to the base flow,
-		// giving the final flow estimate for this level.
-		// The output is in diff_flow_tex; we don't need to make a new texture.
-		//
-		// Disabling this doesn't save any time (although we could easily make it so that
-		// it is more efficient), but it helps debug the motion search.
+		// TODO: If we don't have variational refinement, we don't need I and I_t,
+		// so computing them is a waste.
 		if (op.variational_refinement) {
-			ScopedTimer timer("Add differential flow", &varref_timer);
-			add_base_flow.exec(base_flow_tex, diff_flow_tex, level_width, level_height, num_layers);
+			// Calculate I_x and I_y. We're only calculating first derivatives;
+			// the others will be taken on-the-fly in order to sample from fewer
+			// textures overall, since sampling from the L1 cache is cheap.
+			// (TODO: Verify that this is indeed faster than making separate
+			// double-derivative textures.)
+			GLuint I_x_y_tex = pool.get_texture(GL_RG16F, level_width, level_height, num_layers);
+			GLuint beta_0_tex = pool.get_texture(GL_R16F, level_width, level_height, num_layers);
+			{
+				ScopedTimer timer("First derivatives", &varref_timer);
+				derivatives.exec(I_tex, I_x_y_tex, beta_0_tex, level_width, level_height, num_layers);
+			}
+			pool.release_texture(I_tex);
+
+			// We need somewhere to store du and dv (the flow increment, relative
+			// to the non-refined base flow u0 and v0). It's initially garbage,
+			// but not read until we've written something sane to it.
+			GLuint diff_flow_tex = pool.get_texture(GL_RG16F, level_width, level_height, num_layers);
+
+			// And for diffusivity.
+			GLuint diffusivity_tex = pool.get_texture(GL_R16F, level_width, level_height, num_layers);
+
+			// And finally for the equation set. See SetupEquations for
+			// the storage format.
+			GLuint equation_red_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height, num_layers);
+			GLuint equation_black_tex = pool.get_texture(GL_RGBA32UI, (level_width + 1) / 2, level_height, num_layers);
+
+			for (int outer_idx = 0; outer_idx < level + 1; ++outer_idx) {
+				// Calculate the diffusivity term for each pixel.
+				{
+					ScopedTimer timer("Compute diffusivity", &varref_timer);
+					compute_diffusivity.exec(base_flow_tex, diff_flow_tex, diffusivity_tex, level_width, level_height, outer_idx == 0, num_layers);
+				}
+
+				// Set up the 2x2 equation system for each pixel.
+				{
+					ScopedTimer timer("Set up equations", &varref_timer);
+					setup_equations.exec(I_x_y_tex, I_t_tex, diff_flow_tex, base_flow_tex, beta_0_tex, diffusivity_tex, equation_red_tex, equation_black_tex, level_width, level_height, outer_idx == 0, num_layers);
+				}
+
+				// Run a few SOR iterations. Note that these are to/from the same texture.
+				{
+					ScopedTimer timer("SOR", &varref_timer);
+					sor.exec(diff_flow_tex, equation_red_tex, equation_black_tex, diffusivity_tex, level_width, level_height, 5, outer_idx == 0, num_layers, &timer);
+				}
+			}
+
+			pool.release_texture(I_t_tex);
+			pool.release_texture(I_x_y_tex);
+			pool.release_texture(beta_0_tex);
+			pool.release_texture(diffusivity_tex);
+			pool.release_texture(equation_red_tex);
+			pool.release_texture(equation_black_tex);
+
+			// Add the differential flow found by the variational refinement to the base flow,
+			// giving the final flow estimate for this level.
+			// The output is in base_flow_tex; we don't need to make a new texture.
+			{
+				ScopedTimer timer("Add differential flow", &varref_timer);
+				add_base_flow.exec(base_flow_tex, diff_flow_tex, level_width, level_height, num_layers);
+			}
+			pool.release_texture(diff_flow_tex);
 		}
-		pool.release_texture(diff_flow_tex);
 
 		if (prev_level_flow_tex != initial_flow_tex) {
 			pool.release_texture(prev_level_flow_tex);
@@ -1489,7 +1490,7 @@ int main(int argc, char **argv)
 		{ "gradient-relative-weight", required_argument, 0, 'g' },  // gamma.
 		{ "disable-timing", no_argument, 0, 1000 },
 		{ "detailed-timing", no_argument, 0, 1003 },
-		{ "ignore-variational-refinement", no_argument, 0, 1001 },  // Still calculates it, just doesn't apply it.
+		{ "disable-variational-refinement", no_argument, 0, 1001 },
 		{ "interpolate", no_argument, 0, 1002 },
 		{ "warmup", no_argument, 0, 1004 }
 	};

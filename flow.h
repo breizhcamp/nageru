@@ -21,7 +21,7 @@ struct OperatingPoint {
 	unsigned search_iterations;  // Halved from the paper.
 	unsigned patch_size_pixels;
 	float patch_overlap_ratio;
-	bool variational_refinement;  // TODO: Actually disabling this is not implemented yet!
+	bool variational_refinement;
 
 	// Not part of the original paper; used for interpolation.
 	// NOTE: Values much larger than 1.0 seems to trigger Haswell's “PMA stall”;
