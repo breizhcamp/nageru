@@ -326,7 +326,8 @@ void Sobel::exec(GLint tex_view, GLint grad_tex, int level_width, int level_heig
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, num_layers);
 }
 
-MotionSearch::MotionSearch()
+MotionSearch::MotionSearch(const OperatingPoint &op)
+	: op(op)
 {
 	motion_vs_obj = compile_shader(read_file("motion_search.vert"), GL_VERTEX_SHADER);
 	motion_fs_obj = compile_shader(read_file("motion_search.frag"), GL_FRAGMENT_SHADER);
@@ -338,6 +339,8 @@ MotionSearch::MotionSearch()
 	uniform_image_tex = glGetUniformLocation(motion_search_program, "image_tex");
 	uniform_grad_tex = glGetUniformLocation(motion_search_program, "grad_tex");
 	uniform_flow_tex = glGetUniformLocation(motion_search_program, "flow_tex");
+	uniform_patch_size = glGetUniformLocation(motion_search_program, "patch_size");
+	uniform_num_iterations = glGetUniformLocation(motion_search_program, "num_iterations");
 }
 
 void MotionSearch::exec(GLuint tex_view, GLuint grad_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches, int num_layers)
@@ -351,6 +354,8 @@ void MotionSearch::exec(GLuint tex_view, GLuint grad_tex, GLuint flow_tex, GLuin
 	glProgramUniform2f(motion_search_program, uniform_inv_image_size, 1.0f / level_width, 1.0f / level_height);
 	glProgramUniform2f(motion_search_program, uniform_inv_prev_level_size, 1.0f / prev_level_width, 1.0f / prev_level_height);
 	glProgramUniform2f(motion_search_program, uniform_out_flow_size, width_patches, height_patches);
+	glProgramUniform1ui(motion_search_program, uniform_patch_size, op.patch_size_pixels);
+	glProgramUniform1ui(motion_search_program, uniform_num_iterations, op.search_iterations);
 
 	glViewport(0, 0, width_patches, height_patches);
 	fbos.render_to(flow_out_tex);
@@ -609,7 +614,7 @@ void ResizeFlow::exec(GLuint flow_tex, GLuint out_tex, int input_width, int inpu
 }
 
 DISComputeFlow::DISComputeFlow(int width, int height, const OperatingPoint &op)
-	: width(width), height(height), op(op), densify(op)
+	: width(width), height(height), op(op), motion_search(op), densify(op)
 {
 	// Make some samplers.
 	glCreateSamplers(1, &nearest_sampler);

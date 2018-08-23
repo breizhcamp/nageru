@@ -18,8 +18,8 @@ class ScopedTimer;
 struct OperatingPoint {
 	unsigned coarsest_level;  // TODO: Adjust dynamically based on the resolution?
 	unsigned finest_level;
-	unsigned search_iterations;  // TODO: Not implemented yet! Halved from the paper.
-	unsigned patch_size_pixels;  // TODO: Not implemented in the shader yet!
+	unsigned search_iterations;  // Halved from the paper.
+	unsigned patch_size_pixels;
 	float patch_overlap_ratio;
 	bool variational_refinement;  // TODO: Actually disabling this is not implemented yet!
 
@@ -178,10 +178,11 @@ private:
 // Motion search to find the initial flow. See motion_search.frag for documentation.
 class MotionSearch {
 public:
-	MotionSearch();
+	MotionSearch(const OperatingPoint &op);
 	void exec(GLuint tex_view, GLuint grad_tex, GLuint flow_tex, GLuint flow_out_tex, int level_width, int level_height, int prev_level_width, int prev_level_height, int width_patches, int height_patches, int num_layers);
 
 private:
+	const OperatingPoint op;
 	PersistentFBOSet<1> fbos;
 
 	GLuint motion_vs_obj;
@@ -190,6 +191,7 @@ private:
 
 	GLuint uniform_inv_image_size, uniform_inv_prev_level_size, uniform_out_flow_size;
 	GLuint uniform_image_tex, uniform_grad_tex, uniform_flow_tex;
+	GLuint uniform_patch_size, uniform_num_iterations;
 };
 
 // Do “densification”, ie., upsampling of the flow patches to the flow field

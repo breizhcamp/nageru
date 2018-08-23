@@ -35,9 +35,6 @@
   be ideal.
  */
 
-const uint patch_size = 12;
-const uint num_iterations = 8;
-
 in vec3 flow_tc;
 in vec2 patch_center;
 flat in int ref_layer, search_layer;
@@ -46,6 +43,8 @@ out vec3 out_flow;
 uniform sampler2DArray flow_tex, image_tex;
 uniform usampler2DArray grad_tex;  // Also contains the corresponding reference image.
 uniform vec2 inv_image_size, inv_prev_level_size;
+uniform uint patch_size;
+uniform uint num_iterations;
 
 vec3 unpack_gradients(uint v)
 {
