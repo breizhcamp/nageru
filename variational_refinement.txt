@@ -9,7 +9,7 @@ below.
 The general idea is fairly simple; we try to optimize the flow field
 as a whole, by minimizing some mathematical notion of badness expressed
 as an energy function. The one used in the dense inverse search paper
-[Kroeger05; se references below] has this form:
+[Kroeger16; se references below] has this form:
 
   E(U) = int( σ Ψ(E_I) + γ Ψ(E_G) + α Ψ(E_S) ) dx
 
@@ -27,7 +27,7 @@ so the word “refinement” is maybe not doing the method justice.
 One could just as well say that the motion search is a way of
 finding a reasonable starting point for the optimization.)
 
-The dense inverse search paper [Kroeger05; se references below] sets
+The dense inverse search paper [Kroeger16; se references below] sets
 up the energy terms as described by some motion tensors and normalizations,
 then says simply that it is optimized by “θ_vo fixed point iterations
 and θ_vi iterations of Successive Over Relaxation (SOR) for the linear
@@ -304,8 +304,8 @@ They allow us to minimize expressions that contain x, y, u(x, y) _and_ the parti
 derivatives u_x(x, y) and u_y(x, y), although the answer becomes a differential
 equation.
 
-The Wikipedia page is, unfortunately, suitable for scaring small
-children, but the general idea is: Differentiate the expression by u_x
+The Wikipedia page is, unfortunately, not very beginner-friendly,
+but the general idea is: Differentiate the expression by u_x
 (yes, differentiating by a partial derivative!), negate it, and then
 differentiate the result by x. Then do the same thing by u_y and y,
 add the two results together and equate to zero. Mathematically
@@ -505,7 +505,7 @@ _geometrically_ faster, ie., in O(√N) iterations.
 
 Do note that the DeepFlow code does not fully use SOR or even Gauss-Seidel;
 it solves every 2x2 block (ie., single du/dv pair) using Cramer's rule,
-and then pushes that vector 80% further, SOR-style. This would be clearly
+and then pushes that vector 60% further, SOR-style. This would be clearly
 more accurate if we didn't have SOR in the mix (since du and dv would
 converge immediately relative to each other, bar Cramer's numerical issues),
 but I'm not sure whether it's better given SOR. (DIS changes this to a more
@@ -527,7 +527,7 @@ And that's it. References:
 [Fahad07]: Fahad, Morris: “Multiple Combined Constraints for Optical Flow
   Estimation”, in Proceedings of the 3rd International Conference on Advances
   in Visual Computing (ISVC), 2007
-[Kroeger05]: Kroeger, Timofte, Dai, van Gool: “Fast Optical Flow using Dense
+[Kroeger16]: Kroeger, Timofte, Dai, van Gool: “Fast Optical Flow using Dense
   Inverse Search”, in Proceedings of the European Conference on Computer Vision
   (ECCV), 2016
 [Weinzaepfel13]: Weinzaepfel, Revaud, Harchaoui, Schmid: “DeepFlow: Large
