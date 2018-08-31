@@ -150,6 +150,9 @@ void X264Encoder::init_x264()
 	if (global_flags.x264_speedcontrol) {
 		param.i_frame_reference = 16;  // Because speedcontrol is never allowed to change this above what we set at start.
 	}
+#if X264_BUILD >= 153
+	param.i_bitdepth = global_flags.x264_bit_depth;
+#endif
 
 	// NOTE: These should be in sync with the ones in quicksync_encoder.cpp (sps_rbsp()).
 	param.vui.i_vidformat = 5;  // Unspecified.

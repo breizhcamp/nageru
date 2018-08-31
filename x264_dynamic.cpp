@@ -14,7 +14,14 @@ using namespace std;
 X264Dynamic load_x264_for_bit_depth(unsigned depth)
 {
 	X264Dynamic dyn;
-	if (unsigned(x264_bit_depth) >= depth) {
+#if defined(X264_BIT_DEPTH) && X264_BIT_DEPTH == 0
+	bool suitable = true;  // x264 compiled to support all bit depths.
+#elif defined(X264_BIT_DEPTH)
+	bool suitable = X264_BIT_DEPTH >= depth;
+#else
+	bool suitable = unsigned(x264_bit_depth) >= depth;
+#endif
+	if (suitable) {
 		// Just use the one we are linked to.
 		dyn.handle = nullptr;
 		dyn.x264_encoder_close = x264_encoder_close;
