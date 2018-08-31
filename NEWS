@@ -1,3 +1,18 @@
+Nageru 1.7.4, August 31st, 2018
+
+  - Rework the x264 speedcontrol presets, again. (They earlier assumed
+    we could control B-frame settings on the fly, which we cannot with
+    threaded lookahead.) Also support x264 >= 153, which can support
+    multiple bit depths in the same library.
+
+  - Default to SDI inputs instead of HDMI.
+
+  - Add a mode to run in full screen (--fullscreen). Adapted from a patch
+    by Yoann Dubreuil.
+
+  - Add support for lift/gamma/gain in the theme. Patch by Alexandre Thomazo.
+
+
 Nageru 1.7.3, May 22nd, 2018
 
   - When using multichannel audio, add a control for adjusting the
