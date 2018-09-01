@@ -56,15 +56,15 @@ int main(int argc, char *argv[])
 
 	parse_flags(PROGRAM_NAGERU, argc, argv);
 
-	if (global_flags.va_display.empty()) {
-		// The user didn't specify a VA-API display. See if the default works,
-		// and if not, let's try to help the user by seeing if there's any
-		// that would work automatically.
+	if (global_flags.va_display.empty() && !global_flags.x264_video_to_disk) {
+		// The user didn't specify a VA-API display, but we need one.
+		// See if the default works, and if not, let's try to help
+		// the user by seeing if there's any that would work automatically.
 		global_flags.va_display = QuickSyncEncoder::get_usable_va_display();
 	}
 
-	if (global_flags.va_display.empty() ||
-	    global_flags.va_display[0] != '/') {
+	if ((global_flags.va_display.empty() ||
+	     global_flags.va_display[0] != '/') && !global_flags.x264_video_to_disk) {
 		// We normally use EGL for zerocopy, but if we use VA against DRM
 		// instead of against X11, we turn it off, and then don't need EGL.
 		setenv("QT_XCB_GL_INTEGRATION", "xcb_egl", 0);
