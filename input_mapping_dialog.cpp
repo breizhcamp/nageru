@@ -272,7 +272,7 @@ void InputMappingDialog::save_clicked()
 	// The native file dialog uses GTK+, which interferes with CEF's use of the GLib main loop.
 	QFileDialog::Option options(QFileDialog::DontUseNativeDialog);
 #else
-	QFileDialog::Option options;
+	QFileDialog::Option options(QFileDialog::Option(0));
 #endif
 	QString filename = QFileDialog::getSaveFileName(this,
 		"Save input mapping", QString(), tr("Mapping files (*.mapping)"), /*selectedFilter=*/nullptr, options);
@@ -292,7 +292,7 @@ void InputMappingDialog::load_clicked()
 	// The native file dialog uses GTK+, which interferes with CEF's use of the GLib main loop.
 	QFileDialog::Option options(QFileDialog::DontUseNativeDialog);
 #else
-	QFileDialog::Option options;
+	QFileDialog::Option options(QFileDialog::Option(0));
 #endif
 	QString filename = QFileDialog::getOpenFileName(this,
 		"Load input mapping", QString(), tr("Mapping files (*.mapping)"), /*selectedFilter=*/nullptr, options);
