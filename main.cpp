@@ -71,7 +71,9 @@ int main(int argc, char *argv[])
 		using_egl = true;
 	}
 	setlinebuf(stdout);
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 9, 100)
 	av_register_all();
+#endif
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
 
