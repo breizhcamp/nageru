@@ -797,6 +797,7 @@ void Splat::exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint flow_te
 	glViewport(0, 0, width, height);
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
 	glDepthFunc(GL_LESS);  // We store the difference between I_0 and I_1, where less difference is good. (Default 1.0 is effectively +inf, which always loses.)
 
 	fbos.render_to(depth_rb, flow_tex);
