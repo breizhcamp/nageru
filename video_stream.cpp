@@ -5,6 +5,7 @@ extern "C" {
 #include <libavformat/avio.h>
 }
 
+#include <jpeglib.h>
 #include <unistd.h>
 
 #include "context.h"
@@ -44,6 +45,106 @@ string read_file(const string &filename)
 }
 
 }  // namespace
+
+struct VectorDestinationManager {
+	jpeg_destination_mgr pub;
+	std::vector<uint8_t> dest;
+
+	VectorDestinationManager()
+	{
+		pub.init_destination = init_destination_thunk;
+		pub.empty_output_buffer = empty_output_buffer_thunk;
+		pub.term_destination = term_destination_thunk;
+	}
+
+	static void init_destination_thunk(j_compress_ptr ptr)
+	{
+		((VectorDestinationManager *)(ptr->dest))->init_destination();
+	}
+
+	inline void init_destination()
+	{
+		make_room(0);
+	}
+
+	static boolean empty_output_buffer_thunk(j_compress_ptr ptr)
+	{
+		return ((VectorDestinationManager *)(ptr->dest))->empty_output_buffer();
+	}
+
+	inline bool empty_output_buffer()
+	{
+		make_room(dest.size());  // Should ignore pub.free_in_buffer!
+		return true;
+	}
+
+	inline void make_room(size_t bytes_used)
+	{
+		dest.resize(bytes_used + 4096);
+		dest.resize(dest.capacity());
+		pub.next_output_byte = dest.data() + bytes_used;
+		pub.free_in_buffer = dest.size() - bytes_used;
+	}
+
+	static void term_destination_thunk(j_compress_ptr ptr)
+	{
+		((VectorDestinationManager *)(ptr->dest))->term_destination();
+	}
+
+	inline void term_destination()
+	{
+		dest.resize(dest.size() - pub.free_in_buffer);
+	}
+};
+static_assert(std::is_standard_layout<VectorDestinationManager>::value, "");
+
+vector<uint8_t> encode_jpeg(const uint8_t *pixel_data, unsigned width, unsigned height)
+{
+	VectorDestinationManager dest;
+
+	jpeg_compress_struct cinfo;
+	jpeg_error_mgr jerr;
+	cinfo.err = jpeg_std_error(&jerr);
+	jpeg_create_compress(&cinfo);
+
+	cinfo.dest = (jpeg_destination_mgr *)&dest;
+	cinfo.input_components = 3;
+	cinfo.in_color_space = JCS_RGB;
+	jpeg_set_defaults(&cinfo);
+	constexpr int quality = 90;
+	jpeg_set_quality(&cinfo, quality, /*force_baseline=*/false);
+
+	cinfo.image_width = width;
+	cinfo.image_height = height;
+	cinfo.input_components = 3;
+	cinfo.comp_info[0].h_samp_factor = 2;
+	cinfo.comp_info[0].v_samp_factor = 1;
+	cinfo.comp_info[1].h_samp_factor = 1;
+	cinfo.comp_info[1].v_samp_factor = 1;
+	cinfo.comp_info[2].h_samp_factor = 1;
+	cinfo.comp_info[2].v_samp_factor = 1;
+	// cinfo.CCIR601_sampling = true;  // TODO: Subsample ourselves.
+	jpeg_start_compress(&cinfo, true);
+
+	unique_ptr<uint8_t[]> row(new uint8_t[width * 3]);
+	JSAMPROW row_pointer[1] = { row.get() };
+	for (unsigned y = 0; y < height; ++y) {
+		const uint8_t *sptr = &pixel_data[(height - cinfo.next_scanline - 1) * width * 4];
+		uint8_t *dptr = row.get();
+		for (unsigned x = 0; x < width; ++x) {
+			*dptr++ = *sptr++;
+			*dptr++ = *sptr++;
+			*dptr++ = *sptr++;
+			++sptr;
+		}
+		(void) jpeg_write_scanlines(&cinfo, row_pointer, 1);
+	}
+
+	jpeg_finish_compress(&cinfo);
+	jpeg_destroy_compress(&cinfo);
+
+	return move(dest.dest);
+}
 
 VideoStream::VideoStream()
 {
@@ -271,20 +372,14 @@ void VideoStream::encode_thread_func()
 		} else if (qf.type == QueuedFrame::INTERPOLATED) {
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
-			// DEBUG: Writing the frame to disk.
-			FILE *fp = fopen("inter.ppm", "wb");
-			fprintf(fp, "P6\n%d %d\n255\n", 1280, 720);
-			for (size_t y = 0; y < 720; ++y) {
-				const uint8_t *ptr = (uint8_t *)qf.resources.pbo_contents + (719 - y) * 1280 * 4;
-				for (size_t x = 0; x < 1280; ++x) {
-					putc(ptr[0], fp);
-					putc(ptr[1], fp);
-					putc(ptr[2], fp);
-					ptr += 4;
-				}
-			}
-			fclose(fp);
-			// TODO: Release flow and output textures.
+			vector<uint8_t> jpeg = encode_jpeg((const uint8_t *)qf.resources.pbo_contents, 1280, 720);
+
+			AVPacket pkt;
+			av_init_packet(&pkt);
+			pkt.stream_index = 0;
+			pkt.data = (uint8_t *)jpeg.data();
+			pkt.size = jpeg.size();
+			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 
 			// Put the frame resources back.
 			unique_lock<mutex> lock(queue_lock);

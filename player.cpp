@@ -123,7 +123,8 @@ void Player::thread_func(bool also_output_to_stream)
 					next_next_pts = *it;
 				}
 				if (next_next_pts != -1) {
-					int64_t interpolated_pts = (next_pts + next_next_pts) / 2;
+					auto frame_len = microseconds((next_next_pts - next_pts) * int(1000000 / speed) / 12800) / 2;
+					int64_t interpolated_pts = pts + lrint(duration<double>(frame_len).count() * TIMEBASE);
 					video_stream->schedule_interpolated_frame(interpolated_pts, stream_idx, next_pts, next_next_pts, 0.5f);
 				}
 			}
