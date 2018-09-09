@@ -155,7 +155,7 @@ VideoStream::VideoStream()
 	image_format.color_space = COLORSPACE_sRGB;
 	image_format.gamma_curve = GAMMA_sRGB;
 	ycbcr_format.luma_coefficients = YCBCR_REC_709;
-	ycbcr_format.full_range = false;
+	ycbcr_format.full_range = true;  // JPEG.
 	ycbcr_format.num_levels = 256;
 	ycbcr_format.chroma_subsampling_x = 2;
 	ycbcr_format.chroma_subsampling_y = 1;
