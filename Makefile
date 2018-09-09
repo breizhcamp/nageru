@@ -10,7 +10,10 @@ OBJS_WITH_MOC = mainwindow.o jpeg_frame_view.o clip_list.o
 OBJS += $(OBJS_WITH_MOC)
 OBJS += $(OBJS_WITH_MOC:.o=.moc.o) 
 
-OBJS += ffmpeg_raii.o main.o player.o httpd.o mux.o metacube2.o video_stream.o
+# Flow objects
+OBJS += flow.o gpu_timers.o
+
+OBJS += ffmpeg_raii.o main.o player.o httpd.o mux.o metacube2.o video_stream.o context.o
 
 %.o: %.cpp
 	$(CXX) -MMD -MP $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<

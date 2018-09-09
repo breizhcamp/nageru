@@ -14,10 +14,22 @@ extern "C" {
 #include <string>
 #include <thread>
 
+#include <movit/effect_chain.h>
+#include <movit/ycbcr_input.h>
+
+#include "ref_counted_gl_sync.h"
+
+class DISComputeFlow;
+class GrayscaleConversion;
+class Interpolate;
 class Mux;
+class QSurface;
+class QSurfaceFormat;
 
 class VideoStream {
 public:
+	VideoStream();
+	~VideoStream();
 	void start();
 	void stop();
 
@@ -25,11 +37,24 @@ public:
 	void schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha);
 
 private:
+
 	void encode_thread_func();
 	std::thread encode_thread;
 
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
+
+	// Allocated at the very start; if we're empty, we start dropping frames
+	// (so that we don't build up an infinite interpolation backlog).
+	struct InterpolatedFrameResources {
+		GLuint input_tex;  // Layered (contains both input frames).
+		GLuint gray_tex;  // Same.
+		GLuint input_fbos[2];  // For rendering to the two layers of input_tex.
+		GLuint pbo;  // For reading the data back.
+		void *pbo_contents;  // Persistently mapped.
+	};
+	std::deque<InterpolatedFrameResources> interpolate_resources;  // Under <queue_lock>.
+	static constexpr size_t num_interpolate_slots = 10;
 
 	struct QueuedFrame {
 		int64_t output_pts;
@@ -40,8 +65,9 @@ private:
 		// For interpolated frames only.
 		int64_t input_second_pts;
 		float alpha;
-		GLuint flow_tex;
-		GLuint fence;  // Set when the flow is done computing.
+		InterpolatedFrameResources resources;
+		GLuint output_tex;
+		RefCountedGLsync fence;  // Set when the interpolated image is read back to the CPU.
 	};
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
 	std::mutex queue_lock;
@@ -50,6 +76,16 @@ private:
 	std::unique_ptr<Mux> stream_mux;  // To HTTP.
 	std::string stream_mux_header;
 	bool seen_sync_markers = false;
+
+	QSurface *gl_surface;
+	std::unique_ptr<movit::EffectChain> ycbcr_convert_chain;  // TODO: Have a separate version with resample, for scaling?
+	movit::YCbCrInput *ycbcr_input;
+	movit::YCbCrFormat ycbcr_format;
+
+	// Frame interpolation.
+	std::unique_ptr<GrayscaleConversion> gray;
+	std::unique_ptr<DISComputeFlow> compute_flow;
+	std::unique_ptr<Interpolate> interpolate;
 };
 
 #endif  // !defined(_VIDEO_STREAM_H)

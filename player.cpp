@@ -7,13 +7,17 @@
 
 #include <stdio.h>
 
+#include <movit/util.h>
+
 #include "clip_list.h"
+#include "context.h"
 #include "defs.h"
 #include "ffmpeg_raii.h"
 #include "httpd.h"
 #include "jpeg_frame_view.h"
 #include "mux.h"
 #include "player.h"
+#include "video_stream.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -22,8 +26,25 @@ extern mutex frame_mu;
 extern vector<int64_t> frames[MAX_STREAMS];
 extern HTTPD *global_httpd;
 
-void Player::thread_func()
+void Player::thread_func(bool also_output_to_stream)
 {
+	QSurface *surface = create_surface();
+	QOpenGLContext *context = create_context(surface);
+	if (!make_current(context, surface)) {
+		printf("oops\n");
+		exit(1);
+	}
+
+	check_error();
+
+	// Create the VideoStream object, now that we have an OpenGL context.
+	if (also_output_to_stream) {
+		video_stream.reset(new VideoStream);
+		video_stream->start();
+	}
+	
+	check_error();
+
 	for ( ;; ) {
 		// Wait until we're supposed to play something.
 		{
@@ -82,11 +103,30 @@ void Player::thread_func()
 
 			destination->setFrame(stream_idx, next_pts);
 
-			// Send the frame to the stream.
-			// FIXME: Vaguely less crazy pts, perhaps.
-			double pts_float = fmod(duration<double>(next_frame_start.time_since_epoch()).count(), 86400.0f);
-			int64_t pts = lrint(pts_float * TIMEBASE);
-			video_stream.schedule_original_frame(pts, stream_idx, next_pts);
+			if (video_stream != nullptr) {
+				// Send the frame to the stream.
+				// FIXME: Vaguely less crazy pts, perhaps.
+				double pts_float = fmod(duration<double>(next_frame_start.time_since_epoch()).count(), 86400.0f);
+				int64_t pts = lrint(pts_float * TIMEBASE);
+				video_stream->schedule_original_frame(pts, stream_idx, next_pts);
+
+				// HACK: test interpolation by frame-doubling.
+				int64_t next_next_pts = -1;
+				{
+					lock_guard<mutex> lock(frame_mu);
+					auto it = upper_bound(frames[stream_idx].begin(),
+						frames[stream_idx].end(),
+						next_pts);
+					if (it == frames[stream_idx].end() || *it >= clip.pts_out) {
+						break;
+					}
+					next_next_pts = *it;
+				}
+				if (next_next_pts != -1) {
+					int64_t interpolated_pts = (next_pts + next_next_pts) / 2;
+					video_stream->schedule_interpolated_frame(interpolated_pts, stream_idx, next_pts, next_next_pts, 0.5f);
+				}
+			}
 		}
 
 		{
@@ -99,11 +139,10 @@ void Player::thread_func()
 	}
 }
 
-Player::Player(JPEGFrameView *destination)
+Player::Player(JPEGFrameView *destination, bool also_output_to_stream)
 	: destination(destination)
 {
-	video_stream.start();
-	thread(&Player::thread_func, this).detach();
+	thread(&Player::thread_func, this, also_output_to_stream).detach();
 }
 
 void Player::play_clip(const Clip &clip, unsigned stream_idx)

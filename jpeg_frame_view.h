@@ -11,14 +11,15 @@
 
 #include <memory>
 
-std::string filename_for_frame(unsigned stream_idx, int64_t pts);
-
 struct Frame {
 	std::unique_ptr<uint8_t[]> y, cb, cr;
 	unsigned width, height;
 	unsigned chroma_subsampling_x, chroma_subsampling_y;
 	unsigned pitch_y, pitch_chroma;
 };
+
+std::string filename_for_frame(unsigned stream_idx, int64_t pts);
+std::shared_ptr<Frame> decode_jpeg(const std::string &filename);
 
 class JPEGFrameView : public QGLWidget {
 	Q_OBJECT

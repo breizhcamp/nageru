@@ -16,17 +16,24 @@ extern "C" {
 
 #include <QApplication>
 
+#include <movit/init.h>
+#include <movit/util.h>
+
 #include "clip_list.h"
+#include "context.h"
 #include "defs.h"
 #include "mainwindow.h"
 #include "ffmpeg_raii.h"
 #include "httpd.h"
 #include "player.h"
 #include "post_to_main_thread.h"
+#include "ref_counted_gl_sync.h"
 #include "ui_mainwindow.h"
 
 using namespace std;
 using namespace std::chrono;
+
+std::mutex RefCountedGLsync::fence_lock;
 
 // TODO: Replace by some sort of GUI control, I guess.
 int64_t current_pts = 0;
@@ -40,7 +47,6 @@ string filename_for_frame(unsigned stream_idx, int64_t pts)
 
 mutex frame_mu;
 vector<int64_t> frames[MAX_STREAMS];
-QGLWidget *global_share_widget;
 HTTPD *global_httpd;
 
 int record_thread_func();
@@ -57,8 +63,8 @@ int main(int argc, char **argv)
 	fmt.setDepthBufferSize(0);
 	fmt.setStencilBufferSize(0);
 	fmt.setProfile(QSurfaceFormat::CoreProfile);
-	fmt.setMajorVersion(3);
-	fmt.setMinorVersion(1);
+	fmt.setMajorVersion(4);
+	fmt.setMinorVersion(5);
 
 	// Turn off vsync, since Qt generally gives us at most frame rate
 	// (display frequency) / (number of QGLWidgets active).
@@ -71,9 +77,20 @@ int main(int argc, char **argv)
 	QApplication app(argc, argv);
 	global_share_widget = new QGLWidget();
 	if (!global_share_widget->isValid()) {
-		fprintf(stderr, "Failed to initialize OpenGL. Futatabi needs at least OpenGL 3.1 to function properly.\n");
+		fprintf(stderr, "Failed to initialize OpenGL. Futatabi needs at least OpenGL 4.5 to function properly.\n");
 		exit(1);
 	}
+
+	// Initialize Movit.
+	{
+		QSurface *surface = create_surface();
+		QOpenGLContext *context = create_context(surface);
+		make_current(context, surface);
+		CHECK(movit::init_movit(MOVIT_SHADER_DIR, movit::MOVIT_DEBUG_OFF));
+		delete_context(context);
+		// TODO: Delete the surface, too.
+	}
+
 	MainWindow mainWindow;
 	mainWindow.show();
 

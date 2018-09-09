@@ -16,6 +16,7 @@
 
 #include "defs.h"
 #include "post_to_main_thread.h"
+#include "video_stream.h"
 
 using namespace movit;
 using namespace std;
@@ -221,14 +222,11 @@ void JPEGFrameView::initializeGL()
 {
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
-	glDepthMask(GL_FALSE);
 	check_error();
 
 	static once_flag once;
 	call_once(once, [] {
-		CHECK(init_movit(MOVIT_SHADER_DIR, MOVIT_DEBUG_OFF));
 		resource_pool = new ResourcePool;
-
 		std::thread(&jpeg_decoder_thread).detach();
 	});
 
