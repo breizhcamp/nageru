@@ -28,6 +28,7 @@ extern "C" {
 #include "player.h"
 #include "post_to_main_thread.h"
 #include "ref_counted_gl_sync.h"
+#include "timebase.h"
 #include "ui_mainwindow.h"
 
 using namespace std;
@@ -119,6 +120,12 @@ int record_thread_func()
 		if (av_read_frame(format_ctx.get(), &pkt) != 0) {
 			break;
 		}
+
+		// Convert pts to our own timebase.
+		// TODO: Figure out offsets, too.
+		AVRational stream_timebase = format_ctx->streams[pkt.stream_index]->time_base;
+		pkt.pts = av_rescale_q(pkt.pts, stream_timebase, AVRational{ 1, TIMEBASE });
+
 		//fprintf(stderr, "Got a frame from camera %d, pts = %ld, size = %d\n",
 		//	pkt.stream_index, pkt.pts, pkt.size);
 		string filename = filename_for_frame(pkt.stream_index, pkt.pts);
@@ -145,9 +152,9 @@ int record_thread_func()
 		assert(pkt.stream_index < MAX_STREAMS);
 		frames[pkt.stream_index].push_back(pkt.pts);
 
-		// Hack. Assumes a given timebase.
+		// Hack. Remove when we're dealing with live streams.
 		if (last_pts != -1) {
-			this_thread::sleep_for(microseconds((pkt.pts - last_pts) * 1000000 / 12800));
+			this_thread::sleep_for(microseconds((pkt.pts - last_pts) * 1000000 / TIMEBASE));
 		}
 		last_pts = pkt.pts;
 		current_pts = pkt.pts;

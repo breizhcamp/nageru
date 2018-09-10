@@ -5,14 +5,14 @@
 #include <vector>
 
 #include "clip_list.h"
+#include "timebase.h"
 #include "ui_mainwindow.h"
 
 using namespace std;
 
 string pts_to_string(int64_t pts)
 {
-	// FIXME: This depends on a fixed timebase.
-	int64_t t = lrint((pts / 12800.0) * 1e3);  // In milliseconds.
+	int64_t t = lrint((pts / double(TIMEBASE)) * 1e3);  // In milliseconds.
 	int ms = t % 1000;
 	t /= 1000;
 	int sec = t % 60;
@@ -28,8 +28,7 @@ string pts_to_string(int64_t pts)
 
 string duration_to_string(int64_t pts_diff)
 {
-	// FIXME: This depends on a fixed timebase.
-	int64_t t = lrint((pts_diff / 12800.0) * 1e3);  // In milliseconds.
+	int64_t t = lrint((pts_diff / double(TIMEBASE)) * 1e3);  // In milliseconds.
 	int ms = t % 1000;
 	t /= 1000;
 	int sec = t % 60;

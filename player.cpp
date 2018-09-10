@@ -17,6 +17,7 @@
 #include "jpeg_frame_view.h"
 #include "mux.h"
 #include "player.h"
+#include "timebase.h"
 #include "video_stream.h"
 
 using namespace std;
@@ -82,10 +83,9 @@ void Player::thread_func(bool also_output_to_stream)
 				next_pts = *it;
 			}
 
-			// FIXME: assumes a given timebase.
 			double speed = 0.5;
 			steady_clock::time_point next_frame_start =
-				origin + microseconds((next_pts - pts_origin) * int(1000000 / speed) / 12800);
+				origin + microseconds((next_pts - pts_origin) * int(1000000 / speed) / TIMEBASE);
 
 			// Sleep until the next frame start, or until there's a new clip we're supposed to play.
 			{
@@ -123,7 +123,7 @@ void Player::thread_func(bool also_output_to_stream)
 					next_next_pts = *it;
 				}
 				if (next_next_pts != -1) {
-					auto frame_len = microseconds((next_next_pts - next_pts) * int(1000000 / speed) / 12800) / 2;
+					auto frame_len = microseconds((next_next_pts - next_pts) * int(1000000 / speed) / TIMEBASE) / 2;
 					int64_t interpolated_pts = pts + lrint(duration<double>(frame_len).count() * TIMEBASE);
 					video_stream->schedule_interpolated_frame(interpolated_pts, stream_idx, next_pts, next_next_pts, 0.5f);
 				}
