@@ -255,6 +255,8 @@ void VideoStream::stop()
 
 void VideoStream::schedule_original_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts)
 {
+	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, input_pts);
+
 	QueuedFrame qf;
 	qf.type = QueuedFrame::ORIGINAL;
 	qf.output_pts = output_pts;
@@ -268,6 +270,8 @@ void VideoStream::schedule_original_frame(int64_t output_pts, unsigned stream_id
 
 void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha)
 {
+	fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f\n", output_pts, input_first_pts, input_second_pts, alpha);
+
 	// Get the temporary OpenGL resources we need for doing the interpolation.
 	InterpolatedFrameResources resources;
 	{

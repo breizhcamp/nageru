@@ -46,6 +46,9 @@ void Player::thread_func(bool also_output_to_stream)
 	
 	check_error();
 
+	constexpr double output_framerate = 60000.0 / 1001.0;  // FIXME: make configurable
+	int64_t pts = 0;
+
 	for ( ;; ) {
 		// Wait until we're supposed to play something.
 		{
@@ -65,27 +68,57 @@ void Player::thread_func(bool also_output_to_stream)
 			stream_idx = current_stream_idx;
 		}
 		steady_clock::time_point origin = steady_clock::now();
-		int64_t pts_origin = clip.pts_in;
+		int64_t in_pts_origin = clip.pts_in;
+		int64_t out_pts_origin = pts;
 
-		int64_t next_pts = pts_origin - 1;  // Make sure we play the frame at clip.pts_in if it exists.
+		// Start playing exactly at a frame.
+		{
+			lock_guard<mutex> lock(frame_mu);
+
+			// Find the first frame such that frame.pts <= in_pts.
+			auto it = lower_bound(frames[stream_idx].begin(),
+				frames[stream_idx].end(),
+				in_pts_origin);
+			if (it != frames[stream_idx].end()) {
+				in_pts_origin = *it;
+			}
+		}
+
+		// TODO: Lock to a rational multiple of the frame rate if possible.
+		double speed = 0.5;
 
 		bool aborted = false;
-		for ( ;; ) {
-			// Find the next frame.
+		for (int frameno = 0; ; ++frameno) {  // Ends when the clip ends.
+			double out_pts = out_pts_origin + TIMEBASE * frameno / output_framerate;
+			steady_clock::time_point next_frame_start =
+				origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
+			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * speed / output_framerate);
+			pts = lrint(out_pts);
+
+			int64_t in_pts_lower, in_pts_upper;
+
+			// Find the frame immediately before and after this point.
 			{
 				lock_guard<mutex> lock(frame_mu);
-				auto it = upper_bound(frames[stream_idx].begin(),
+
+				// Find the first frame such that in_pts >= frame.pts.
+				auto it = lower_bound(frames[stream_idx].begin(),
 					frames[stream_idx].end(),
-					next_pts);
+					in_pts);
 				if (it == frames[stream_idx].end() || *it >= clip.pts_out) {
 					break;
 				}
-				next_pts = *it;
-			}
+				in_pts_upper = *it;
 
-			double speed = 0.5;
-			steady_clock::time_point next_frame_start =
-				origin + microseconds((next_pts - pts_origin) * int(1000000 / speed) / TIMEBASE);
+				// Find the last frame such that in_pts <= frame.pts (if any).
+				if (it == frames[stream_idx].begin()) {
+					in_pts_lower = *it;
+				} else {
+					in_pts_lower = *(it - 1);
+				}
+			}
+			assert(in_pts >= in_pts_lower);
+			assert(in_pts <= in_pts_upper);
 
 			// Sleep until the next frame start, or until there's a new clip we're supposed to play.
 			{
@@ -101,32 +134,40 @@ void Player::thread_func(bool also_output_to_stream)
 				}
 			}
 
-			destination->setFrame(stream_idx, next_pts);
+			if (in_pts_lower == in_pts_upper) {
+				destination->setFrame(stream_idx, in_pts_lower);
+				if (video_stream != nullptr) {
+					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_lower);
+				}
+				continue;
+			}
+
+			// Snap to input frame: If we can do so with less than 1% jitter
+			// (ie., move less than 1% of an _output_ frame), do so.
+			double in_pts_lower_as_frameno = (in_pts_lower - in_pts_origin) * output_framerate / TIMEBASE / speed;
+			double in_pts_upper_as_frameno = (in_pts_upper - in_pts_origin) * output_framerate / TIMEBASE / speed;
+			if (fabs(in_pts_lower_as_frameno - frameno) < 0.01) {
+				destination->setFrame(stream_idx, in_pts_lower);
+				if (video_stream != nullptr) {
+					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_lower);
+				}
+				in_pts_origin += in_pts_lower - in_pts;
+				continue;
+			} else if (fabs(in_pts_upper_as_frameno - frameno) < 0.01) {
+				destination->setFrame(stream_idx, in_pts_upper);
+				if (video_stream != nullptr) {
+					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_upper);
+				}
+				in_pts_origin += in_pts_upper - in_pts;
+				continue;
+			}
+
+			double alpha = double(in_pts - in_pts_lower) / (in_pts_upper - in_pts_lower);
+			destination->setFrame(stream_idx, in_pts_lower);  // FIXME
 
 			if (video_stream != nullptr) {
 				// Send the frame to the stream.
-				// FIXME: Vaguely less crazy pts, perhaps.
-				double pts_float = fmod(duration<double>(next_frame_start.time_since_epoch()).count(), 86400.0f);
-				int64_t pts = lrint(pts_float * TIMEBASE);
-				video_stream->schedule_original_frame(pts, stream_idx, next_pts);
-
-				// HACK: test interpolation by frame-doubling.
-				int64_t next_next_pts = -1;
-				{
-					lock_guard<mutex> lock(frame_mu);
-					auto it = upper_bound(frames[stream_idx].begin(),
-						frames[stream_idx].end(),
-						next_pts);
-					if (it == frames[stream_idx].end() || *it >= clip.pts_out) {
-						break;
-					}
-					next_next_pts = *it;
-				}
-				if (next_next_pts != -1) {
-					auto frame_len = microseconds((next_next_pts - next_pts) * int(1000000 / speed) / TIMEBASE) / 2;
-					int64_t interpolated_pts = pts + lrint(duration<double>(frame_len).count() * TIMEBASE);
-					video_stream->schedule_interpolated_frame(interpolated_pts, stream_idx, next_pts, next_next_pts, 0.5f);
-				}
+				video_stream->schedule_interpolated_frame(lrint(out_pts), stream_idx, in_pts_lower, in_pts_upper, alpha);
 			}
 		}
 
