@@ -318,11 +318,15 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	check_error();
 	glGenerateTextureMipmap(resources.gray_tex);
 	check_error();
-	GLuint flow_tex = compute_flow->exec(resources.gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
+	qf.flow_tex = compute_flow->exec(resources.gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 	check_error();
 
-	qf.output_tex = interpolate->exec(resources.input_tex, flow_tex, 1280, 720, alpha);
+	qf.output_tex = interpolate->exec(resources.input_tex, qf.flow_tex, 1280, 720, alpha);
 	check_error();
+
+	// We could have released qf.flow_tex here, but to make sure we don't cause a stall
+	// when trying to reuse it for the next frame, we can just as well hold on to it
+	// and release it only when the readback is done.
 
 	// Read it down (asynchronously) to the CPU.
 	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
@@ -377,6 +381,8 @@ void VideoStream::encode_thread_func()
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
 			vector<uint8_t> jpeg = encode_jpeg((const uint8_t *)qf.resources.pbo_contents, 1280, 720);
+			compute_flow->release_texture(qf.flow_tex);
+			interpolate->release_texture(qf.output_tex);
 
 			AVPacket pkt;
 			av_init_packet(&pkt);

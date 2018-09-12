@@ -1019,11 +1019,14 @@ GLuint Interpolate::exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint
 
 GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height, GLuint num_layers)
 {
-	for (Texture &tex : textures) {
-		if (!tex.in_use && !tex.is_renderbuffer && tex.format == format &&
-		    tex.width == width && tex.height == height && tex.num_layers == num_layers) {
-			tex.in_use = true;
-			return tex.tex_num;
+	{
+		lock_guard<mutex> lock(mu);
+		for (Texture &tex : textures) {
+			if (!tex.in_use && !tex.is_renderbuffer && tex.format == format &&
+			    tex.width == width && tex.height == height && tex.num_layers == num_layers) {
+				tex.in_use = true;
+				return tex.tex_num;
+			}
 		}
 	}
 
@@ -1041,17 +1044,23 @@ GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height, GLui
 	tex.num_layers = num_layers;
 	tex.in_use = true;
 	tex.is_renderbuffer = false;
-	textures.push_back(tex);
+	{
+		lock_guard<mutex> lock(mu);
+		textures.push_back(tex);
+	}
 	return tex.tex_num;
 }
 
 GLuint TexturePool::get_renderbuffer(GLenum format, GLuint width, GLuint height)
 {
-	for (Texture &tex : textures) {
-		if (!tex.in_use && tex.is_renderbuffer && tex.format == format &&
-		    tex.width == width && tex.height == height) {
-			tex.in_use = true;
-			return tex.tex_num;
+	{
+		lock_guard<mutex> lock(mu);
+		for (Texture &tex : textures) {
+			if (!tex.in_use && tex.is_renderbuffer && tex.format == format &&
+			    tex.width == width && tex.height == height) {
+				tex.in_use = true;
+				return tex.tex_num;
+			}
 		}
 	}
 
@@ -1064,12 +1073,16 @@ GLuint TexturePool::get_renderbuffer(GLenum format, GLuint width, GLuint height)
 	tex.height = height;
 	tex.in_use = true;
 	tex.is_renderbuffer = true;
-	textures.push_back(tex);
+	{
+		lock_guard<mutex> lock(mu);
+		textures.push_back(tex);
+	}
 	return tex.tex_num;
 }
 
 void TexturePool::release_texture(GLuint tex_num)
 {
+	lock_guard<mutex> lock(mu);
 	for (Texture &tex : textures) {
 		if (!tex.is_renderbuffer && tex.tex_num == tex_num) {
 			assert(tex.in_use);
@@ -1082,6 +1095,7 @@ void TexturePool::release_texture(GLuint tex_num)
 
 void TexturePool::release_renderbuffer(GLuint tex_num)
 {
+	lock_guard<mutex> lock(mu);
 	for (Texture &tex : textures) {
 		if (tex.is_renderbuffer && tex.tex_num == tex_num) {
 			assert(tex.in_use);

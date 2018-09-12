@@ -9,6 +9,7 @@
 #include <epoxy/gl.h>
 #include <array>
 #include <map>
+#include <mutex>
 #include <vector>
 #include <utility>
 
@@ -383,6 +384,7 @@ private:
 	GLuint uniform_scale_factor;
 };
 
+// All operations, except construction and destruction, are thread-safe.
 class TexturePool {
 public:
 	GLuint get_texture(GLenum format, GLuint width, GLuint height, GLuint num_layers = 0);
@@ -398,7 +400,8 @@ private:
 		bool in_use = false;
 		bool is_renderbuffer = false;
 	};
-	std::vector<Texture> textures;
+	std::mutex mu;
+	std::vector<Texture> textures;  // Under mu.
 };
 
 class DISComputeFlow {

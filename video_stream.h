@@ -66,8 +66,8 @@ private:
 		int64_t input_second_pts;
 		float alpha;
 		InterpolatedFrameResources resources;
-		GLuint output_tex;
 		RefCountedGLsync fence;  // Set when the interpolated image is read back to the CPU.
+		GLuint flow_tex, output_tex;  // Released in the receiving thread; not really used for anything else.
 	};
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
 	std::mutex queue_lock;
