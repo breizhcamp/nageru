@@ -21,10 +21,6 @@
 using namespace movit;
 using namespace std;
 
-struct JPEGID {
-	unsigned stream_idx;
-	int64_t pts;
-};
 bool operator< (const JPEGID &a, const JPEGID &b) {
 	return make_pair(a.stream_idx, a.pts) < make_pair(b.stream_idx, b.pts);
 }
@@ -146,6 +142,34 @@ void prune_cache()
 	}
 }
 
+shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss_behavior, bool *did_decode)
+{
+	*did_decode = false;
+	{
+		unique_lock<mutex> lock(cache_mu);
+		auto it = cache.find(id);
+		if (it != cache.end()) {
+			it->second.last_used = event_counter++;
+			return it->second.frame;
+		}
+	}
+
+	if (cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE) {
+		return nullptr;
+	}
+
+	*did_decode = true;
+	shared_ptr<Frame> frame = decode_jpeg(filename_for_frame(id.stream_idx, id.pts));
+
+	unique_lock<mutex> lock(cache_mu);
+	cache[id] = LRUFrame{ frame, event_counter++ };
+
+	if (cache.size() > CACHE_SIZE) {
+		prune_cache();
+	}
+	return frame;
+}
+
 void jpeg_decoder_thread()
 {
 	size_t num_decoded = 0, num_dropped = 0;
@@ -154,9 +178,9 @@ void jpeg_decoder_thread()
 	for ( ;; ) {
 		JPEGID id;
 		JPEGFrameView *dest;
-		shared_ptr<Frame> frame;
+		CacheMissBehavior cache_miss_behavior = DECODE_IF_NOT_IN_CACHE;
 		{
-			unique_lock<mutex> lock(cache_mu);
+			unique_lock<mutex> lock(cache_mu);  // TODO: Perhaps under another lock?
 			any_pending_decodes.wait(lock, [] {
 				return !pending_decodes.empty();
 			});
@@ -164,17 +188,6 @@ void jpeg_decoder_thread()
 			dest = pending_decodes.front().second;
 			pending_decodes.pop_front();
 
-			auto it = cache.find(id);
-			if (it != cache.end()) {
-				frame = it->second.frame;
-				it->second.last_used = event_counter++;
-			}
-		}
-
-		if (frame == nullptr) {
-			// Not found in the cache, so we need to do a decode or drop the request.
-			// Prune the queue if there are too many pending for this destination.
-			// TODO: Could we get starvation here?
 			size_t num_pending = 0;
 			for (const pair<JPEGID, JPEGFrameView *> &decode : pending_decodes) {
 				if (decode.second == dest) {
@@ -182,18 +195,20 @@ void jpeg_decoder_thread()
 				}
 			}
 			if (num_pending > 3) {
-				++num_dropped;
-				continue;
+				cache_miss_behavior = RETURN_NULLPTR_IF_NOT_IN_CACHE;
 			}
+		}
 
-			frame = decode_jpeg(filename_for_frame(id.stream_idx, id.pts));
+		bool found_in_cache;
+		shared_ptr<Frame> frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
 
-			unique_lock<mutex> lock(cache_mu);
-			cache[id] = LRUFrame{ frame, event_counter++ };
+		if (frame == nullptr) {
+			assert(cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
+			++num_dropped;
+			continue;
+		}
 
-			if (cache.size() > CACHE_SIZE) {
-				prune_cache();
-			}
+		if (!found_in_cache) {
 			++num_decoded;
 			if (num_decoded % 1000 == 0) {
 				fprintf(stderr, "Decoded %zu images, dropped %zu (%.2f%% dropped)\n",

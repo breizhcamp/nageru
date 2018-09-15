@@ -11,15 +11,24 @@
 
 #include <memory>
 
+struct JPEGID {
+	unsigned stream_idx;
+	int64_t pts;
+};
 struct Frame {
 	std::unique_ptr<uint8_t[]> y, cb, cr;
 	unsigned width, height;
 	unsigned chroma_subsampling_x, chroma_subsampling_y;
 	unsigned pitch_y, pitch_chroma;
 };
+enum CacheMissBehavior {
+	DECODE_IF_NOT_IN_CACHE,
+	RETURN_NULLPTR_IF_NOT_IN_CACHE
+};
 
 std::string filename_for_frame(unsigned stream_idx, int64_t pts);
 std::shared_ptr<Frame> decode_jpeg(const std::string &filename);
+std::shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss_behavior, bool *did_decode);
 
 class JPEGFrameView : public QGLWidget {
 	Q_OBJECT

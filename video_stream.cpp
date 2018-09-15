@@ -295,7 +295,11 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	// Convert frame0 and frame1 to OpenGL textures.
 	// TODO: Deduplicate against JPEGFrameView::setDecodedFrame?
 	for (size_t frame_no = 0; frame_no < 2; ++frame_no) {
-		shared_ptr<Frame> frame = decode_jpeg(filename_for_frame(stream_idx, frame_no == 1 ? input_second_pts : input_first_pts));
+		JPEGID jpeg_id;
+		jpeg_id.stream_idx = stream_idx;
+		jpeg_id.pts = frame_no == 1 ? input_second_pts : input_first_pts;
+		bool did_decode;
+		shared_ptr<Frame> frame = decode_jpeg_with_cache(jpeg_id, DECODE_IF_NOT_IN_CACHE, &did_decode);
 		ycbcr_format.chroma_subsampling_x = frame->chroma_subsampling_x;
 		ycbcr_format.chroma_subsampling_y = frame->chroma_subsampling_y;
 		ycbcr_input->change_ycbcr_format(ycbcr_format);
