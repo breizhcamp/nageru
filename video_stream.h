@@ -19,6 +19,7 @@ extern "C" {
 
 #include "ref_counted_gl_sync.h"
 
+class ChromaSubsampler;
 class DISComputeFlow;
 class Interpolate;
 class Mux;
@@ -48,6 +49,7 @@ private:
 	struct InterpolatedFrameResources {
 		GLuint input_tex;  // Layered (contains both input frames).
 		GLuint gray_tex;  // Same.
+		GLuint cb_tex, cr_tex;
 		GLuint input_fbos[2];  // For rendering to the two layers of input_tex.
 		GLuint pbo;  // For reading the data back.
 		void *pbo_contents;  // Persistently mapped.
@@ -66,7 +68,7 @@ private:
 		float alpha;
 		InterpolatedFrameResources resources;
 		RefCountedGLsync fence;  // Set when the interpolated image is read back to the CPU.
-		GLuint flow_tex, output_tex, output2_tex;  // Released in the receiving thread; not really used for anything else.
+		GLuint flow_tex, output_tex, cbcr_tex;  // Released in the receiving thread; not really used for anything else.
 	};
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
 	std::mutex queue_lock;
@@ -88,6 +90,7 @@ private:
 	// Frame interpolation.
 	std::unique_ptr<DISComputeFlow> compute_flow;
 	std::unique_ptr<Interpolate> interpolate;
+	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
 };
 
 #endif  // !defined(_VIDEO_STREAM_H)

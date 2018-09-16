@@ -8,6 +8,7 @@ extern "C" {
 #include <jpeglib.h>
 #include <unistd.h>
 
+#include "chroma_subsampler.h"
 #include "context.h"
 #include "flow.h"
 #include "httpd.h"
@@ -98,7 +99,7 @@ struct VectorDestinationManager {
 };
 static_assert(std::is_standard_layout<VectorDestinationManager>::value, "");
 
-vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cbcr_data, unsigned width, unsigned height)
+vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cb_data, const uint8_t *cr_data, unsigned width, unsigned height)
 {
 	VectorDestinationManager dest;
 
@@ -127,26 +128,13 @@ vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cbcr_data, uns
 	cinfo.CCIR601_sampling = true;  // Seems to be mostly ignored by libjpeg, though.
 	jpeg_start_compress(&cinfo, true);
 
-	// TODO: Subsample on the GPU.
-	unique_ptr<uint8_t[]> cbdata(new uint8_t[(width/2) * 8]);
-	unique_ptr<uint8_t[]> crdata(new uint8_t[(width/2) * 8]);
 	JSAMPROW yptr[8], cbptr[8], crptr[8];
 	JSAMPARRAY data[3] = { yptr, cbptr, crptr };
-	for (unsigned yy = 0; yy < 8; ++yy) {
-		cbptr[yy] = cbdata.get() + yy * (width / 2);
-		crptr[yy] = crdata.get() + yy * (width / 2);
-	}
 	for (unsigned y = 0; y < height; y += 8) {
-		uint8_t *cbptr = cbdata.get();
-		uint8_t *crptr = crdata.get();
 		for (unsigned yy = 0; yy < 8; ++yy) {
 			yptr[yy] = const_cast<JSAMPROW>(&y_data[(height - y - yy - 1) * width]);
-			const uint8_t *sptr = &cbcr_data[(height - y - yy - 1) * width * 2];
-			for (unsigned x = 0; x < width; x += 2) {
-				*cbptr++ = (sptr[0] + sptr[2]) / 2;
-				*crptr++ = (sptr[1] + sptr[3]) / 2;
-				sptr += 4;
-			}
+			cbptr[yy] = const_cast<JSAMPROW>(&cb_data[(height - y - yy - 1) * width/2]);
+			crptr[yy] = const_cast<JSAMPROW>(&cr_data[(height - y - yy - 1) * width/2]);
 		}
 
 		jpeg_write_raw_data(&cinfo, data, /*num_lines=*/8);
@@ -198,9 +186,11 @@ VideoStream::VideoStream()
 	ycbcr_convert_chain->finalize();
 	check_error();
 
-	GLuint input_tex[num_interpolate_slots], gray_tex[num_interpolate_slots];
+	GLuint input_tex[num_interpolate_slots], gray_tex[num_interpolate_slots], cb_tex[num_interpolate_slots], cr_tex[num_interpolate_slots];
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 10, input_tex);
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 10, gray_tex);
+	glCreateTextures(GL_TEXTURE_2D, 10, cb_tex);
+	glCreateTextures(GL_TEXTURE_2D, 10, cr_tex);
 	check_error();
 	constexpr size_t width = 1280, height = 720;  // FIXME: adjustable width, height
 	int levels = find_num_levels(width, height);
@@ -209,10 +199,16 @@ VideoStream::VideoStream()
 		check_error();
 		glTextureStorage3D(gray_tex[i], levels, GL_R8, width, height, 2);
 		check_error();
+		glTextureStorage2D(cb_tex[i], 1, GL_R8, width / 2, height);
+		check_error();
+		glTextureStorage2D(cr_tex[i], 1, GL_R8, width / 2, height);
+		check_error();
 
 		InterpolatedFrameResources resource;
 		resource.input_tex = input_tex[i];
 		resource.gray_tex = gray_tex[i];
+		resource.cb_tex = cb_tex[i];
+		resource.cr_tex = cr_tex[i];
 		glCreateFramebuffers(2, resource.input_fbos);
 		check_error();
 
@@ -243,6 +239,7 @@ VideoStream::VideoStream()
 
 	compute_flow.reset(new DISComputeFlow(width, height, operating_point2));
 	interpolate.reset(new Interpolate(width, height, operating_point2, /*split_ycbcr_output=*/true));
+	chroma_subsampler.reset(new ChromaSubsampler);
 	check_error();
 }
 
@@ -346,8 +343,11 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	// Compute the interpolated frame.
 	qf.flow_tex = compute_flow->exec(resources.gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 	check_error();
-	tie(qf.output_tex, qf.output2_tex) = interpolate->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
+	tie(qf.output_tex, qf.cbcr_tex) = interpolate->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
 	check_error();
+
+	// Subsample and split Cb/Cr.
+	chroma_subsampler->subsample_chroma(qf.cbcr_tex, 1280, 720, resources.cb_tex, resources.cr_tex);
 
 	// We could have released qf.flow_tex here, but to make sure we don't cause a stall
 	// when trying to reuse it for the next frame, we can just as well hold on to it
@@ -359,7 +359,9 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	check_error();
 	glGetTextureImage(qf.output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
 	check_error();
-	glGetTextureImage(qf.output2_tex, 0, GL_RG, GL_UNSIGNED_BYTE, 1280 * 720 * 3, BUFFER_OFFSET(1280 * 720));
+	glGetTextureImage(resources.cb_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3, BUFFER_OFFSET(1280 * 720));
+	check_error();
+	glGetTextureImage(resources.cr_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3 - 640 * 720, BUFFER_OFFSET(1280 * 720 + 640 * 720));
 	check_error();
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
@@ -411,10 +413,11 @@ void VideoStream::encode_thread_func()
 			vector<uint8_t> jpeg = encode_jpeg(
 				(const uint8_t *)qf.resources.pbo_contents,
 				(const uint8_t *)qf.resources.pbo_contents + 1280 * 720,
+				(const uint8_t *)qf.resources.pbo_contents + 1280 * 720 + 640 * 720,
 				1280, 720);
 			compute_flow->release_texture(qf.flow_tex);
 			interpolate->release_texture(qf.output_tex);
-			interpolate->release_texture(qf.output2_tex);
+			interpolate->release_texture(qf.cbcr_tex);
 
 			AVPacket pkt;
 			av_init_packet(&pkt);

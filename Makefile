@@ -13,7 +13,7 @@ OBJS += $(OBJS_WITH_MOC:.o=.moc.o)
 # Flow objects
 OBJS += flow.o gpu_timers.o
 
-OBJS += ffmpeg_raii.o main.o player.o httpd.o mux.o metacube2.o video_stream.o context.o
+OBJS += ffmpeg_raii.o main.o player.o httpd.o mux.o metacube2.o video_stream.o context.o chroma_subsampler.o
 
 %.o: %.cpp
 	$(CXX) -MMD -MP $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<
