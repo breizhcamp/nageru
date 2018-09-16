@@ -45,4 +45,4 @@ DEPS=$(OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(DEPS) futatabi $(OBJS_WITH_MOC:.o=.moc.cpp) 
+	$(RM) $(OBJS) $(DEPS) flow_main.o gpu_timers.o futatabi $(OBJS_WITH_MOC:.o=.moc.cpp)
