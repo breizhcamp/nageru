@@ -116,28 +116,45 @@ vector<uint8_t> encode_jpeg(const uint8_t *pixel_data, unsigned width, unsigned 
 
 	cinfo.image_width = width;
 	cinfo.image_height = height;
-	cinfo.input_components = 3;
+	cinfo.raw_data_in = true;
+	jpeg_set_colorspace(&cinfo, JCS_YCbCr);
 	cinfo.comp_info[0].h_samp_factor = 2;
 	cinfo.comp_info[0].v_samp_factor = 1;
 	cinfo.comp_info[1].h_samp_factor = 1;
 	cinfo.comp_info[1].v_samp_factor = 1;
 	cinfo.comp_info[2].h_samp_factor = 1;
 	cinfo.comp_info[2].v_samp_factor = 1;
-	// cinfo.CCIR601_sampling = true;  // TODO: Subsample ourselves.
+	cinfo.CCIR601_sampling = true;  // Seems to be mostly ignored by libjpeg, though.
 	jpeg_start_compress(&cinfo, true);
 
-	unique_ptr<uint8_t[]> row(new uint8_t[width * 3]);
-	JSAMPROW row_pointer[1] = { row.get() };
-	for (unsigned y = 0; y < height; ++y) {
-		const uint8_t *sptr = &pixel_data[(height - cinfo.next_scanline - 1) * width * 4];
-		uint8_t *dptr = row.get();
-		for (unsigned x = 0; x < width; ++x) {
-			*dptr++ = *sptr++;
-			*dptr++ = *sptr++;
-			*dptr++ = *sptr++;
-			++sptr;
+	// TODO: Subsample and deinterleave on the GPU.
+
+	unique_ptr<uint8_t[]> ydata(new uint8_t[width * 8]);
+	unique_ptr<uint8_t[]> cbdata(new uint8_t[(width/2) * 8]);
+	unique_ptr<uint8_t[]> crdata(new uint8_t[(width/2) * 8]);
+	JSAMPROW yptr[8], cbptr[8], crptr[8];
+	JSAMPARRAY data[3] = { yptr, cbptr, crptr };
+	for (unsigned yy = 0; yy < 8; ++yy) {
+		yptr[yy] = ydata.get() + yy * width;
+		cbptr[yy] = cbdata.get() + yy * (width / 2);
+		crptr[yy] = crdata.get() + yy * (width / 2);
+	}
+	for (unsigned y = 0; y < height; y += 8) {
+		uint8_t *yptr = ydata.get();
+		uint8_t *cbptr = cbdata.get();
+		uint8_t *crptr = crdata.get();
+		for (unsigned yy = 0; yy < 8; ++yy) {
+			const uint8_t *sptr = &pixel_data[(height - y - yy - 1) * width * 4];
+			for (unsigned x = 0; x < width; x += 2) {
+				*yptr++ = sptr[0];
+				*yptr++ = sptr[4];
+				*cbptr++ = (sptr[1] + sptr[5]) / 2;
+				*crptr++ = (sptr[2] + sptr[6]) / 2;
+				sptr += 8;
+			}
 		}
-		(void) jpeg_write_scanlines(&cinfo, row_pointer, 1);
+
+		jpeg_write_raw_data(&cinfo, data, /*num_lines=*/8);
 	}
 
 	jpeg_finish_compress(&cinfo);
@@ -165,12 +182,21 @@ VideoStream::VideoStream()
 	ycbcr_format.cr_y_position = 0.5f;
 	ycbcr_input = (movit::YCbCrInput *)ycbcr_convert_chain->add_input(new YCbCrInput(image_format, ycbcr_format, 1280, 720));
 
+	YCbCrFormat ycbcr_output_format = ycbcr_format;
+	ycbcr_output_format.chroma_subsampling_x = 1;
+
 	ImageFormat inout_format;
 	inout_format.color_space = COLORSPACE_sRGB;
 	inout_format.gamma_curve = GAMMA_sRGB;
 
 	check_error();
-	ycbcr_convert_chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
+
+	// One full Y'CbCr texture (for interpolation), one that's just Y (throwing away the
+	// Cb and Cr channels). The second copy is sort of redundant, but it's the easiest way
+	// of getting the gray data into a layered texture.
+	ycbcr_convert_chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, ycbcr_output_format);
+	check_error();
+	ycbcr_convert_chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, ycbcr_output_format);
 	check_error();
 	ycbcr_convert_chain->set_dither_bits(8);
 	check_error();
@@ -197,13 +223,17 @@ VideoStream::VideoStream()
 
 		glNamedFramebufferTextureLayer(resource.input_fbos[0], GL_COLOR_ATTACHMENT0, input_tex[i], 0, 0);
 		check_error();
+		glNamedFramebufferTextureLayer(resource.input_fbos[0], GL_COLOR_ATTACHMENT1, gray_tex[i], 0, 0);
+		check_error();
 		glNamedFramebufferTextureLayer(resource.input_fbos[1], GL_COLOR_ATTACHMENT0, input_tex[i], 0, 1);
 		check_error();
-
-		GLuint buf = GL_COLOR_ATTACHMENT0;
-		glNamedFramebufferDrawBuffers(resource.input_fbos[0], 1, &buf);
+		glNamedFramebufferTextureLayer(resource.input_fbos[1], GL_COLOR_ATTACHMENT1, gray_tex[i], 0, 1);
 		check_error();
-		glNamedFramebufferDrawBuffers(resource.input_fbos[1], 1, &buf);
+
+		GLuint bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+		glNamedFramebufferDrawBuffers(resource.input_fbos[0], 2, bufs);
+		check_error();
+		glNamedFramebufferDrawBuffers(resource.input_fbos[1], 2, bufs);
 		check_error();
 
 		glCreateBuffers(1, &resource.pbo);
@@ -217,7 +247,6 @@ VideoStream::VideoStream()
 	check_error();
 
 	compute_flow.reset(new DISComputeFlow(width, height, operating_point3));
-	gray.reset(new GrayscaleConversion);  // NOTE: Must come after DISComputeFlow, since it sets up the VBO!
 	interpolate.reset(new Interpolate(width, height, operating_point3));
 	check_error();
 }
@@ -315,17 +344,14 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	}
 
 	glGenerateTextureMipmap(resources.input_tex);
-
-	// Compute the interpolated frame.
-	check_error();
-	gray->exec(resources.input_tex, resources.gray_tex, 1280, 720, /*num_layers=*/2);
 	check_error();
 	glGenerateTextureMipmap(resources.gray_tex);
 	check_error();
+
+	// Compute the interpolated frame.
 	qf.flow_tex = compute_flow->exec(resources.gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 	check_error();
-
-	qf.output_tex = interpolate->exec(resources.input_tex, qf.flow_tex, 1280, 720, alpha);
+	qf.output_tex = interpolate->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
 	check_error();
 
 	// We could have released qf.flow_tex here, but to make sure we don't cause a stall

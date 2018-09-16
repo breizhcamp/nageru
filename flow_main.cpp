@@ -391,7 +391,7 @@ void interpolate_image(int argc, char **argv, int optind)
 		in_warmup = true;
 		for (int i = 0; i < 10; ++i) {
 			GLuint bidirectional_flow_tex = compute_flow.exec(tex_gray, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
-			GLuint interpolated_tex = interpolate.exec(image_tex, bidirectional_flow_tex, width1, height1, 0.5f);
+			GLuint interpolated_tex = interpolate.exec(image_tex, tex_gray, bidirectional_flow_tex, width1, height1, 0.5f);
 			compute_flow.release_texture(bidirectional_flow_tex);
 			interpolate.release_texture(interpolated_tex);
 		}
@@ -405,7 +405,7 @@ void interpolate_image(int argc, char **argv, int optind)
 		snprintf(ppm_filename, sizeof(ppm_filename), "interp%04d.ppm", frameno);
 
 		float alpha = frameno / 60.0f;
-		GLuint interpolated_tex = interpolate.exec(image_tex, bidirectional_flow_tex, width1, height1, alpha);
+		GLuint interpolated_tex = interpolate.exec(image_tex, tex_gray, bidirectional_flow_tex, width1, height1, alpha);
 
 		schedule_read<RGBAType>(interpolated_tex, width1, height1, filename0, filename1, "", ppm_filename);
 		interpolate.release_texture(interpolated_tex);

@@ -778,16 +778,16 @@ Splat::Splat(const OperatingPoint &op)
 
 	uniform_splat_size = glGetUniformLocation(splat_program, "splat_size");
 	uniform_alpha = glGetUniformLocation(splat_program, "alpha");
-	uniform_image_tex = glGetUniformLocation(splat_program, "image_tex");
+	uniform_gray_tex = glGetUniformLocation(splat_program, "gray_tex");
 	uniform_flow_tex = glGetUniformLocation(splat_program, "flow_tex");
 	uniform_inv_flow_size = glGetUniformLocation(splat_program, "inv_flow_size");
 }
 
-void Splat::exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha)
+void Splat::exec(GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha)
 {
 	glUseProgram(splat_program);
 
-	bind_sampler(splat_program, uniform_image_tex, 0, image_tex, linear_sampler);
+	bind_sampler(splat_program, uniform_gray_tex, 0, gray_tex, linear_sampler);
 	bind_sampler(splat_program, uniform_flow_tex, 1, bidirectional_flow_tex, nearest_sampler);
 
 	glProgramUniform2f(splat_program, uniform_splat_size, op.splat_size / width, op.splat_size / height);
@@ -961,7 +961,7 @@ Interpolate::Interpolate(int width, int height, const OperatingPoint &op)
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 }
 
-GLuint Interpolate::exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha)
+GLuint Interpolate::exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha)
 {
 	GPUTimers timers;
 
@@ -973,7 +973,7 @@ GLuint Interpolate::exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint
 	// Pick out the right level to test splatting results on.
 	GLuint tex_view;
 	glGenTextures(1, &tex_view);
-	glTextureView(tex_view, GL_TEXTURE_2D_ARRAY, image_tex, GL_RGBA8, flow_level, 1, 0, 2);
+	glTextureView(tex_view, GL_TEXTURE_2D_ARRAY, gray_tex, GL_R8, flow_level, 1, 0, 2);
 
 	int flow_width = width >> flow_level;
 	int flow_height = height >> flow_level;

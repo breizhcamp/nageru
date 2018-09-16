@@ -20,7 +20,6 @@ extern "C" {
 #include "ref_counted_gl_sync.h"
 
 class DISComputeFlow;
-class GrayscaleConversion;
 class Interpolate;
 class Mux;
 class QSurface;
@@ -78,12 +77,15 @@ private:
 	bool seen_sync_markers = false;
 
 	QSurface *gl_surface;
-	std::unique_ptr<movit::EffectChain> ycbcr_convert_chain;  // TODO: Have a separate version with resample, for scaling?
+
+	// Effectively only converts from 4:2:2 to 4:4:4.
+	// TODO: Have a separate version with ResampleEffect, for scaling?
+	std::unique_ptr<movit::EffectChain> ycbcr_convert_chain;
+
 	movit::YCbCrInput *ycbcr_input;
 	movit::YCbCrFormat ycbcr_format;
 
 	// Frame interpolation.
-	std::unique_ptr<GrayscaleConversion> gray;
 	std::unique_ptr<DISComputeFlow> compute_flow;
 	std::unique_ptr<Interpolate> interpolate;
 };

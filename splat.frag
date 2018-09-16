@@ -4,17 +4,15 @@ in vec2 image_pos;
 flat in vec2 flow, I_0_check_offset, I_1_check_offset;
 out vec2 out_flow;
 
-uniform sampler2DArray image_tex;
+uniform sampler2DArray gray_tex;
 
 void main()
 {
 	out_flow = flow;
 
 	// TODO: Check if we are sampling out-of-image.
-	// TODO: See whether using intensity values gives equally good results
-	// as RGB, since the rest of our pipeline is intensity.
-	vec3 I_0 = texture(image_tex, vec3(image_pos + I_0_check_offset, 0)).rgb;
-	vec3 I_1 = texture(image_tex, vec3(image_pos + I_1_check_offset, 1)).rgb;
-	vec3 diff = abs(I_1 - I_0);
-	gl_FragDepth = 0.125 * (diff.x + diff.y + diff.z);  // Make sure we stay well under the 1.0 maximum.
+	float I_0 = texture(gray_tex, vec3(image_pos + I_0_check_offset, 0)).r;
+	float I_1 = texture(gray_tex, vec3(image_pos + I_1_check_offset, 1)).r;
+	float diff = abs(I_1 - I_0);
+	gl_FragDepth = 0.125 * diff.x;  // Make sure we stay well under the 1.0 maximum.
 }

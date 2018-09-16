@@ -453,7 +453,7 @@ public:
 	Splat(const OperatingPoint &op);
 
 	// alpha is the time of the interpolated frame (0..1).
-	void exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha);
+	void exec(GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint flow_tex, GLuint depth_rb, int width, int height, float alpha);
 
 private:
 	const OperatingPoint op;
@@ -464,7 +464,7 @@ private:
 	GLuint splat_program;
 
 	GLuint uniform_splat_size, uniform_alpha;
-	GLuint uniform_image_tex, uniform_flow_tex;
+	GLuint uniform_gray_tex, uniform_flow_tex;
 	GLuint uniform_inv_flow_size;
 };
 
@@ -542,7 +542,7 @@ public:
 	// Returns a texture that must be released with release_texture()
 	// after use. image_tex must be a two-layer RGBA8 texture with mipmaps
 	// (unless flow_level == 0).
-	GLuint exec(GLuint image_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha);
+	GLuint exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha);
 
 	void release_texture(GLuint tex) {
 		pool.release_texture(tex);
