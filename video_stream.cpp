@@ -98,7 +98,7 @@ struct VectorDestinationManager {
 };
 static_assert(std::is_standard_layout<VectorDestinationManager>::value, "");
 
-vector<uint8_t> encode_jpeg(const uint8_t *pixel_data, unsigned width, unsigned height)
+vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cbcr_data, unsigned width, unsigned height)
 {
 	VectorDestinationManager dest;
 
@@ -127,30 +127,25 @@ vector<uint8_t> encode_jpeg(const uint8_t *pixel_data, unsigned width, unsigned 
 	cinfo.CCIR601_sampling = true;  // Seems to be mostly ignored by libjpeg, though.
 	jpeg_start_compress(&cinfo, true);
 
-	// TODO: Subsample and deinterleave on the GPU.
-
-	unique_ptr<uint8_t[]> ydata(new uint8_t[width * 8]);
+	// TODO: Subsample on the GPU.
 	unique_ptr<uint8_t[]> cbdata(new uint8_t[(width/2) * 8]);
 	unique_ptr<uint8_t[]> crdata(new uint8_t[(width/2) * 8]);
 	JSAMPROW yptr[8], cbptr[8], crptr[8];
 	JSAMPARRAY data[3] = { yptr, cbptr, crptr };
 	for (unsigned yy = 0; yy < 8; ++yy) {
-		yptr[yy] = ydata.get() + yy * width;
 		cbptr[yy] = cbdata.get() + yy * (width / 2);
 		crptr[yy] = crdata.get() + yy * (width / 2);
 	}
 	for (unsigned y = 0; y < height; y += 8) {
-		uint8_t *yptr = ydata.get();
 		uint8_t *cbptr = cbdata.get();
 		uint8_t *crptr = crdata.get();
 		for (unsigned yy = 0; yy < 8; ++yy) {
-			const uint8_t *sptr = &pixel_data[(height - y - yy - 1) * width * 4];
+			yptr[yy] = const_cast<JSAMPROW>(&y_data[(height - y - yy - 1) * width]);
+			const uint8_t *sptr = &cbcr_data[(height - y - yy - 1) * width * 2];
 			for (unsigned x = 0; x < width; x += 2) {
-				*yptr++ = sptr[0];
-				*yptr++ = sptr[4];
-				*cbptr++ = (sptr[1] + sptr[5]) / 2;
-				*crptr++ = (sptr[2] + sptr[6]) / 2;
-				sptr += 8;
+				*cbptr++ = (sptr[0] + sptr[2]) / 2;
+				*crptr++ = (sptr[1] + sptr[3]) / 2;
+				sptr += 4;
 			}
 		}
 
@@ -247,7 +242,7 @@ VideoStream::VideoStream()
 	check_error();
 
 	compute_flow.reset(new DISComputeFlow(width, height, operating_point3));
-	interpolate.reset(new Interpolate(width, height, operating_point3));
+	interpolate.reset(new Interpolate(width, height, operating_point3, /*split_ycbcr_output=*/true));
 	check_error();
 }
 
@@ -351,7 +346,7 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	// Compute the interpolated frame.
 	qf.flow_tex = compute_flow->exec(resources.gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 	check_error();
-	qf.output_tex = interpolate->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
+	tie(qf.output_tex, qf.output2_tex) = interpolate->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
 	check_error();
 
 	// We could have released qf.flow_tex here, but to make sure we don't cause a stall
@@ -362,7 +357,9 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, resources.pbo);
 	check_error();
-	glGetTextureImage(qf.output_tex, 0, GL_RGBA, GL_UNSIGNED_BYTE, 1280 * 720 * 4, nullptr);
+	glGetTextureImage(qf.output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
+	check_error();
+	glGetTextureImage(qf.output2_tex, 0, GL_RG, GL_UNSIGNED_BYTE, 1280 * 720 * 3, BUFFER_OFFSET(1280 * 720));
 	check_error();
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
@@ -411,9 +408,13 @@ void VideoStream::encode_thread_func()
 		} else if (qf.type == QueuedFrame::INTERPOLATED) {
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
-			vector<uint8_t> jpeg = encode_jpeg((const uint8_t *)qf.resources.pbo_contents, 1280, 720);
+			vector<uint8_t> jpeg = encode_jpeg(
+				(const uint8_t *)qf.resources.pbo_contents,
+				(const uint8_t *)qf.resources.pbo_contents + 1280 * 720,
+				1280, 720);
 			compute_flow->release_texture(qf.flow_tex);
 			interpolate->release_texture(qf.output_tex);
+			interpolate->release_texture(qf.output2_tex);
 
 			AVPacket pkt;
 			av_init_packet(&pkt);

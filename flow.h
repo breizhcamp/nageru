@@ -522,11 +522,15 @@ private:
 
 class Blend {
 public:
-	Blend();
-	void exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, int width, int height, float alpha);
+	Blend(bool split_ycbcr_output);
+
+	// output2_tex is only used if split_ycbcr_output was true.
+	void exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, GLuint output2_tex, int width, int height, float alpha);
 
 private:
+	bool split_ycbcr_output;
 	PersistentFBOSet<1> fbos;
+	PersistentFBOSet<2> fbos_split;
 	GLuint blend_vs_obj;
 	GLuint blend_fs_obj;
 	GLuint blend_program;
@@ -537,12 +541,12 @@ private:
 
 class Interpolate {
 public:
-	Interpolate(int width, int height, const OperatingPoint &op);
+	Interpolate(int width, int height, const OperatingPoint &op, bool split_ycbcr_output);
 
-	// Returns a texture that must be released with release_texture()
-	// after use. image_tex must be a two-layer RGBA8 texture with mipmaps
-	// (unless flow_level == 0).
-	GLuint exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha);
+	// Returns a texture (or two, if split_ycbcr_output is true) that must
+	// be released with release_texture() after use. image_tex must be a
+	// two-layer RGBA8 texture with mipmaps (unless flow_level == 0).
+	std::pair<GLuint, GLuint> exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha);
 
 	void release_texture(GLuint tex) {
 		pool.release_texture(tex);
@@ -553,6 +557,7 @@ private:
 	GLuint vertex_vbo, vao;
 	TexturePool pool;
 	const OperatingPoint op;
+	const bool split_ycbcr_output;
 
 	Splat splat;
 	HoleFill hole_fill;

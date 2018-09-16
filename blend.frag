@@ -1,7 +1,13 @@
 #version 450 core
 
 in vec3 tc;
+
+#ifdef SPLIT_YCBCR_OUTPUT
+out float Y;
+out vec2 CbCr;
+#else
 out vec4 rgba;
+#endif
 
 uniform sampler2DArray image_tex;
 uniform sampler2D flow_tex;
@@ -24,13 +30,20 @@ void main()
 	// Same for d1.
 	float d1 = (1.0f - alpha) * length(size * (texture(flow_tex, vec2(tc.xy + (1.0f - alpha) * flow)).xy - flow));
 
+	vec4 result;
 	if (max(d0, d1) < 3.0f) {  // Arbitrary constant, not all that tuned. The UW paper says 1.0 is fine for ground truth.
 		// Both are visible, so blend.
-		rgba = I_0 + alpha * (I_1 - I_0);
+		result = I_0 + alpha * (I_1 - I_0);
 	} else if (d0 < d1) {
-		rgba = I_0;
+		result = I_0;
 	} else {
-		rgba = I_1;
+		result = I_1;
 	}
 
+#ifdef SPLIT_YCBCR_OUTPUT
+	Y = result.r;
+	CbCr = result.gb;
+#else
+	rgba = result;
+#endif
 }

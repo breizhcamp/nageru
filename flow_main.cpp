@@ -379,7 +379,7 @@ void interpolate_image(int argc, char **argv, int optind)
 	}
 	DISComputeFlow compute_flow(width1, height1, op);
 	GrayscaleConversion gray;
-	Interpolate interpolate(width1, height1, op);
+	Interpolate interpolate(width1, height1, op, /*split_ycbcr_output=*/false);
 
 	GLuint tex_gray;
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex_gray);
@@ -391,7 +391,7 @@ void interpolate_image(int argc, char **argv, int optind)
 		in_warmup = true;
 		for (int i = 0; i < 10; ++i) {
 			GLuint bidirectional_flow_tex = compute_flow.exec(tex_gray, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
-			GLuint interpolated_tex = interpolate.exec(image_tex, tex_gray, bidirectional_flow_tex, width1, height1, 0.5f);
+			GLuint interpolated_tex = interpolate.exec(image_tex, tex_gray, bidirectional_flow_tex, width1, height1, 0.5f).first;
 			compute_flow.release_texture(bidirectional_flow_tex);
 			interpolate.release_texture(interpolated_tex);
 		}
@@ -405,7 +405,7 @@ void interpolate_image(int argc, char **argv, int optind)
 		snprintf(ppm_filename, sizeof(ppm_filename), "interp%04d.ppm", frameno);
 
 		float alpha = frameno / 60.0f;
-		GLuint interpolated_tex = interpolate.exec(image_tex, tex_gray, bidirectional_flow_tex, width1, height1, alpha);
+		GLuint interpolated_tex = interpolate.exec(image_tex, tex_gray, bidirectional_flow_tex, width1, height1, alpha).first;
 
 		schedule_read<RGBAType>(interpolated_tex, width1, height1, filename0, filename1, "", ppm_filename);
 		interpolate.release_texture(interpolated_tex);

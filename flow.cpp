@@ -915,10 +915,19 @@ void HoleBlend::exec(GLuint flow_tex, GLuint depth_rb, GLuint temp_tex[3], int w
 	glDisable(GL_DEPTH_TEST);
 }
 
-Blend::Blend()
+Blend::Blend(bool split_ycbcr_output)
+	: split_ycbcr_output(split_ycbcr_output)
 {
+	string frag_shader = read_file("blend.frag");
+	if (split_ycbcr_output) {
+		// Insert after the first #version line.
+		size_t offset = frag_shader.find('\n');
+		assert(offset != string::npos);
+		frag_shader = frag_shader.substr(0, offset + 1) + "#define SPLIT_YCBCR_OUTPUT 1\n" + frag_shader.substr(offset + 1);
+	}
+
 	blend_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	blend_fs_obj = compile_shader(read_file("blend.frag"), GL_FRAGMENT_SHADER);
+	blend_fs_obj = compile_shader(frag_shader, GL_FRAGMENT_SHADER);
 	blend_program = link_program(blend_vs_obj, blend_fs_obj);
 
 	uniform_image_tex = glGetUniformLocation(blend_program, "image_tex");
@@ -927,7 +936,7 @@ Blend::Blend()
 	uniform_flow_consistency_tolerance = glGetUniformLocation(blend_program, "flow_consistency_tolerance");
 }
 
-void Blend::exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, int level_width, int level_height, float alpha)
+void Blend::exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, GLuint output2_tex, int level_width, int level_height, float alpha)
 {
 	glUseProgram(blend_program);
 	bind_sampler(blend_program, uniform_image_tex, 0, image_tex, linear_sampler);
@@ -935,13 +944,23 @@ void Blend::exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, int level
 	glProgramUniform1f(blend_program, uniform_alpha, alpha);
 
 	glViewport(0, 0, level_width, level_height);
-	fbos.render_to(output_tex);
+	if (split_ycbcr_output) {
+		fbos_split.render_to(output_tex, output2_tex);
+	} else {
+		fbos.render_to(output_tex);
+	}
 	glDisable(GL_BLEND);  // A bit ironic, perhaps.
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
-Interpolate::Interpolate(int width, int height, const OperatingPoint &op)
-	: width(width), height(height), flow_level(op.finest_level), op(op), splat(op) {
+Interpolate::Interpolate(int width, int height, const OperatingPoint &op, bool split_ycbcr_output)
+	: width(width),
+	  height(height),
+	  flow_level(op.finest_level),
+	  op(op),
+	  split_ycbcr_output(split_ycbcr_output),
+	  splat(op),
+	  blend(split_ycbcr_output) {
 	// Set up the vertex data that will be shared between all passes.
 	float vertices[] = {
 		0.0f, 1.0f,
@@ -961,7 +980,7 @@ Interpolate::Interpolate(int width, int height, const OperatingPoint &op)
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 }
 
-GLuint Interpolate::exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha)
+pair<GLuint, GLuint> Interpolate::exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha)
 {
 	GPUTimers timers;
 
@@ -1003,10 +1022,20 @@ GLuint Interpolate::exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional
 	pool.release_texture(temp_tex[2]);
 	pool.release_renderbuffer(depth_rb);
 
-	GLuint output_tex = pool.get_texture(GL_RGBA8, width, height);
-	{
-		ScopedTimer timer("Blend", &total_timer);
-		blend.exec(image_tex, flow_tex, output_tex, width, height, alpha);
+	GLuint output_tex, output2_tex = 0;
+	if (split_ycbcr_output) {
+		output_tex = pool.get_texture(GL_R8, width, height);
+		output2_tex = pool.get_texture(GL_RG8, width, height);
+		{
+			ScopedTimer timer("Blend", &total_timer);
+			blend.exec(image_tex, flow_tex, output_tex, output2_tex, width, height, alpha);
+		}
+	} else {
+		output_tex = pool.get_texture(GL_RGBA8, width, height);
+		{
+			ScopedTimer timer("Blend", &total_timer);
+			blend.exec(image_tex, flow_tex, output_tex, 0, width, height, alpha);
+		}
 	}
 	pool.release_texture(flow_tex);
 	total_timer.end();
@@ -1014,7 +1043,7 @@ GLuint Interpolate::exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional
 		timers.print();
 	}
 
-	return output_tex;
+	return make_pair(output_tex, output2_tex);
 }
 
 GLuint TexturePool::get_texture(GLenum format, GLuint width, GLuint height, GLuint num_layers)
