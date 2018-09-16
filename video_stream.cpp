@@ -353,6 +353,7 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 
 void VideoStream::encode_thread_func()
 {
+	pthread_setname_np(pthread_self(), "VideoStream");
 	QSurface *surface = create_surface();
 	QOpenGLContext *context = create_context(surface);
 	bool ok = make_current(context, surface);
