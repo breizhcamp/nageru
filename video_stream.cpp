@@ -241,8 +241,8 @@ VideoStream::VideoStream()
 
 	check_error();
 
-	compute_flow.reset(new DISComputeFlow(width, height, operating_point3));
-	interpolate.reset(new Interpolate(width, height, operating_point3, /*split_ycbcr_output=*/true));
+	compute_flow.reset(new DISComputeFlow(width, height, operating_point2));
+	interpolate.reset(new Interpolate(width, height, operating_point2, /*split_ycbcr_output=*/true));
 	check_error();
 }
 
