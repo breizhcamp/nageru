@@ -237,6 +237,8 @@ void Mux::unplug()
 
 void Mux::thread_func()
 {
+	pthread_setname_np(pthread_self(), "Mux");
+
 	unique_lock<mutex> lock(mu);
 	for ( ;; ) {
 		packet_queue_ready.wait(lock, [this]() {

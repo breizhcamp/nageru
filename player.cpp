@@ -29,6 +29,8 @@ extern HTTPD *global_httpd;
 
 void Player::thread_func(bool also_output_to_stream)
 {
+	pthread_setname_np(pthread_self(), "Player");
+
 	QSurface *surface = create_surface();
 	QOpenGLContext *context = create_context(surface);
 	if (!make_current(context, surface)) {
