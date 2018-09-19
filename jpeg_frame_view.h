@@ -43,9 +43,14 @@ public:
 		update_frame();
 	}
 
+	void mousePressEvent(QMouseEvent *event) override;
+
 	unsigned get_stream_idx() const { return stream_idx; }
 
 	void setDecodedFrame(std::shared_ptr<Frame> frame);
+
+signals:
+	void clicked();
 
 protected:
 	void initializeGL() override;

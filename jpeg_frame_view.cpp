@@ -10,6 +10,8 @@
 #include <thread>
 #include <utility>
 
+#include <QMouseEvent>
+
 #include <movit/resource_pool.h>
 #include <movit/init.h>
 #include <movit/util.h>
@@ -309,4 +311,11 @@ void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
 		ycbcr_input->set_pitch(2, frame->pitch_chroma);
 		update();
 	});
+}
+
+void JPEGFrameView::mousePressEvent(QMouseEvent *event)
+{
+	if (event->type() == QEvent::MouseButtonPress && event->button() == Qt::LeftButton) {
+		emit clicked();
+	}
 }
