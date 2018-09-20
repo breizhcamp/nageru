@@ -226,8 +226,10 @@ JPEGFrameView::JPEGFrameView(QWidget *parent)
 	: QGLWidget(parent, global_share_widget) {
 }
 
-void JPEGFrameView::update_frame()
+void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts)
 {
+	current_stream_idx = stream_idx;
+
 	unique_lock<mutex> lock(cache_mu);
 	pending_decodes.emplace_back(JPEGID{ stream_idx, pts }, this);
 	any_pending_decodes.notify_all();

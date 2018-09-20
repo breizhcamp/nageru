@@ -36,16 +36,11 @@ class JPEGFrameView : public QGLWidget {
 public:
 	JPEGFrameView(QWidget *parent);
 
-	void setFrame(unsigned stream_idx, int64_t pts)
-	{
-		this->stream_idx = stream_idx;
-		this->pts = pts;
-		update_frame();
-	}
+	void setFrame(unsigned stream_idx, int64_t pts);
 
 	void mousePressEvent(QMouseEvent *event) override;
 
-	unsigned get_stream_idx() const { return stream_idx; }
+	unsigned get_stream_idx() const { return current_stream_idx; }
 
 	void setDecodedFrame(std::shared_ptr<Frame> frame);
 
@@ -58,10 +53,8 @@ protected:
 	void paintGL() override;
 
 private:
-	void update_frame();
-
-	unsigned stream_idx;
-	int64_t pts;
+	// The stream index of the latest frame we displayed.
+	unsigned current_stream_idx;
 
 	std::unique_ptr<movit::EffectChain> chain;
 	std::shared_ptr<Frame> current_frame;  // So that we hold on to the pixels.
