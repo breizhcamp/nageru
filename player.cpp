@@ -137,7 +137,7 @@ void Player::thread_func(bool also_output_to_stream)
 			}
 
 			if (in_pts_lower == in_pts_upper) {
-				destination->setFrame(stream_idx, in_pts_lower);
+				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false);
 				if (video_stream != nullptr) {
 					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_lower);
 				}
@@ -149,14 +149,14 @@ void Player::thread_func(bool also_output_to_stream)
 			double in_pts_lower_as_frameno = (in_pts_lower - in_pts_origin) * output_framerate / TIMEBASE / speed;
 			double in_pts_upper_as_frameno = (in_pts_upper - in_pts_origin) * output_framerate / TIMEBASE / speed;
 			if (fabs(in_pts_lower_as_frameno - frameno) < 0.01) {
-				destination->setFrame(stream_idx, in_pts_lower);
+				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false);
 				if (video_stream != nullptr) {
 					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_lower);
 				}
 				in_pts_origin += in_pts_lower - in_pts;
 				continue;
 			} else if (fabs(in_pts_upper_as_frameno - frameno) < 0.01) {
-				destination->setFrame(stream_idx, in_pts_upper);
+				destination->setFrame(stream_idx, in_pts_upper, /*interpolated=*/false);
 				if (video_stream != nullptr) {
 					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_upper);
 				}
@@ -165,10 +165,14 @@ void Player::thread_func(bool also_output_to_stream)
 			}
 
 			double alpha = double(in_pts - in_pts_lower) / (in_pts_upper - in_pts_lower);
-			destination->setFrame(stream_idx, in_pts_lower);  // FIXME
 
-			if (video_stream != nullptr) {
-				// Send the frame to the stream.
+			if (video_stream == nullptr) {
+				// Previews don't do any interpolation.
+				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false);
+			} else {
+				// Calculate the interpolated frame. When it's done, the destination
+				// will be unblocked.
+				destination->setFrame(stream_idx, lrint(out_pts), /*interpolated=*/true);
 				video_stream->schedule_interpolated_frame(lrint(out_pts), stream_idx, in_pts_lower, in_pts_upper, alpha);
 			}
 		}
@@ -244,5 +248,5 @@ void Player::override_angle(unsigned stream_idx)
 	if (it == frames[stream_idx].end()) {
 		return;
 	}
-	destination->setFrame(stream_idx, *it);
+	destination->setFrame(stream_idx, *it, /*interpolated=*/false);
 }

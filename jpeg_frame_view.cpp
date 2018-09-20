@@ -2,6 +2,7 @@
 
 #include <jpeglib.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -23,9 +24,18 @@
 using namespace movit;
 using namespace std;
 
-bool operator< (const JPEGID &a, const JPEGID &b) {
-	return make_pair(a.stream_idx, a.pts) < make_pair(b.stream_idx, b.pts);
-}
+// Just an arbitrary order for std::map.
+struct JPEGIDLexicalOrder
+{
+	bool operator() (const JPEGID &a, const JPEGID &b) const
+	{
+		if (a.stream_idx != b.stream_idx)
+			return a.stream_idx < b.stream_idx;
+		if (a.pts != b.pts)
+			return a.pts < b.pts;
+		return a.interpolated < b.interpolated;
+	}
+};
 
 struct LRUFrame {
 	shared_ptr<Frame> frame;
@@ -33,8 +43,8 @@ struct LRUFrame {
 };
 
 mutex cache_mu;
-map<JPEGID, LRUFrame> cache;  // Under cache_mu.
-condition_variable any_pending_decodes;
+map<JPEGID, LRUFrame, JPEGIDLexicalOrder> cache;  // Under cache_mu.
+condition_variable any_pending_decodes, cache_updated;
 deque<pair<JPEGID, JPEGFrameView *>> pending_decodes;  // Under cache_mu.
 atomic<size_t> event_counter{0};
 extern QGLWidget *global_share_widget;
@@ -160,6 +170,7 @@ shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss
 		return nullptr;
 	}
 
+	assert(!id.interpolated);
 	*did_decode = true;
 	shared_ptr<Frame> frame = decode_jpeg(filename_for_frame(id.stream_idx, id.pts));
 
@@ -202,10 +213,33 @@ void jpeg_decoder_thread()
 		}
 
 		bool found_in_cache;
-		shared_ptr<Frame> frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
+		shared_ptr<Frame> frame;
+		if (id.interpolated) {
+			// Interpolated frames are never decoded by us,
+			// put directly into the cache from VideoStream.
+			unique_lock<mutex> lock(cache_mu);
+			cache_updated.wait(lock, [id] {
+				return cache.count(id) != 0;
+			});
+			found_in_cache = true;  // Don't count it as a decode.
+
+			auto it = cache.find(id);
+			assert(it != cache.end());
+
+			it->second.last_used = event_counter++;
+			frame = it->second.frame;
+			if (frame == nullptr) {
+				// We inserted a nullptr as signal that the frame was never
+				// interpolated and that we should stop waiting.
+				// But don't let it linger in the cache anymore.
+				cache.erase(it);
+			}
+		} else {
+			frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
+		}
 
 		if (frame == nullptr) {
-			assert(cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
+			assert(id.interpolated || cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
 			++num_dropped;
 			continue;
 		}
@@ -218,6 +252,7 @@ void jpeg_decoder_thread()
 			}
 		}
 
+		// TODO: Could we get jitter between non-interpolated and interpolated frames here?
 		dest->setDecodedFrame(frame);
 	}
 }
@@ -226,13 +261,26 @@ JPEGFrameView::JPEGFrameView(QWidget *parent)
 	: QGLWidget(parent, global_share_widget) {
 }
 
-void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts)
+void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts, bool interpolated)
 {
 	current_stream_idx = stream_idx;
 
 	unique_lock<mutex> lock(cache_mu);
-	pending_decodes.emplace_back(JPEGID{ stream_idx, pts }, this);
+	pending_decodes.emplace_back(JPEGID{ stream_idx, pts, interpolated }, this);
 	any_pending_decodes.notify_all();
+}
+
+void JPEGFrameView::insert_interpolated_frame(unsigned stream_idx, int64_t pts, shared_ptr<Frame> frame)
+{
+	JPEGID id{ stream_idx, pts, true };
+
+	// We rely on the frame not being evicted from the cache before
+	// jpeg_decoder_thread() sees it and can display it (otherwise,
+	// that thread would hang). With a default cache of 1000 elements,
+	// that would sound like a reasonable assumption.
+	unique_lock<mutex> lock(cache_mu);
+	cache[id] = LRUFrame{ std::move(frame), event_counter++ };
+	cache_updated.notify_all();
 }
 
 ResourcePool *resource_pool = nullptr;

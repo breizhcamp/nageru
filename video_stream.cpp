@@ -299,6 +299,7 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 		unique_lock<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
+			JPEGFrameView::insert_interpolated_frame(stream_idx, output_pts, nullptr);
 			return;
 		}
 		resources = interpolate_resources.front();
@@ -319,6 +320,7 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 		JPEGID jpeg_id;
 		jpeg_id.stream_idx = stream_idx;
 		jpeg_id.pts = frame_no == 1 ? input_second_pts : input_first_pts;
+		jpeg_id.interpolated = false;
 		bool did_decode;
 		shared_ptr<Frame> frame = decode_jpeg_with_cache(jpeg_id, DECODE_IF_NOT_IN_CACHE, &did_decode);
 		ycbcr_format.chroma_subsampling_x = frame->chroma_subsampling_x;
@@ -410,11 +412,30 @@ void VideoStream::encode_thread_func()
 		} else if (qf.type == QueuedFrame::INTERPOLATED) {
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
-			vector<uint8_t> jpeg = encode_jpeg(
-				(const uint8_t *)qf.resources.pbo_contents,
-				(const uint8_t *)qf.resources.pbo_contents + 1280 * 720,
-				(const uint8_t *)qf.resources.pbo_contents + 1280 * 720 + 640 * 720,
-				1280, 720);
+			const uint8_t *y = (const uint8_t *)qf.resources.pbo_contents;
+			const uint8_t *cb = (const uint8_t *)qf.resources.pbo_contents + 1280 * 720;
+			const uint8_t *cr = (const uint8_t *)qf.resources.pbo_contents + 1280 * 720 + 640 * 720;
+
+			// Send a copy of the frame on to display.
+			shared_ptr<Frame> frame(new Frame);
+			frame->y.reset(new uint8_t[1280 * 720]);
+			frame->cb.reset(new uint8_t[640 * 720]);
+			frame->cr.reset(new uint8_t[640 * 720]);
+			for (unsigned yy = 0; yy < 720; ++yy) {
+				memcpy(frame->y.get() + 1280 * yy, y + 1280 * (719 - yy), 1280);
+				memcpy(frame->cb.get() + 640 * yy, cb + 640 * (719 - yy), 640);
+				memcpy(frame->cr.get() + 640 * yy, cr + 640 * (719 - yy), 640);
+			}
+			frame->width = 1280;
+			frame->height = 720;
+			frame->chroma_subsampling_x = 2;
+			frame->chroma_subsampling_y = 1;
+			frame->pitch_y = 1280;
+			frame->pitch_chroma = 640;
+			JPEGFrameView::insert_interpolated_frame(qf.stream_idx, qf.output_pts, std::move(frame));
+
+			// Now JPEG encode it, and send it on to the stream.
+			vector<uint8_t> jpeg = encode_jpeg(y, cb, cr, 1280, 720);
 			compute_flow->release_texture(qf.flow_tex);
 			interpolate->release_texture(qf.output_tex);
 			interpolate->release_texture(qf.cbcr_tex);

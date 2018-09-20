@@ -14,6 +14,7 @@
 struct JPEGID {
 	unsigned stream_idx;
 	int64_t pts;
+	bool interpolated;
 };
 struct Frame {
 	std::unique_ptr<uint8_t[]> y, cb, cr;
@@ -36,13 +37,15 @@ class JPEGFrameView : public QGLWidget {
 public:
 	JPEGFrameView(QWidget *parent);
 
-	void setFrame(unsigned stream_idx, int64_t pts);
+	void setFrame(unsigned stream_idx, int64_t pts, bool interpolated);
+	static void insert_interpolated_frame(unsigned stream_idx, int64_t pts, std::shared_ptr<Frame> frame);
 
 	void mousePressEvent(QMouseEvent *event) override;
 
 	unsigned get_stream_idx() const { return current_stream_idx; }
 
 	void setDecodedFrame(std::shared_ptr<Frame> frame);
+
 
 signals:
 	void clicked();

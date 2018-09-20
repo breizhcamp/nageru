@@ -139,13 +139,13 @@ int record_thread_func()
 
 		post_to_main_thread([pkt] {
 			if (pkt.stream_index == 0) {
-				global_mainwindow->ui->input1_display->setFrame(pkt.stream_index, pkt.pts);
+				global_mainwindow->ui->input1_display->setFrame(pkt.stream_index, pkt.pts, /*interpolated=*/false);
 			} else if (pkt.stream_index == 1) {
-				global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, pkt.pts);
+				global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, pkt.pts, /*interpolated=*/false);
 			} else if (pkt.stream_index == 2) {
-				global_mainwindow->ui->input3_display->setFrame(pkt.stream_index, pkt.pts);
+				global_mainwindow->ui->input3_display->setFrame(pkt.stream_index, pkt.pts, /*interpolated=*/false);
 			} else if (pkt.stream_index == 3) {
-				global_mainwindow->ui->input4_display->setFrame(pkt.stream_index, pkt.pts);
+				global_mainwindow->ui->input4_display->setFrame(pkt.stream_index, pkt.pts, /*interpolated=*/false);
 			}
 		});
 
