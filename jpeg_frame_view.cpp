@@ -323,6 +323,12 @@ void JPEGFrameView::initializeGL()
 	check_error();
 	chain->finalize();
 	check_error();
+
+	overlay_chain.reset(new EffectChain(overlay_width, overlay_height, resource_pool));
+	overlay_input = (movit::FlatInput *)overlay_chain->add_input(new FlatInput(image_format, FORMAT_GRAYSCALE, GL_UNSIGNED_BYTE, overlay_width, overlay_height));
+
+	overlay_chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
+	overlay_chain->finalize();
 }
 
 void JPEGFrameView::resizeGL(int width, int height)
@@ -334,6 +340,7 @@ void JPEGFrameView::resizeGL(int width, int height)
 
 void JPEGFrameView::paintGL()
 {
+	glViewport(0, 0, width(), height());
 	if (current_frame == nullptr) {
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -342,6 +349,14 @@ void JPEGFrameView::paintGL()
 
 	check_error();
 	chain->render_to_screen();
+
+	if (overlay_image != nullptr) {
+		if (overlay_input_needs_refresh) {
+			overlay_input->set_pixel_data(overlay_image->bits());
+		}
+		glViewport(width() - overlay_width, 0, overlay_width, overlay_height);
+		overlay_chain->render_to_screen();
+	}
 }
 
 void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
@@ -368,4 +383,26 @@ void JPEGFrameView::mousePressEvent(QMouseEvent *event)
 	if (event->type() == QEvent::MouseButtonPress && event->button() == Qt::LeftButton) {
 		emit clicked();
 	}
+}
+
+void JPEGFrameView::set_overlay(const string &text)
+{
+	if (text.empty()) {
+		overlay_image.reset();
+		return;
+	}
+
+	overlay_image.reset(new QImage(overlay_width, overlay_height, QImage::Format_Grayscale8));
+	overlay_image->fill(0);
+	QPainter painter(overlay_image.get());
+
+	painter.setPen(Qt::white);
+	QFont font = painter.font();
+	font.setPointSize(12);
+	painter.setFont(font);
+
+	painter.drawText(QRectF(0, 0, overlay_width, overlay_height), Qt::AlignCenter, QString::fromStdString(text));
+
+	// Don't refresh immediately; we might not have an OpenGL context here.
+	overlay_input_needs_refresh = true;
 }

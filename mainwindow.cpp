@@ -62,21 +62,25 @@ MainWindow::MainWindow()
 	connect(preview_1, &QShortcut::activated, ui->preview_1_btn, &QPushButton::click);
 	connect(ui->input1_display, &JPEGFrameView::clicked, ui->preview_1_btn, &QPushButton::click);
 	connect(ui->preview_1_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(0); });
+	ui->input1_display->set_overlay("1");
 
 	QShortcut *preview_2 = new QShortcut(QKeySequence(Qt::Key_2), this);
 	connect(preview_2, &QShortcut::activated, ui->preview_2_btn, &QPushButton::click);
 	connect(ui->input2_display, &JPEGFrameView::clicked, ui->preview_2_btn, &QPushButton::click);
 	connect(ui->preview_2_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(1); });
+	ui->input2_display->set_overlay("2");
 
 	QShortcut *preview_3 = new QShortcut(QKeySequence(Qt::Key_3), this);
 	connect(preview_3, &QShortcut::activated, ui->preview_3_btn, &QPushButton::click);
 	connect(ui->input3_display, &JPEGFrameView::clicked, ui->preview_3_btn, &QPushButton::click);
 	connect(ui->preview_3_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(2); });
+	ui->input3_display->set_overlay("3");
 
 	QShortcut *preview_4 = new QShortcut(QKeySequence(Qt::Key_4), this);
 	connect(preview_4, &QShortcut::activated, ui->preview_4_btn, &QPushButton::click);
 	connect(ui->input4_display, &JPEGFrameView::clicked, ui->preview_4_btn, &QPushButton::click);
 	connect(ui->preview_4_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(3); });
+	ui->input4_display->set_overlay("4");
 
 	connect(ui->playlist_duplicate_btn, &QPushButton::clicked, this, &MainWindow::playlist_duplicate);
 

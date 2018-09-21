@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <movit/effect_chain.h>
+#include <movit/flat_input.h>
 #include <movit/ycbcr_input.h>
 
 #include <memory>
@@ -45,7 +46,7 @@ public:
 	unsigned get_stream_idx() const { return current_stream_idx; }
 
 	void setDecodedFrame(std::shared_ptr<Frame> frame);
-
+	void set_overlay(const std::string &text);  // Blank for none.
 
 signals:
 	void clicked();
@@ -63,6 +64,12 @@ private:
 	std::shared_ptr<Frame> current_frame;  // So that we hold on to the pixels.
 	movit::YCbCrInput *ycbcr_input;
 	movit::YCbCrFormat ycbcr_format;
+
+	static constexpr int overlay_width = 16, overlay_height = 16;
+	std::unique_ptr<QImage> overlay_image;  // If nullptr, no overlay.
+	std::unique_ptr<movit::EffectChain> overlay_chain;  // Just to get the overlay on screen in the easiest way possible.
+	movit::FlatInput *overlay_input;
+	bool overlay_input_needs_refresh = false;
 };
 
 #endif  // !defined(_JPEG_FRAME_VIEW_H)
