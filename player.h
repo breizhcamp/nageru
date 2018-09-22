@@ -28,6 +28,11 @@ public:
 	using done_callback_func = std::function<void()>;
 	void set_done_callback(done_callback_func cb) { done_callback = cb; }
 
+	// Not thread-safe to set concurrently with playing.
+	// Will be called back from the player thread.
+	using progress_callback_func = std::function<void(double played_this_clip, double total_length)>;
+	void set_progress_callback(progress_callback_func cb) { progress_callback = cb; }
+
 private:
 	void thread_func(bool also_output_to_stream);
 	void open_output_stream();
@@ -36,6 +41,7 @@ private:
 
 	JPEGFrameView *destination;
 	done_callback_func done_callback;
+	progress_callback_func progress_callback;
 
 	std::mutex mu;
 	Clip current_clip;  // Under mu. Can have pts_in = -1 for no clip.

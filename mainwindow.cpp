@@ -3,6 +3,7 @@
 #include "clip_list.h"
 #include "player.h"
 #include "post_to_main_thread.h"
+#include "timebase.h"
 #include "ui_mainwindow.h"
 
 #include <string>
@@ -105,6 +106,11 @@ MainWindow::MainWindow()
 	live_player->set_done_callback([this]{
 		post_to_main_thread([this]{
 			live_player_clip_done();
+		});
+	});
+	live_player->set_progress_callback([this](double played_this_clip, double total_length) {
+		post_to_main_thread([this, played_this_clip, total_length] {
+			live_player_clip_progress(played_this_clip, total_length);
 		});
 	});
 }
@@ -263,7 +269,28 @@ void MainWindow::live_player_clip_done()
 		playlist_clips->set_currently_playing(row);
 	} else {
 		playlist_clips->set_currently_playing(-1);
+		ui->live_label->setText("Current output (paused)");
 	}
+}
+
+void MainWindow::live_player_clip_progress(double played_this_clip, double total_length)
+{
+	double remaining = total_length - played_this_clip;
+	for (int row = playlist_clips->get_currently_playing() + 1; row < int(playlist_clips->size()); ++row) {
+		const Clip clip = *playlist_clips->clip(row);
+		remaining += double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;   // FIXME: stop hardcoding speed.
+	}
+	int remaining_ms = lrint(remaining * 1e3);
+
+	int ms = remaining_ms % 1000;
+	remaining_ms /= 1000;
+	int s = remaining_ms % 60;
+	remaining_ms /= 60;
+	int m = remaining_ms;
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "Current output (%d:%02d.%03d left)", m, s, ms);
+	ui->live_label->setText(buf);
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)

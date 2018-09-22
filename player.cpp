@@ -136,6 +136,13 @@ void Player::thread_func(bool also_output_to_stream)
 				}
 			}
 
+			if (progress_callback != nullptr) {
+				// NOTE: None of this will take into account any snapping done below.
+				double played_this_clip = double(in_pts - clip.pts_in) / TIMEBASE / speed;
+				double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / speed;
+				progress_callback(played_this_clip, total_length);
+			}
+
 			if (in_pts_lower == in_pts_upper) {
 				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false);
 				if (video_stream != nullptr) {

@@ -146,9 +146,9 @@
            <widget class="JPEGFrameView" name="live_display" native="true"/>
           </item>
           <item>
-           <widget class="QLabel" name="label_3">
+           <widget class="QLabel" name="live_label">
             <property name="text">
-             <string>Current output</string>
+             <string>Current output (paused)</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>

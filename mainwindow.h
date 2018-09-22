@@ -47,6 +47,7 @@ private:
 	void preview_angle_clicked(unsigned stream_idx);
 	void play_clicked();
 	void live_player_clip_done();
+	void live_player_clip_progress(double played_this_clip, double total_length);
 	void playlist_duplicate();
 	void playlist_remove();
 	void playlist_move(int delta);
