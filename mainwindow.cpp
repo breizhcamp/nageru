@@ -84,8 +84,13 @@ MainWindow::MainWindow()
 
 	connect(ui->playlist_duplicate_btn, &QPushButton::clicked, this, &MainWindow::playlist_duplicate);
 
-	// TODO: support the delete key iff the widget has focus?
 	connect(ui->playlist_remove_btn, &QPushButton::clicked, this, &MainWindow::playlist_remove);
+	QShortcut *delete_key = new QShortcut(QKeySequence(Qt::Key_Delete), ui->playlist);
+	connect(delete_key, &QShortcut::activated, [this] {
+		if (ui->playlist->hasFocus()) {
+			playlist_remove();
+		}
+	});
 
 	// TODO: support drag-and-drop.
 	connect(ui->playlist_move_up_btn, &QPushButton::clicked, [this]{ playlist_move(-1); });
