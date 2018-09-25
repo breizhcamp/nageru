@@ -150,13 +150,16 @@ void MainWindow::queue_clicked()
 	}
 
 	QModelIndex index = selected->currentIndex();
+	Clip clip = *cliplist_clips->clip(index.row());
 	if (index.column() >= int(ClipList::Column::CAMERA_1) &&
 	    index.column() <= int(ClipList::Column::CAMERA_4)) {
-		Clip clip = *cliplist_clips->clip(index.row());
 		clip.stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
-		playlist_clips->add_clip(clip);
-		playlist_selection_changed();
+	} else {
+		clip.stream_idx = ui->preview_display->get_stream_idx();
 	}
+
+	playlist_clips->add_clip(clip);
+	playlist_selection_changed();
 }
 
 void MainWindow::preview_clicked()
@@ -170,11 +173,14 @@ void MainWindow::preview_clicked()
 	}
 
 	QModelIndex index = selected->currentIndex();
+	unsigned stream_idx;
 	if (index.column() >= int(ClipList::Column::CAMERA_1) &&
 	    index.column() <= int(ClipList::Column::CAMERA_4)) {
-		unsigned stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
-		preview_player->play_clip(*cliplist_clips->clip(index.row()), stream_idx);
+		stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
+	} else {
+		stream_idx = ui->preview_display->get_stream_idx();
 	}
+	preview_player->play_clip(*cliplist_clips->clip(index.row()), stream_idx);
 }
 
 void MainWindow::preview_angle_clicked(unsigned stream_idx)

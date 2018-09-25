@@ -58,7 +58,7 @@ protected:
 
 private:
 	// The stream index of the latest frame we displayed.
-	unsigned current_stream_idx;
+	unsigned current_stream_idx = 0;
 
 	std::unique_ptr<movit::EffectChain> chain;
 	std::shared_ptr<Frame> current_frame;  // So that we hold on to the pixels.
