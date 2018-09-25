@@ -65,11 +65,14 @@ private:
 	movit::YCbCrInput *ycbcr_input;
 	movit::YCbCrFormat ycbcr_format;
 
-	static constexpr int overlay_width = 16, overlay_height = 16;
+	static constexpr int overlay_base_width = 16, overlay_base_height = 16;
+	int overlay_width = overlay_base_width, overlay_height = overlay_base_height;
 	std::unique_ptr<QImage> overlay_image;  // If nullptr, no overlay.
 	std::unique_ptr<movit::EffectChain> overlay_chain;  // Just to get the overlay on screen in the easiest way possible.
 	movit::FlatInput *overlay_input;
 	bool overlay_input_needs_refresh = false;
+
+	int gl_width, gl_height;
 };
 
 #endif  // !defined(_JPEG_FRAME_VIEW_H)

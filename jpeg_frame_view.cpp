@@ -12,6 +12,7 @@
 #include <utility>
 
 #include <QMouseEvent>
+#include <QScreen>
 
 #include <movit/resource_pool.h>
 #include <movit/init.h>
@@ -324,8 +325,8 @@ void JPEGFrameView::initializeGL()
 	chain->finalize();
 	check_error();
 
-	overlay_chain.reset(new EffectChain(overlay_width, overlay_height, resource_pool));
-	overlay_input = (movit::FlatInput *)overlay_chain->add_input(new FlatInput(image_format, FORMAT_GRAYSCALE, GL_UNSIGNED_BYTE, overlay_width, overlay_height));
+	overlay_chain.reset(new EffectChain(overlay_base_width, overlay_base_height, resource_pool));
+	overlay_input = (movit::FlatInput *)overlay_chain->add_input(new FlatInput(image_format, FORMAT_GRAYSCALE, GL_UNSIGNED_BYTE, overlay_base_width, overlay_base_height));
 
 	overlay_chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
 	overlay_chain->finalize();
@@ -336,11 +337,15 @@ void JPEGFrameView::resizeGL(int width, int height)
 	check_error();
 	glViewport(0, 0, width, height);
 	check_error();
+
+	// Save these, as width() and height() will lie with DPI scaling.
+	gl_width = width;
+	gl_height = height;
 }
 
 void JPEGFrameView::paintGL()
 {
-	glViewport(0, 0, width(), height());
+	glViewport(0, 0, gl_width, gl_height);
 	if (current_frame == nullptr) {
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -352,9 +357,11 @@ void JPEGFrameView::paintGL()
 
 	if (overlay_image != nullptr) {
 		if (overlay_input_needs_refresh) {
+			overlay_input->set_width(overlay_width);
+			overlay_input->set_height(overlay_height);
 			overlay_input->set_pixel_data(overlay_image->bits());
 		}
-		glViewport(width() - overlay_width, 0, overlay_width, overlay_height);
+		glViewport(gl_width - overlay_width, 0, overlay_width, overlay_height);
 		overlay_chain->render_to_screen();
 	}
 }
@@ -392,7 +399,12 @@ void JPEGFrameView::set_overlay(const string &text)
 		return;
 	}
 
+	float dpr = QGuiApplication::primaryScreen()->devicePixelRatio();
+	overlay_width = lrint(overlay_base_width * dpr);
+	overlay_height = lrint(overlay_base_height * dpr);
+
 	overlay_image.reset(new QImage(overlay_width, overlay_height, QImage::Format_Grayscale8));
+	overlay_image->setDevicePixelRatio(dpr);
 	overlay_image->fill(0);
 	QPainter painter(overlay_image.get());
 
@@ -401,7 +413,7 @@ void JPEGFrameView::set_overlay(const string &text)
 	font.setPointSize(12);
 	painter.setFont(font);
 
-	painter.drawText(QRectF(0, 0, overlay_width, overlay_height), Qt::AlignCenter, QString::fromStdString(text));
+	painter.drawText(QRectF(0, 0, overlay_base_width, overlay_base_height), Qt::AlignCenter, QString::fromStdString(text));
 
 	// Don't refresh immediately; we might not have an OpenGL context here.
 	overlay_input_needs_refresh = true;
