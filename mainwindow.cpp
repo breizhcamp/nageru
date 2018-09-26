@@ -310,7 +310,8 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 void MainWindow::relayout()
 {
-	ui->live_display->setMinimumHeight(ui->live_display->width() * 9 / 16);
+	ui->live_display->setMinimumWidth(ui->live_display->height() * 16 / 9);
+	ui->preview_display->setMinimumWidth(ui->preview_display->height() * 16 / 9);
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
