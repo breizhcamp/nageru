@@ -129,6 +129,23 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const {
 			return Qt::AlignLeft + Qt::AlignVCenter;
 		}
 	}
+	if (role == Qt::BackgroundRole) {
+		if (Column(column) == Column::PLAYING) {
+			if (row == currently_playing_index) {
+				// This only really works well for the first column, for whatever odd Qt reason.
+				QLinearGradient grad(QPointF(0, 0), QPointF(1, 0));
+				grad.setCoordinateMode(grad.QGradient::ObjectBoundingMode);
+				grad.setColorAt(0.0f, QColor::fromRgbF(0.0f, 0.0f, 1.0f, 0.2f));
+				grad.setColorAt(play_progress, QColor::fromRgbF(0.0f, 0.0f, 1.0f, 0.2f));
+				grad.setColorAt(play_progress + 0.01f, QColor::fromRgbF(0.0f, 0.0f, 1.0f, 0.0f));
+				return QBrush(grad);
+			} else {
+				return QVariant();
+			}
+		} else {
+			return QVariant();
+		}
+	}
 
 	if (role != Qt::DisplayRole && role != Qt::EditRole)
 		return QVariant();
@@ -353,16 +370,21 @@ void PlayList::emit_data_changed(size_t row)
 	emit dataChanged(index(row, 0), index(row, int(Column::NUM_COLUMNS)));
 }
 
-void PlayList::set_currently_playing(int index)
+void PlayList::set_currently_playing(int index, double progress)
 {
 	int old_index = currently_playing_index;
+	int column = int(Column::PLAYING);
 	if (index != old_index) {
 		currently_playing_index = index;
+		play_progress = progress;
 		if (old_index != -1) {
-			emit_data_changed(old_index);
+			emit dataChanged(this->index(old_index, column), this->index(old_index, column));
 		}
 		if (index != -1) {
-			emit_data_changed(index);
+			emit dataChanged(this->index(index, column), this->index(index, column));
 		}
+	} else if (index != -1 && fabs(progress - play_progress) > 1e-3) {
+		play_progress = progress;
+		emit dataChanged(this->index(index, column), this->index(index, column));
 	}
 }

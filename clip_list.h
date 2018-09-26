@@ -120,7 +120,7 @@ public:
 	ClipProxy mutable_back() { return mutable_clip(size() - 1); }
 	const Clip *back() const { return clip(size() - 1); }
 
-	void set_currently_playing(int index);  // -1 = none.
+	void set_currently_playing(int index, double progress);  // -1 = none.
 	int get_currently_playing() const { return currently_playing_index; }
 
 	void emit_data_changed(size_t row) override;
@@ -128,6 +128,7 @@ public:
 private:
 	std::vector<Clip> clips;
 	int currently_playing_index = -1;
+	double play_progress = 0.0;
 };
 
 #endif  // !defined (_CLIP_LIST_H)

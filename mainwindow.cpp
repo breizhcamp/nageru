@@ -261,7 +261,7 @@ void MainWindow::play_clicked()
 
 	const Clip &clip = *playlist_clips->clip(row);
 	live_player->play_clip(clip, clip.stream_idx);
-	playlist_clips->set_currently_playing(row);
+	playlist_clips->set_currently_playing(row, 0.0f);
 	playlist_selection_changed();
 }
 
@@ -272,15 +272,17 @@ void MainWindow::live_player_clip_done()
 		++row;
 		const Clip &clip = *playlist_clips->clip(row);
 		live_player->play_clip(clip, clip.stream_idx);
-		playlist_clips->set_currently_playing(row);
+		playlist_clips->set_currently_playing(row, 0.0f);
 	} else {
-		playlist_clips->set_currently_playing(-1);
+		playlist_clips->set_currently_playing(-1, 0.0f);
 		ui->live_label->setText("Current output (paused)");
 	}
 }
 
 void MainWindow::live_player_clip_progress(double played_this_clip, double total_length)
 {
+	playlist_clips->set_currently_playing(playlist_clips->get_currently_playing(), played_this_clip / total_length);
+
 	double remaining = total_length - played_this_clip;
 	for (int row = playlist_clips->get_currently_playing() + 1; row < int(playlist_clips->size()); ++row) {
 		const Clip clip = *playlist_clips->clip(row);
