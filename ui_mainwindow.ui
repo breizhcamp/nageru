@@ -21,11 +21,11 @@
        <enum>Qt::Vertical</enum>
       </property>
       <widget class="QWidget" name="horizontalLayoutWidget">
-       <layout class="QHBoxLayout" name="horizontalLayout">
+       <layout class="QHBoxLayout" name="video_displays">
         <item>
-         <layout class="QVBoxLayout" name="verticalLayout_3" stretch="1,0">
+         <layout class="QVBoxLayout" name="input_pane" stretch="1,0">
           <item>
-           <layout class="QGridLayout" name="gridLayout_2">
+           <layout class="QGridLayout" name="input_displays">
             <item row="1" column="0">
              <widget class="JPEGFrameView" name="input3_display" native="true"/>
             </item>
@@ -141,7 +141,7 @@
          </layout>
         </item>
         <item>
-         <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1,0">
+         <layout class="QVBoxLayout" name="live_pane" stretch="1,0">
           <item>
            <widget class="JPEGFrameView" name="live_display" native="true"/>
           </item>
@@ -160,7 +160,7 @@
        </layout>
       </widget>
       <widget class="QWidget" name="verticalLayoutWidget_4">
-       <layout class="QVBoxLayout" name="verticalLayout_4">
+       <layout class="QVBoxLayout" name="clip_and_play_lists">
         <item>
          <widget class="QTableView" name="clip_list"/>
         </item>
