@@ -68,10 +68,10 @@ public:
 	size_t size() const { return clips.size(); }
 	bool empty() const { return clips.empty(); }
 
-	ClipProxy clip(size_t index) { return ClipProxy(clips[index], this, index); }
+	ClipProxy mutable_clip(size_t index) { return ClipProxy(clips[index], this, index); }
 	const Clip *clip(size_t index) const { return &clips[index]; }
 
-	ClipProxy back() { return clip(size() - 1); }
+	ClipProxy mutable_back() { return mutable_clip(size() - 1); }
 	const Clip *back() const { return clip(size() - 1); }
 
 	void emit_data_changed(size_t row) override;
@@ -114,10 +114,10 @@ public:
 	size_t size() const { return clips.size(); }
 	bool empty() const { return clips.empty(); }
 
-	ClipProxy clip(size_t index) { return ClipProxy(clips[index], this, index); }
+	ClipProxy mutable_clip(size_t index) { return ClipProxy(clips[index], this, index); }
 	const Clip *clip(size_t index) const { return &clips[index]; }
 
-	ClipProxy back() { return clip(size() - 1); }
+	ClipProxy mutable_back() { return mutable_clip(size() - 1); }
 	const Clip *back() const { return clip(size() - 1); }
 
 	void set_currently_playing(int index);  // -1 = none.

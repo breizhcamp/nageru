@@ -118,7 +118,7 @@ MainWindow::MainWindow()
 void MainWindow::cue_in_clicked()
 {
 	if (!cliplist_clips->empty() && cliplist_clips->back()->pts_out < 0) {
-		cliplist_clips->back()->pts_in = current_pts;
+		cliplist_clips->mutable_back()->pts_in = current_pts;
 		return;
 	}
 	Clip clip;
@@ -130,7 +130,7 @@ void MainWindow::cue_in_clicked()
 void MainWindow::cue_out_clicked()
 {
 	if (!cliplist_clips->empty()) {
-		cliplist_clips->back()->pts_out = current_pts;
+		cliplist_clips->mutable_back()->pts_out = current_pts;
 		// TODO: select the row in the clip list?
 	}
 }
@@ -388,7 +388,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			int64_t pts = scrub_pts_origin + adjusted_offset * scrub_sensitivity;
 
 			if (scrub_type == SCRUBBING_CLIP_LIST) {
-				ClipProxy clip = cliplist_clips->clip(scrub_row);
+				ClipProxy clip = cliplist_clips->mutable_clip(scrub_row);
 				if (scrub_column == int(ClipList::Column::IN)) {
 					pts = std::max<int64_t>(pts, 0);
 					pts = std::min(pts, clip->pts_out);
@@ -401,7 +401,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 					preview_single_frame(pts, stream_idx, LAST_BEFORE);
 				}
 			} else {
-				ClipProxy clip = playlist_clips->clip(scrub_row);
+				ClipProxy clip = playlist_clips->mutable_clip(scrub_row);
 				if (scrub_column == int(PlayList::Column::IN)) {
 					pts = std::max<int64_t>(pts, 0);
 					pts = std::min(pts, clip->pts_out);
@@ -442,7 +442,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		if (column == -1 || row == -1) return false;
 
 		ClipProxy clip = (watched == ui->clip_list->viewport()) ?
-			cliplist_clips->clip(row) : playlist_clips->clip(row);
+			cliplist_clips->mutable_clip(row) : playlist_clips->mutable_clip(row);
 		if (watched == ui->playlist->viewport()) {
 			stream_idx = clip->stream_idx;
 		}
