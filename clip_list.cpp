@@ -137,7 +137,9 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const {
 				grad.setCoordinateMode(grad.QGradient::ObjectBoundingMode);
 				grad.setColorAt(0.0f, QColor::fromRgbF(0.0f, 0.0f, 1.0f, 0.2f));
 				grad.setColorAt(play_progress, QColor::fromRgbF(0.0f, 0.0f, 1.0f, 0.2f));
-				grad.setColorAt(play_progress + 0.01f, QColor::fromRgbF(0.0f, 0.0f, 1.0f, 0.0f));
+				if (play_progress + 0.01f <= 1.0f) {
+					grad.setColorAt(play_progress + 0.01f, QColor::fromRgbF(0.0f, 0.0f, 1.0f, 0.0f));
+				}
 				return QBrush(grad);
 			} else {
 				return QVariant();
