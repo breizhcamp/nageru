@@ -97,6 +97,13 @@ void Player::thread_func(bool also_output_to_stream)
 			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * speed / output_framerate);
 			pts = lrint(out_pts);
 
+			steady_clock::duration time_behind = steady_clock::now() - next_frame_start;
+			if (time_behind >= milliseconds(200)) {
+				fprintf(stderr, "WARNING: %ld ms behind, dropping a frame (no matter the type).\n",
+					lrint(1e3 * duration<double>(time_behind).count()));
+				continue;
+			}
+
 			int64_t in_pts_lower, in_pts_upper;
 
 			// Find the frame immediately before and after this point.
@@ -168,6 +175,12 @@ void Player::thread_func(bool also_output_to_stream)
 					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_upper);
 				}
 				in_pts_origin += in_pts_upper - in_pts;
+				continue;
+			}
+
+			if (time_behind >= milliseconds(100)) {
+				fprintf(stderr, "WARNING: %ld ms behind, dropping an interpolated frame.\n",
+					lrint(1e3 * duration<double>(time_behind).count()));
 				continue;
 			}
 
