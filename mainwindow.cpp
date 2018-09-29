@@ -321,6 +321,17 @@ void MainWindow::relayout()
 	ui->preview_display->setMinimumWidth(ui->preview_display->height() * 16 / 9);
 }
 
+void set_pts_in(int64_t pts, int64_t current_pts, ClipProxy &clip)
+{
+	pts = std::max<int64_t>(pts, 0);
+	if (clip->pts_out == -1) {
+		pts = std::min(pts, current_pts);
+	} else {
+		pts = std::min(pts, clip->pts_out);
+	}
+	clip->pts_in = pts;
+}
+
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
 	constexpr int dead_zone_pixels = 3;  // To avoid that simple clicks get misinterpreted.
@@ -398,9 +409,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			if (scrub_type == SCRUBBING_CLIP_LIST) {
 				ClipProxy clip = cliplist_clips->mutable_clip(scrub_row);
 				if (scrub_column == int(ClipList::Column::IN)) {
-					pts = std::max<int64_t>(pts, 0);
-					pts = std::min(pts, clip->pts_out);
-					clip->pts_in = pts;
+					set_pts_in(pts, current_pts, clip);
 					preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
 				} else {
 					pts = std::max(pts, clip->pts_in);
@@ -411,9 +420,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			} else {
 				ClipProxy clip = playlist_clips->mutable_clip(scrub_row);
 				if (scrub_column == int(PlayList::Column::IN)) {
-					pts = std::max<int64_t>(pts, 0);
-					pts = std::min(pts, clip->pts_out);
-					clip->pts_in = pts;
+					set_pts_in(pts, current_pts, clip);
 					preview_single_frame(pts, clip->stream_idx, FIRST_AT_OR_AFTER);
 				} else {
 					pts = std::max(pts, clip->pts_in);
@@ -460,9 +467,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		}
 		if (column == in_column) {
 			int64_t pts = clip->pts_in + wheel->angleDelta().y() * wheel_sensitivity;
-			pts = std::max<int64_t>(pts, 0);
-			pts = std::min(pts, clip->pts_out);
-			clip->pts_in = pts;
+			set_pts_in(pts, current_pts, clip);
 			preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
 		} else if (column == out_column) {
 			int64_t pts = clip->pts_out + wheel->angleDelta().y() * wheel_sensitivity;
