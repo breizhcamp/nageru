@@ -145,7 +145,10 @@ void MainWindow::queue_clicked()
 	if (!selected->hasSelection()) {
 		Clip clip = *cliplist_clips->back();
 		clip.stream_idx = 0;
-		playlist_clips->add_clip(clip);
+		if (clip.pts_out != -1) {
+			playlist_clips->add_clip(clip);
+			playlist_selection_changed();
+		}
 		return;
 	}
 
@@ -158,8 +161,10 @@ void MainWindow::queue_clicked()
 		clip.stream_idx = ui->preview_display->get_stream_idx();
 	}
 
-	playlist_clips->add_clip(clip);
-	playlist_selection_changed();
+	if (clip.pts_out != -1) {
+		playlist_clips->add_clip(clip);
+		playlist_selection_changed();
+	}
 }
 
 void MainWindow::preview_clicked()
