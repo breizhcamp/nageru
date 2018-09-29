@@ -149,11 +149,11 @@ vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cb_data, const
 VideoStream::VideoStream()
 {
 	using namespace movit;
-	// TODO: deduplicate code against JPEGFrameView?
-	ycbcr_convert_chain.reset(new EffectChain(1280, 720));
-	ImageFormat image_format;
-	image_format.color_space = COLORSPACE_sRGB;
-	image_format.gamma_curve = GAMMA_sRGB;
+
+	ImageFormat inout_format;
+	inout_format.color_space = COLORSPACE_sRGB;
+	inout_format.gamma_curve = GAMMA_sRGB;
+
 	ycbcr_format.luma_coefficients = YCBCR_REC_709;
 	ycbcr_format.full_range = true;  // JPEG.
 	ycbcr_format.num_levels = 256;
@@ -163,28 +163,33 @@ VideoStream::VideoStream()
 	ycbcr_format.cb_y_position = 0.5f;  // Irrelevant.
 	ycbcr_format.cr_x_position = 0.0f;
 	ycbcr_format.cr_y_position = 0.5f;
-	ycbcr_input = (movit::YCbCrInput *)ycbcr_convert_chain->add_input(new YCbCrInput(image_format, ycbcr_format, 1280, 720));
 
 	YCbCrFormat ycbcr_output_format = ycbcr_format;
 	ycbcr_output_format.chroma_subsampling_x = 1;
 
-	ImageFormat inout_format;
-	inout_format.color_space = COLORSPACE_sRGB;
-	inout_format.gamma_curve = GAMMA_sRGB;
-
-	check_error();
+	// TODO: deduplicate code against JPEGFrameView?
+	ycbcr_planar_convert_chain.reset(new EffectChain(1280, 720));
+	ycbcr_planar_input = (movit::YCbCrInput *)ycbcr_planar_convert_chain->add_input(new YCbCrInput(inout_format, ycbcr_format, 1280, 720, YCBCR_INPUT_PLANAR));
 
 	// One full Y'CbCr texture (for interpolation), one that's just Y (throwing away the
 	// Cb and Cr channels). The second copy is sort of redundant, but it's the easiest way
 	// of getting the gray data into a layered texture.
-	ycbcr_convert_chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, ycbcr_output_format);
-	check_error();
-	ycbcr_convert_chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, ycbcr_output_format);
-	check_error();
-	ycbcr_convert_chain->set_dither_bits(8);
-	check_error();
-	ycbcr_convert_chain->finalize();
-	check_error();
+	ycbcr_planar_convert_chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, ycbcr_output_format);
+	ycbcr_planar_convert_chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, ycbcr_output_format);
+	ycbcr_planar_convert_chain->set_dither_bits(8);
+	ycbcr_planar_convert_chain->finalize();
+
+	// Same, for semiplanar inputs.
+	ycbcr_semiplanar_convert_chain.reset(new EffectChain(1280, 720));
+	ycbcr_semiplanar_input = (movit::YCbCrInput *)ycbcr_semiplanar_convert_chain->add_input(new YCbCrInput(inout_format, ycbcr_format, 1280, 720, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
+
+	// One full Y'CbCr texture (for interpolation), one that's just Y (throwing away the
+	// Cb and Cr channels). The second copy is sort of redundant, but it's the easiest way
+	// of getting the gray data into a layered texture.
+	ycbcr_semiplanar_convert_chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, ycbcr_output_format);
+	ycbcr_semiplanar_convert_chain->add_ycbcr_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED, ycbcr_output_format);
+	ycbcr_semiplanar_convert_chain->set_dither_bits(8);
+	ycbcr_semiplanar_convert_chain->finalize();
 
 	GLuint input_tex[num_interpolate_slots], gray_tex[num_interpolate_slots], cb_tex[num_interpolate_slots], cr_tex[num_interpolate_slots];
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 10, input_tex);
@@ -325,16 +330,28 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 		shared_ptr<Frame> frame = decode_jpeg_with_cache(jpeg_id, DECODE_IF_NOT_IN_CACHE, &did_decode);
 		ycbcr_format.chroma_subsampling_x = frame->chroma_subsampling_x;
 		ycbcr_format.chroma_subsampling_y = frame->chroma_subsampling_y;
-		ycbcr_input->change_ycbcr_format(ycbcr_format);
-		ycbcr_input->set_width(frame->width);
-		ycbcr_input->set_height(frame->height);
-		ycbcr_input->set_pixel_data(0, frame->y.get());
-		ycbcr_input->set_pixel_data(1, frame->cb.get());
-		ycbcr_input->set_pixel_data(2, frame->cr.get());
-		ycbcr_input->set_pitch(0, frame->pitch_y);
-		ycbcr_input->set_pitch(1, frame->pitch_chroma);
-		ycbcr_input->set_pitch(2, frame->pitch_chroma);
-		ycbcr_convert_chain->render_to_fbo(resources.input_fbos[frame_no], 1280, 720);
+
+		if (frame->is_semiplanar) {
+			ycbcr_semiplanar_input->change_ycbcr_format(ycbcr_format);
+			ycbcr_semiplanar_input->set_width(frame->width);
+			ycbcr_semiplanar_input->set_height(frame->height);
+			ycbcr_semiplanar_input->set_pixel_data(0, frame->y.get());
+			ycbcr_semiplanar_input->set_pixel_data(1, frame->cbcr.get());
+			ycbcr_semiplanar_input->set_pitch(0, frame->pitch_y);
+			ycbcr_semiplanar_input->set_pitch(1, frame->pitch_chroma);
+			ycbcr_semiplanar_convert_chain->render_to_fbo(resources.input_fbos[frame_no], 1280, 720);
+		} else {
+			ycbcr_planar_input->change_ycbcr_format(ycbcr_format);
+			ycbcr_planar_input->set_width(frame->width);
+			ycbcr_planar_input->set_height(frame->height);
+			ycbcr_planar_input->set_pixel_data(0, frame->y.get());
+			ycbcr_planar_input->set_pixel_data(1, frame->cb.get());
+			ycbcr_planar_input->set_pixel_data(2, frame->cr.get());
+			ycbcr_planar_input->set_pitch(0, frame->pitch_y);
+			ycbcr_planar_input->set_pitch(1, frame->pitch_chroma);
+			ycbcr_planar_input->set_pitch(2, frame->pitch_chroma);
+			ycbcr_planar_convert_chain->render_to_fbo(resources.input_fbos[frame_no], 1280, 720);
+		}
 	}
 
 	glGenerateTextureMipmap(resources.input_tex);
@@ -426,6 +443,7 @@ void VideoStream::encode_thread_func()
 				memcpy(frame->cb.get() + 640 * yy, cb + 640 * (719 - yy), 640);
 				memcpy(frame->cr.get() + 640 * yy, cr + 640 * (719 - yy), 640);
 			}
+			frame->is_semiplanar = false;
 			frame->width = 1280;
 			frame->height = 720;
 			frame->chroma_subsampling_x = 2;

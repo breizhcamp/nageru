@@ -12,16 +12,12 @@
 
 #include <memory>
 
+#include "jpeg_frame.h"
+
 struct JPEGID {
 	unsigned stream_idx;
 	int64_t pts;
 	bool interpolated;
-};
-struct Frame {
-	std::unique_ptr<uint8_t[]> y, cb, cr;
-	unsigned width, height;
-	unsigned chroma_subsampling_x, chroma_subsampling_y;
-	unsigned pitch_y, pitch_chroma;
 };
 enum CacheMissBehavior {
 	DECODE_IF_NOT_IN_CACHE,
@@ -60,10 +56,13 @@ private:
 	// The stream index of the latest frame we displayed.
 	unsigned current_stream_idx = 0;
 
-	std::unique_ptr<movit::EffectChain> chain;
+	std::unique_ptr<movit::EffectChain> planar_chain;
 	std::shared_ptr<Frame> current_frame;  // So that we hold on to the pixels.
-	movit::YCbCrInput *ycbcr_input;
+	movit::YCbCrInput *ycbcr_planar_input;
 	movit::YCbCrFormat ycbcr_format;
+
+	std::unique_ptr<movit::EffectChain> semiplanar_chain;
+	movit::YCbCrInput *ycbcr_semiplanar_input;
 
 	static constexpr int overlay_base_width = 16, overlay_base_height = 16;
 	int overlay_width = overlay_base_width, overlay_height = overlay_base_height;

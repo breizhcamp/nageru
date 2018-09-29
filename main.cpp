@@ -30,6 +30,7 @@ extern "C" {
 #include "ref_counted_gl_sync.h"
 #include "timebase.h"
 #include "ui_mainwindow.h"
+#include "vaapi_jpeg_decoder.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -96,6 +97,8 @@ int main(int argc, char **argv)
 	mainWindow.show();
 
 	thread(record_thread_func).detach();
+
+	init_jpeg_vaapi();
 
 	return app.exec();
 }

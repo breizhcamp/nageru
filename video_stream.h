@@ -82,9 +82,11 @@ private:
 
 	// Effectively only converts from 4:2:2 to 4:4:4.
 	// TODO: Have a separate version with ResampleEffect, for scaling?
-	std::unique_ptr<movit::EffectChain> ycbcr_convert_chain;
+	std::unique_ptr<movit::EffectChain> ycbcr_planar_convert_chain;
+	std::unique_ptr<movit::EffectChain> ycbcr_semiplanar_convert_chain;
 
-	movit::YCbCrInput *ycbcr_input;
+	movit::YCbCrInput *ycbcr_planar_input;
+	movit::YCbCrInput *ycbcr_semiplanar_input;
 	movit::YCbCrFormat ycbcr_format;
 
 	// Frame interpolation.

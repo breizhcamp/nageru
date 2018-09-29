@@ -3,7 +3,7 @@ PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL Qt5PrintS
 CXXFLAGS ?= -O2 -g -Wall  # Will be overridden by environment.
 CXXFLAGS += -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -pthread
 
-LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lavformat -lavcodec -lavutil -lswscale -lGL
+LDLIBS=$(shell pkg-config --libs $(PKG_MODULES)) -pthread -lavformat -lavcodec -lavutil -lswscale -lGL -lva -lva-drm -lva-x11 -lX11
 
 # Qt objects
 OBJS_WITH_MOC = mainwindow.o jpeg_frame_view.o clip_list.o
@@ -14,6 +14,7 @@ OBJS += $(OBJS_WITH_MOC:.o=.moc.o)
 OBJS += flow.o gpu_timers.o
 
 OBJS += ffmpeg_raii.o main.o player.o httpd.o mux.o metacube2.o video_stream.o context.o chroma_subsampler.o
+OBJS += vaapi_jpeg_decoder.o memcpy_interleaved.o
 
 %.o: %.cpp
 	$(CXX) -MMD -MP $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<
