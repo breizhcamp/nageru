@@ -9,6 +9,7 @@
 #include <string>
 
 #include "defs.h"
+#include "state.pb.h"
 
 struct Clip {
 	int64_t pts_in = -1, pts_out = -1;  // pts_in is inclusive, pts_out is exclusive.
@@ -44,7 +45,7 @@ class ClipList : public QAbstractTableModel, public DataChangedReceiver {
 	Q_OBJECT
 
 public:
-	ClipList() {}
+	explicit ClipList(const ClipListProto &serialized);
 
 	enum class Column {
 		IN,
@@ -74,7 +75,12 @@ public:
 	ClipProxy mutable_back() { return mutable_clip(size() - 1); }
 	const Clip *back() const { return clip(size() - 1); }
 
+	ClipListProto serialize() const;
+
 	void emit_data_changed(size_t row) override;
+
+signals:
+	void any_content_changed();
 
 private:
 	std::vector<Clip> clips;
@@ -84,7 +90,7 @@ class PlayList : public QAbstractTableModel, public DataChangedReceiver {
 	Q_OBJECT
 
 public:
-	PlayList() {}
+	explicit PlayList(const ClipListProto &serialized);
 
 	enum class Column {
 		PLAYING,
@@ -123,7 +129,12 @@ public:
 	void set_currently_playing(int index, double progress);  // -1 = none.
 	int get_currently_playing() const { return currently_playing_index; }
 
+	ClipListProto serialize() const;
+
 	void emit_data_changed(size_t row) override;
+
+signals:
+	void any_content_changed();
 
 private:
 	std::vector<Clip> clips;

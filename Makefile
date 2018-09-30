@@ -1,5 +1,6 @@
 CXX=g++
-PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL Qt5PrintSupport libjpeg movit libmicrohttpd
+PROTOC=protoc
+PKG_MODULES := Qt5Core Qt5Gui Qt5Widgets Qt5OpenGLExtensions Qt5OpenGL Qt5PrintSupport libjpeg movit libmicrohttpd protobuf sqlite3
 CXXFLAGS ?= -O2 -g -Wall  # Will be overridden by environment.
 CXXFLAGS += -fPIC $(shell pkg-config --cflags $(PKG_MODULES)) -DMOVIT_SHADER_DIR=\"$(shell pkg-config --variable=shaderdir movit)\" -pthread
 
@@ -14,7 +15,8 @@ OBJS += $(OBJS_WITH_MOC:.o=.moc.o)
 OBJS += flow.o gpu_timers.o
 
 OBJS += ffmpeg_raii.o main.o player.o httpd.o mux.o metacube2.o video_stream.o context.o chroma_subsampler.o
-OBJS += vaapi_jpeg_decoder.o memcpy_interleaved.o
+OBJS += vaapi_jpeg_decoder.o memcpy_interleaved.o db.o
+OBJS += state.pb.o
 
 %.o: %.cpp
 	$(CXX) -MMD -MP $(CPPFLAGS) $(CXXFLAGS) -o $@ -c $<
@@ -33,6 +35,10 @@ all: futatabi flow vis eval
 
 mainwindow.o: ui_mainwindow.h
 
+clip_list.h: state.pb.h
+
+db.h: state.pb.h
+
 futatabi: $(OBJS) $(CEF_LIBS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 flow: flow.o flow_main.o gpu_timers.o
@@ -46,4 +52,4 @@ DEPS=$(OBJS:.o=.d)
 -include $(DEPS)
 
 clean:
-	$(RM) $(OBJS) $(DEPS) flow_main.o gpu_timers.o futatabi $(OBJS_WITH_MOC:.o=.moc.cpp)
+	$(RM) $(OBJS) $(DEPS) flow_main.o gpu_timers.o futatabi $(OBJS_WITH_MOC:.o=.moc.cpp) *.pb.cc *.pb.h

@@ -12,6 +12,9 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QShortcut>
+#include <QTimer>
+
+#include <sqlite3.h>
 
 using namespace std;
 
@@ -24,16 +27,21 @@ extern mutex frame_mu;
 extern vector<int64_t> frames[MAX_STREAMS];
 
 MainWindow::MainWindow()
-	: ui(new Ui::MainWindow)
+	: ui(new Ui::MainWindow),
+	  db("futatabi.db")
 {
 	global_mainwindow = this;
 	ui->setupUi(this);
 
-	cliplist_clips = new ClipList();
-	ui->clip_list->setModel(cliplist_clips);
+	StateProto state = db.get_state();
 
-	playlist_clips = new PlayList();
+	cliplist_clips = new ClipList(state.clip_list());
+	ui->clip_list->setModel(cliplist_clips);
+	connect(cliplist_clips, &ClipList::any_content_changed, this, &MainWindow::content_changed);
+
+	playlist_clips = new PlayList(state.play_list());
 	ui->playlist->setModel(playlist_clips);
+	connect(playlist_clips, &PlayList::any_content_changed, this, &MainWindow::content_changed);
 
 	// For scrubbing in the pts columns.
 	ui->clip_list->viewport()->installEventFilter(this);
@@ -113,6 +121,10 @@ MainWindow::MainWindow()
 			live_player_clip_progress(played_this_clip, total_length);
 		});
 	});
+
+	defer_timeout = new QTimer(this);
+	defer_timeout->setSingleShot(true);
+	connect(defer_timeout, &QTimer::timeout, this, &MainWindow::defer_timer_expired);
 }
 
 void MainWindow::cue_in_clicked()
@@ -250,6 +262,37 @@ void MainWindow::playlist_move(int delta)
 
 	playlist_clips->move_clips(first, last, delta);
 	playlist_selection_changed();
+}
+
+void MainWindow::defer_timer_expired()
+{
+	state_changed(deferred_state);
+}
+
+void MainWindow::content_changed()
+{
+	if (defer_timeout->isActive() &&
+	    (!currently_deferring_model_changes || deferred_change_id != current_change_id)) {
+		// There's some deferred event waiting, but this event is unrelated.
+		// So it's time to short-circuit that timer and do the work it wanted to do.
+		defer_timeout->stop();
+		state_changed(deferred_state);
+	}
+	StateProto state;
+	*state.mutable_clip_list() = cliplist_clips->serialize();
+	*state.mutable_play_list() = playlist_clips->serialize();
+	if (currently_deferring_model_changes) {
+		deferred_change_id = current_change_id;
+		deferred_state = std::move(state);
+		defer_timeout->start(200);
+		return;
+	}
+	state_changed(state);
+}
+
+void MainWindow::state_changed(const StateProto &state)
+{
+	db.store_state(state);
 }
 
 void MainWindow::play_clicked()
@@ -405,13 +448,15 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			}
 
 			int64_t pts = scrub_pts_origin + adjusted_offset * scrub_sensitivity;
-
+			currently_deferring_model_changes = true;
 			if (scrub_type == SCRUBBING_CLIP_LIST) {
 				ClipProxy clip = cliplist_clips->mutable_clip(scrub_row);
 				if (scrub_column == int(ClipList::Column::IN)) {
+					current_change_id = "cliplist:in:" + to_string(scrub_row);
 					set_pts_in(pts, current_pts, clip);
 					preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
 				} else {
+					current_change_id = "cliplist:out" + to_string(scrub_row);
 					pts = std::max(pts, clip->pts_in);
 					pts = std::min(pts, current_pts);
 					clip->pts_out = pts;
@@ -420,15 +465,18 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			} else {
 				ClipProxy clip = playlist_clips->mutable_clip(scrub_row);
 				if (scrub_column == int(PlayList::Column::IN)) {
+					current_change_id = "playlist:in:" + to_string(scrub_row);
 					set_pts_in(pts, current_pts, clip);
 					preview_single_frame(pts, clip->stream_idx, FIRST_AT_OR_AFTER);
 				} else {
+					current_change_id = "playlist:out:" + to_string(scrub_row);
 					pts = std::max(pts, clip->pts_in);
 					pts = std::min(pts, current_pts);
 					clip->pts_out = pts;
 					preview_single_frame(pts, clip->stream_idx, LAST_BEFORE);
 				}
 			}
+			currently_deferring_model_changes = false;
 
 			return true;  // Don't use this mouse movement for selecting things.
 		}
@@ -456,41 +504,49 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		int row = destination->rowAt(wheel->y());
 		if (column == -1 || row == -1) return false;
 
-		ClipProxy clip = (watched == ui->clip_list->viewport()) ?
-			cliplist_clips->mutable_clip(row) : playlist_clips->mutable_clip(row);
-		if (watched == ui->playlist->viewport()) {
-			stream_idx = clip->stream_idx;
-		}
-
-		if (column != camera_column) {
-			last_mousewheel_camera_row = -1;
-		}
-		if (column == in_column) {
-			int64_t pts = clip->pts_in + wheel->angleDelta().y() * wheel_sensitivity;
-			set_pts_in(pts, current_pts, clip);
-			preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
-		} else if (column == out_column) {
-			int64_t pts = clip->pts_out + wheel->angleDelta().y() * wheel_sensitivity;
-			pts = std::max(pts, clip->pts_in);
-			pts = std::min(pts, current_pts);
-			clip->pts_out = pts;
-			preview_single_frame(pts, stream_idx, LAST_BEFORE);
-		} else if (column == camera_column) {
-			int angle_degrees = wheel->angleDelta().y();
-			if (last_mousewheel_camera_row == row) {
-				angle_degrees += leftover_angle_degrees;
+		currently_deferring_model_changes = true;
+		{
+			current_change_id = (watched == ui->clip_list->viewport()) ? "cliplist:" : "playlist:";
+			ClipProxy clip = (watched == ui->clip_list->viewport()) ?
+				cliplist_clips->mutable_clip(row) : playlist_clips->mutable_clip(row);
+			if (watched == ui->playlist->viewport()) {
+				stream_idx = clip->stream_idx;
 			}
 
-			int stream_idx = clip->stream_idx + angle_degrees / camera_degrees_per_pixel;
-			stream_idx = std::max(stream_idx, 0);
-			stream_idx = std::min(stream_idx, NUM_CAMERAS - 1);
-			clip->stream_idx = stream_idx;
+			if (column != camera_column) {
+				last_mousewheel_camera_row = -1;
+			}
+			if (column == in_column) {
+				current_change_id += "in:" + to_string(row);
+				int64_t pts = clip->pts_in + wheel->angleDelta().y() * wheel_sensitivity;
+				set_pts_in(pts, current_pts, clip);
+				preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
+			} else if (column == out_column) {
+				current_change_id += "out:" + to_string(row);
+				int64_t pts = clip->pts_out + wheel->angleDelta().y() * wheel_sensitivity;
+				pts = std::max(pts, clip->pts_in);
+				pts = std::min(pts, current_pts);
+				clip->pts_out = pts;
+				preview_single_frame(pts, stream_idx, LAST_BEFORE);
+			} else if (column == camera_column) {
+				current_change_id += "camera:" + to_string(row);
+				int angle_degrees = wheel->angleDelta().y();
+				if (last_mousewheel_camera_row == row) {
+					angle_degrees += leftover_angle_degrees;
+				}
 
-			last_mousewheel_camera_row = row;
-			leftover_angle_degrees = angle_degrees % camera_degrees_per_pixel;
+				int stream_idx = clip->stream_idx + angle_degrees / camera_degrees_per_pixel;
+				stream_idx = std::max(stream_idx, 0);
+				stream_idx = std::min(stream_idx, NUM_CAMERAS - 1);
+				clip->stream_idx = stream_idx;
 
-			// Don't update the live view, that's rarely what the operator wants.
+				last_mousewheel_camera_row = row;
+				leftover_angle_degrees = angle_degrees % camera_degrees_per_pixel;
+
+				// Don't update the live view, that's rarely what the operator wants.
+			}
 		}
+		currently_deferring_model_changes = false;
 	} else if (event->type() == QEvent::MouseButtonRelease) {
 		scrubbing = false;
 	}

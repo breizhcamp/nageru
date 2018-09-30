@@ -325,6 +325,7 @@ void ClipList::add_clip(const Clip &clip)
 	beginInsertRows(QModelIndex(), clips.size(), clips.size());
 	clips.push_back(clip);
 	endInsertRows();
+	emit any_content_changed();
 }
 
 void PlayList::add_clip(const Clip &clip)
@@ -332,6 +333,7 @@ void PlayList::add_clip(const Clip &clip)
 	beginInsertRows(QModelIndex(), clips.size(), clips.size());
 	clips.push_back(clip);
 	endInsertRows();
+	emit any_content_changed();
 }
 
 void PlayList::duplicate_clips(size_t first, size_t last)
@@ -339,6 +341,7 @@ void PlayList::duplicate_clips(size_t first, size_t last)
 	beginInsertRows(QModelIndex(), first, last);
 	clips.insert(clips.begin() + first, clips.begin() + first, clips.begin() + last + 1);
 	endInsertRows();
+	emit any_content_changed();
 }
 
 void PlayList::erase_clips(size_t first, size_t last)
@@ -346,6 +349,7 @@ void PlayList::erase_clips(size_t first, size_t last)
 	beginRemoveRows(QModelIndex(), first, last);
 	clips.erase(clips.begin() + first, clips.begin() + last + 1);
 	endRemoveRows();
+	emit any_content_changed();
 }
 
 void PlayList::move_clips(size_t first, size_t last, int delta)
@@ -360,16 +364,19 @@ void PlayList::move_clips(size_t first, size_t last, int delta)
 		rotate(clips.rbegin() + last - 1, clips.rbegin() + last, clips.rbegin() + first + 1);
 	}
 	endMoveRows();
+	emit any_content_changed();
 }
 
 void ClipList::emit_data_changed(size_t row)
 {
 	emit dataChanged(index(row, 0), index(row, int(Column::NUM_COLUMNS)));
+	emit any_content_changed();
 }
 
 void PlayList::emit_data_changed(size_t row)
 {
 	emit dataChanged(index(row, 0), index(row, int(Column::NUM_COLUMNS)));
+	emit any_content_changed();
 }
 
 void PlayList::set_currently_playing(int index, double progress)
@@ -389,4 +396,62 @@ void PlayList::set_currently_playing(int index, double progress)
 		play_progress = progress;
 		emit dataChanged(this->index(index, column), this->index(index, column));
 	}
+}
+
+namespace {
+
+Clip deserialize_clip(const ClipProto &clip_proto)
+{
+	Clip clip;
+	clip.pts_in = clip_proto.pts_in();
+	clip.pts_out = clip_proto.pts_out();
+	for (int camera_idx = 0; camera_idx < min(clip_proto.description_size(), NUM_CAMERAS); ++camera_idx) {
+		clip.descriptions[camera_idx] = clip_proto.description(camera_idx);
+	}
+	clip.stream_idx = clip_proto.stream_idx();
+	return clip;
+}
+
+void serialize_clip(const Clip &clip, ClipProto *clip_proto)
+{
+	clip_proto->set_pts_in(clip.pts_in);
+	clip_proto->set_pts_out(clip.pts_out);
+	for (int camera_idx = 0; camera_idx < NUM_CAMERAS; ++camera_idx) {
+		*clip_proto->add_description() = clip.descriptions[camera_idx];
+	}
+	clip_proto->set_stream_idx(clip.stream_idx);
+}
+
+}  // namespace
+
+ClipList::ClipList(const ClipListProto &serialized)
+{
+	for (const ClipProto &clip_proto : serialized.clip()) {
+		clips.push_back(deserialize_clip(clip_proto));
+	}
+}
+
+ClipListProto ClipList::serialize() const
+{
+	ClipListProto ret;
+	for (const Clip &clip : clips) {
+		serialize_clip(clip, ret.add_clip());
+	}
+	return ret;
+}
+
+PlayList::PlayList(const ClipListProto &serialized)
+{
+	for (const ClipProto &clip_proto : serialized.clip()) {
+		clips.push_back(deserialize_clip(clip_proto));
+	}
+}
+
+ClipListProto PlayList::serialize() const
+{
+	ClipListProto ret;
+	for (const Clip &clip : clips) {
+		serialize_clip(clip, ret.add_clip());
+	}
+	return ret;
 }
