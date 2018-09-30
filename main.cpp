@@ -1,6 +1,8 @@
 #include <assert.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -37,6 +39,8 @@ using namespace std::chrono;
 
 std::mutex RefCountedGLsync::fence_lock;
 
+int64_t start_pts = -1;
+
 // TODO: Replace by some sort of GUI control, I guess.
 int64_t current_pts = 0;
 
@@ -51,6 +55,7 @@ mutex frame_mu;
 vector<int64_t> frames[MAX_STREAMS];
 HTTPD *global_httpd;
 
+void load_existing_frames();
 int record_thread_func();
 
 int main(int argc, char **argv)
@@ -96,11 +101,55 @@ int main(int argc, char **argv)
 	MainWindow mainWindow;
 	mainWindow.show();
 
+	load_existing_frames();
 	thread(record_thread_func).detach();
 
 	init_jpeg_vaapi();
 
 	return app.exec();
+}
+
+void load_existing_frames()
+{
+	DIR *dir = opendir("frames/");
+	if (dir == nullptr) {
+		perror("frames/");
+		start_pts = 0;
+		return;
+	}
+
+	for ( ;; ) {
+		errno = 0;
+		dirent *de = readdir(dir);
+		if (de == nullptr) {
+			if (errno != 0) {
+				perror("readdir");
+				exit(1);
+			}
+			break;
+		}
+
+		int stream_idx;
+		int64_t pts;
+		if (sscanf(de->d_name, "cam%d-pts%ld.jpeg", &stream_idx, &pts) == 2 &&
+		    stream_idx >= 0 && stream_idx < MAX_STREAMS) {
+			frames[stream_idx].push_back(pts);
+			start_pts = max(start_pts, pts);
+		}
+	}
+
+	closedir(dir);
+
+	if (start_pts == -1) {
+		start_pts = 0;
+	} else {
+		// Add a gap of one second from the old frames to the new ones.
+		start_pts += TIMEBASE;
+	}
+
+	for (int stream_idx = 0; stream_idx < MAX_STREAMS; ++stream_idx) {
+		sort(frames[stream_idx].begin(), frames[stream_idx].end());
+	}
 }
 
 int record_thread_func()
@@ -112,6 +161,7 @@ int record_thread_func()
 	}
 
 	int64_t last_pts = -1;
+	int64_t pts_offset;
 
 	for ( ;; ) {
 		AVPacket pkt;
@@ -125,13 +175,18 @@ int record_thread_func()
 		}
 
 		// Convert pts to our own timebase.
-		// TODO: Figure out offsets, too.
 		AVRational stream_timebase = format_ctx->streams[pkt.stream_index]->time_base;
-		pkt.pts = av_rescale_q(pkt.pts, stream_timebase, AVRational{ 1, TIMEBASE });
+		int64_t pts = av_rescale_q(pkt.pts, stream_timebase, AVRational{ 1, TIMEBASE });
+
+		// Translate offset into our stream.
+		if (last_pts == -1) {
+			pts_offset = start_pts - pts;
+		}
+		pts = std::max(pts + pts_offset, start_pts);
 
 		//fprintf(stderr, "Got a frame from camera %d, pts = %ld, size = %d\n",
-		//	pkt.stream_index, pkt.pts, pkt.size);
-		string filename = filename_for_frame(pkt.stream_index, pkt.pts);
+		//	pkt.stream_index, pts, pkt.size);
+		string filename = filename_for_frame(pkt.stream_index, pts);
 		FILE *fp = fopen(filename.c_str(), "wb");
 		if (fp == nullptr) {
 			perror(filename.c_str());
@@ -140,27 +195,27 @@ int record_thread_func()
 		fwrite(pkt.data, pkt.size, 1, fp);
 		fclose(fp);
 
-		post_to_main_thread([pkt] {
+		post_to_main_thread([pkt, pts] {
 			if (pkt.stream_index == 0) {
-				global_mainwindow->ui->input1_display->setFrame(pkt.stream_index, pkt.pts, /*interpolated=*/false);
+				global_mainwindow->ui->input1_display->setFrame(pkt.stream_index, pts, /*interpolated=*/false);
 			} else if (pkt.stream_index == 1) {
-				global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, pkt.pts, /*interpolated=*/false);
+				global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, pts, /*interpolated=*/false);
 			} else if (pkt.stream_index == 2) {
-				global_mainwindow->ui->input3_display->setFrame(pkt.stream_index, pkt.pts, /*interpolated=*/false);
+				global_mainwindow->ui->input3_display->setFrame(pkt.stream_index, pts, /*interpolated=*/false);
 			} else if (pkt.stream_index == 3) {
-				global_mainwindow->ui->input4_display->setFrame(pkt.stream_index, pkt.pts, /*interpolated=*/false);
+				global_mainwindow->ui->input4_display->setFrame(pkt.stream_index, pts, /*interpolated=*/false);
 			}
 		});
 
 		assert(pkt.stream_index < MAX_STREAMS);
-		frames[pkt.stream_index].push_back(pkt.pts);
+		frames[pkt.stream_index].push_back(pts);
 
 		// Hack. Remove when we're dealing with live streams.
 		if (last_pts != -1) {
-			this_thread::sleep_for(microseconds((pkt.pts - last_pts) * 1000000 / TIMEBASE));
+			this_thread::sleep_for(microseconds((pts - last_pts) * 1000000 / TIMEBASE));
 		}
-		last_pts = pkt.pts;
-		current_pts = pkt.pts;
+		last_pts = pts;
+		current_pts = pts;
 	}
 
 	return 0;
