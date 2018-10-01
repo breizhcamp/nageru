@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -37,7 +38,8 @@ extern "C" {
 using namespace std;
 using namespace std::chrono;
 
-std::mutex RefCountedGLsync::fence_lock;
+mutex RefCountedGLsync::fence_lock;
+atomic<bool> should_quit{false};
 
 int64_t start_pts = -1;
 
@@ -101,12 +103,18 @@ int main(int argc, char **argv)
 	MainWindow mainWindow;
 	mainWindow.show();
 
-	load_existing_frames();
-	thread(record_thread_func).detach();
-
 	init_jpeg_vaapi();
 
-	return app.exec();
+	load_existing_frames();
+	thread record_thread(record_thread_func);
+
+	int ret = app.exec();
+
+	should_quit = true;
+	record_thread.join();
+	JPEGFrameView::shutdown();
+
+	return ret;
 }
 
 void load_existing_frames()
@@ -163,13 +171,16 @@ int record_thread_func()
 	int64_t last_pts = -1;
 	int64_t pts_offset;
 
-	for ( ;; ) {
+	while (!should_quit.load()) {
 		AVPacket pkt;
 		unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
 			&pkt, av_packet_unref);
 		av_init_packet(&pkt);
 		pkt.data = nullptr;
 		pkt.size = 0;
+
+		// TODO: Make it possible to abort av_read_frame() (use an interrupt callback);
+		// right now, should_quit will be ignored if it's hung on I/O.
 		if (av_read_frame(format_ctx.get(), &pkt) != 0) {
 			break;
 		}

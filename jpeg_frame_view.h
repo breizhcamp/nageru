@@ -11,6 +11,7 @@
 #include <movit/ycbcr_input.h>
 
 #include <memory>
+#include <thread>
 
 #include "jpeg_frame.h"
 
@@ -44,6 +45,8 @@ public:
 	void setDecodedFrame(std::shared_ptr<Frame> frame);
 	void set_overlay(const std::string &text);  // Blank for none.
 
+	static void shutdown();
+
 signals:
 	void clicked();
 
@@ -72,6 +75,8 @@ private:
 	bool overlay_input_needs_refresh = false;
 
 	int gl_width, gl_height;
+
+	static std::thread jpeg_decoder_thread;
 };
 
 #endif  // !defined(_JPEG_FRAME_VIEW_H)

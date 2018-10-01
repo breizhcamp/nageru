@@ -44,12 +44,14 @@ struct LRUFrame {
 	size_t last_used;
 };
 
+thread JPEGFrameView::jpeg_decoder_thread;
 mutex cache_mu;
 map<JPEGID, LRUFrame, JPEGIDLexicalOrder> cache;  // Under cache_mu.
 condition_variable any_pending_decodes, cache_updated;
 deque<pair<JPEGID, JPEGFrameView *>> pending_decodes;  // Under cache_mu.
 atomic<size_t> event_counter{0};
 extern QGLWidget *global_share_widget;
+extern atomic<bool> should_quit;
 
 shared_ptr<Frame> decode_jpeg(const string &filename)
 {
@@ -193,20 +195,21 @@ shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss
 	return frame;
 }
 
-void jpeg_decoder_thread()
+void jpeg_decoder_thread_func()
 {
 	size_t num_decoded = 0, num_dropped = 0;
 
 	pthread_setname_np(pthread_self(), "JPEGDecoder");
-	for ( ;; ) {
+	while (!should_quit.load()) {
 		JPEGID id;
 		JPEGFrameView *dest;
 		CacheMissBehavior cache_miss_behavior = DECODE_IF_NOT_IN_CACHE;
 		{
 			unique_lock<mutex> lock(cache_mu);  // TODO: Perhaps under another lock?
 			any_pending_decodes.wait(lock, [] {
-				return !pending_decodes.empty();
+				return !pending_decodes.empty() || should_quit.load();
 			});
+			if (should_quit.load()) break;
 			id = pending_decodes.front().first;
 			dest = pending_decodes.front().second;
 			pending_decodes.pop_front();
@@ -229,8 +232,9 @@ void jpeg_decoder_thread()
 			// put directly into the cache from VideoStream.
 			unique_lock<mutex> lock(cache_mu);
 			cache_updated.wait(lock, [id] {
-				return cache.count(id) != 0;
+				return cache.count(id) != 0 || should_quit.load();
 			});
+			if (should_quit.load()) break;
 			found_in_cache = true;  // Don't count it as a decode.
 
 			auto it = cache.find(id);
@@ -265,6 +269,12 @@ void jpeg_decoder_thread()
 		// TODO: Could we get jitter between non-interpolated and interpolated frames here?
 		dest->setDecodedFrame(frame);
 	}
+}
+
+void JPEGFrameView::shutdown()
+{
+	any_pending_decodes.notify_all();
+	jpeg_decoder_thread.join();
 }
 
 JPEGFrameView::JPEGFrameView(QWidget *parent)
@@ -304,7 +314,7 @@ void JPEGFrameView::initializeGL()
 	static once_flag once;
 	call_once(once, [] {
 		resource_pool = new ResourcePool;
-		std::thread(&jpeg_decoder_thread).detach();
+		jpeg_decoder_thread = std::thread(jpeg_decoder_thread_func);
 	});
 
 	ImageFormat inout_format;
