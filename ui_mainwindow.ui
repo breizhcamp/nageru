@@ -328,13 +328,13 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="actionQuit"/>
+    <addaction name="exit_action"/>
    </widget>
    <addaction name="menuFile"/>
   </widget>
-  <action name="actionQuit">
+  <action name="exit_action">
    <property name="text">
-    <string>Quit</string>
+    <string>E&amp;xit</string>
    </property>
   </action>
  </widget>

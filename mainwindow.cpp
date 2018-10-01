@@ -35,6 +35,9 @@ MainWindow::MainWindow()
 	global_mainwindow = this;
 	ui->setupUi(this);
 
+	// The menus.
+	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
+
 	global_disk_space_estimator = new DiskSpaceEstimator(bind(&MainWindow::report_disk_space, this, _1, _2));
 	disk_free_label = new QLabel(this);
 	disk_free_label->setStyleSheet("QLabel {padding-right: 5px;}");
@@ -629,5 +632,10 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
 			disk_free_label->setText(QString::fromStdString(label));
 			ui->menuBar->setCornerWidget(disk_free_label);  // Need to set this again for the sizing to get right.
 			});
+}
+
+void MainWindow::exit_triggered()
+{
+	close();
 }
 

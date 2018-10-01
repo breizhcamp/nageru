@@ -87,6 +87,7 @@ private:
 	bool eventFilter(QObject *watched, QEvent *event) override;
 
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
+	void exit_triggered();
 
 private slots:
 	void relayout();
