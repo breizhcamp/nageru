@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "clip_list.h"
+#include "disk_space_estimator.h"
 #include "player.h"
 #include "post_to_main_thread.h"
 #include "timebase.h"
@@ -17,6 +18,7 @@
 #include <sqlite3.h>
 
 using namespace std;
+using namespace std::placeholders;
 
 MainWindow *global_mainwindow = nullptr;
 ClipList *cliplist_clips;
@@ -32,6 +34,11 @@ MainWindow::MainWindow()
 {
 	global_mainwindow = this;
 	ui->setupUi(this);
+
+	global_disk_space_estimator = new DiskSpaceEstimator(bind(&MainWindow::report_disk_space, this, _1, _2));
+	disk_free_label = new QLabel(this);
+	disk_free_label->setStyleSheet("QLabel {padding-right: 5px;}");
+	ui->menuBar->setCornerWidget(disk_free_label);
 
 	StateProto state = db.get_state();
 
@@ -590,3 +597,37 @@ void MainWindow::playlist_selection_changed()
 		any_selected && selected->selectedRows().back().row() < int(playlist_clips->size()) - 1);
 	ui->play_btn->setEnabled(!playlist_clips->empty());
 }
+
+void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_left)
+{
+	char time_str[256];
+	if (estimated_seconds_left < 60.0) {
+		strcpy(time_str, "<font color=\"red\">Less than a minute</font>");
+	} else if (estimated_seconds_left < 1800.0) {  // Less than half an hour: Xm Ys (red).
+		int s = lrintf(estimated_seconds_left);
+		int m = s / 60;
+		s %= 60;
+		snprintf(time_str, sizeof(time_str), "<font color=\"red\">%dm %ds</font>", m, s);
+	} else if (estimated_seconds_left < 3600.0) {  // Less than an hour: Xm.
+		int m = lrintf(estimated_seconds_left / 60.0);
+		snprintf(time_str, sizeof(time_str), "%dm", m);
+	} else if (estimated_seconds_left < 36000.0) {  // Less than ten hours: Xh Ym.
+		int m = lrintf(estimated_seconds_left / 60.0);
+		int h = m / 60;
+		m %= 60;
+		snprintf(time_str, sizeof(time_str), "%dh %dm", h, m);
+	} else {  // More than ten hours: Xh.
+		int h = lrintf(estimated_seconds_left / 3600.0);
+		snprintf(time_str, sizeof(time_str), "%dh", h);
+	}
+	char buf[256];
+	snprintf(buf, sizeof(buf), "Disk free: %'.0f MB (approx. %s)", free_bytes / 1048576.0, time_str);
+
+	std::string label = buf;
+
+	post_to_main_thread([this, label]{
+			disk_free_label->setText(QString::fromStdString(label));
+			ui->menuBar->setCornerWidget(disk_free_label);  // Need to set this again for the sizing to get right.
+			});
+}
+

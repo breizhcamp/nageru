@@ -25,6 +25,7 @@ extern "C" {
 #include "clip_list.h"
 #include "context.h"
 #include "defs.h"
+#include "disk_space_estimator.h"
 #include "mainwindow.h"
 #include "ffmpeg_raii.h"
 #include "httpd.h"
@@ -205,6 +206,8 @@ int record_thread_func()
 		}
 		fwrite(pkt.data, pkt.size, 1, fp);
 		fclose(fp);
+
+		global_disk_space_estimator->report_write(filename, pts);
 
 		post_to_main_thread([pkt, pts] {
 			if (pkt.stream_index == 0) {

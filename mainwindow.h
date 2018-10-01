@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 #include <sys/types.h>
+
+#include <QLabel>
 #include <QMainWindow>
 
 #include "db.h"
@@ -25,6 +27,7 @@ public:
 	Ui::MainWindow *ui;
 
 private:
+	QLabel *disk_free_label;
 	Player *preview_player, *live_player;
 	DB db;
 
@@ -82,6 +85,8 @@ private:
 
 	void resizeEvent(QResizeEvent *event) override;
 	bool eventFilter(QObject *watched, QEvent *event) override;
+
+	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
 
 private slots:
 	void relayout();

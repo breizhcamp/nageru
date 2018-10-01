@@ -15,7 +15,7 @@ OBJS += $(OBJS_WITH_MOC:.o=.moc.o)
 OBJS += flow.o gpu_timers.o
 
 OBJS += ffmpeg_raii.o main.o player.o httpd.o mux.o metacube2.o video_stream.o context.o chroma_subsampler.o
-OBJS += vaapi_jpeg_decoder.o memcpy_interleaved.o db.o
+OBJS += vaapi_jpeg_decoder.o memcpy_interleaved.o db.o disk_space_estimator.o
 OBJS += state.pb.o
 
 %.o: %.cpp
