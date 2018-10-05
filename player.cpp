@@ -89,7 +89,6 @@ void Player::thread_func(bool also_output_to_stream)
 		// TODO: Lock to a rational multiple of the frame rate if possible.
 		double speed = 0.5;
 
-		bool aborted = false;
 		for (int frameno = 0; ; ++frameno) {  // Ends when the clip ends.
 			double out_pts = out_pts_origin + TIMEBASE * frameno / output_framerate;
 			steady_clock::time_point next_frame_start =
@@ -181,7 +180,7 @@ void Player::thread_func(bool also_output_to_stream)
 			unique_lock<mutex> lock(queue_state_mu);
 			playing = false;
 		}
-		if (done_callback != nullptr && !aborted) {
+		if (done_callback != nullptr) {
 			done_callback();
 		}
 	}
