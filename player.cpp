@@ -134,7 +134,7 @@ void Player::thread_func(bool also_output_to_stream)
 			if (in_pts_lower == in_pts_upper) {
 				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false);
 				if (video_stream != nullptr) {
-					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_lower);
+					video_stream->schedule_original_frame(pts, stream_idx, in_pts_lower);
 				}
 				continue;
 			}
@@ -147,7 +147,7 @@ void Player::thread_func(bool also_output_to_stream)
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
 					destination->setFrame(stream_idx, snap_pts, /*interpolated=*/false);
 					if (video_stream != nullptr) {
-						video_stream->schedule_original_frame(lrint(out_pts), stream_idx, snap_pts);
+						video_stream->schedule_original_frame(pts, stream_idx, snap_pts);
 					}
 					in_pts_origin += snap_pts - in_pts;
 					snapped = true;
@@ -172,8 +172,8 @@ void Player::thread_func(bool also_output_to_stream)
 			} else {
 				// Calculate the interpolated frame. When it's done, the destination
 				// will be unblocked.
-				destination->setFrame(stream_idx, lrint(out_pts), /*interpolated=*/true);
-				video_stream->schedule_interpolated_frame(lrint(out_pts), stream_idx, in_pts_lower, in_pts_upper, alpha);
+				destination->setFrame(stream_idx, pts, /*interpolated=*/true);
+				video_stream->schedule_interpolated_frame(pts, stream_idx, in_pts_lower, in_pts_upper, alpha);
 			}
 		}
 
