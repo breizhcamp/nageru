@@ -541,7 +541,7 @@ private:
 
 class Interpolate {
 public:
-	Interpolate(int width, int height, const OperatingPoint &op, bool split_ycbcr_output);
+	Interpolate(const OperatingPoint &op, bool split_ycbcr_output);
 
 	// Returns a texture (or two, if split_ycbcr_output is true) that must
 	// be released with release_texture() after use. image_tex must be a
@@ -553,10 +553,9 @@ public:
 	}
 
 private:
-	int width, height, flow_level;
+	int flow_level;
 	GLuint vertex_vbo, vao;
 	TexturePool pool;
-	const OperatingPoint op;
 	const bool split_ycbcr_output;
 
 	Splat splat;

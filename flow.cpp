@@ -953,11 +953,8 @@ void Blend::exec(GLuint image_tex, GLuint flow_tex, GLuint output_tex, GLuint ou
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
-Interpolate::Interpolate(int width, int height, const OperatingPoint &op, bool split_ycbcr_output)
-	: width(width),
-	  height(height),
-	  flow_level(op.finest_level),
-	  op(op),
+Interpolate::Interpolate(const OperatingPoint &op, bool split_ycbcr_output)
+	: flow_level(op.finest_level),
 	  split_ycbcr_output(split_ycbcr_output),
 	  splat(op),
 	  blend(split_ycbcr_output) {

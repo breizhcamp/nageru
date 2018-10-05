@@ -78,8 +78,6 @@ private:
 	std::string stream_mux_header;
 	bool seen_sync_markers = false;
 
-	QSurface *gl_surface;
-
 	// Effectively only converts from 4:2:2 to 4:4:4.
 	// TODO: Have a separate version with ResampleEffect, for scaling?
 	std::unique_ptr<movit::EffectChain> ycbcr_planar_convert_chain;

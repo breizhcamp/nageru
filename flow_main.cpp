@@ -379,7 +379,7 @@ void interpolate_image(int argc, char **argv, int optind)
 	}
 	DISComputeFlow compute_flow(width1, height1, op);
 	GrayscaleConversion gray;
-	Interpolate interpolate(width1, height1, op, /*split_ycbcr_output=*/false);
+	Interpolate interpolate(op, /*split_ycbcr_output=*/false);
 
 	GLuint tex_gray;
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex_gray);
