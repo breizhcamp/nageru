@@ -39,6 +39,10 @@ private:
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 
+	// Find the frame immediately before and after this point.
+	// Returns false if pts is after the last frame.
+	bool find_surrounding_frames(int64_t pts, int stream_idx, int64_t *pts_lower, int64_t *pts_upper);
+
 	JPEGFrameView *destination;
 	done_callback_func done_callback;
 	progress_callback_func progress_callback;

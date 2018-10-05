@@ -105,29 +105,10 @@ void Player::thread_func(bool also_output_to_stream)
 			}
 
 			int64_t in_pts_lower, in_pts_upper;
-
-			// Find the frame immediately before and after this point.
-			{
-				lock_guard<mutex> lock(frame_mu);
-
-				// Find the first frame such that in_pts >= frame.pts.
-				auto it = lower_bound(frames[stream_idx].begin(),
-					frames[stream_idx].end(),
-					in_pts);
-				if (it == frames[stream_idx].end() || *it >= clip.pts_out) {
-					break;
-				}
-				in_pts_upper = *it;
-
-				// Find the last frame such that in_pts <= frame.pts (if any).
-				if (it == frames[stream_idx].begin()) {
-					in_pts_lower = *it;
-				} else {
-					in_pts_lower = *(it - 1);
-				}
+			bool ok = find_surrounding_frames(in_pts, stream_idx, &in_pts_lower, &in_pts_upper);
+			if (!ok || in_pts_upper >= clip.pts_out) {
+				break;
 			}
-			assert(in_pts >= in_pts_lower);
-			assert(in_pts <= in_pts_upper);
 
 			// Sleep until the next frame start, or until there's a new clip we're supposed to play.
 			{
@@ -205,6 +186,31 @@ void Player::thread_func(bool also_output_to_stream)
 			done_callback();
 		}
 	}
+}
+
+// Find the frame immediately before and after this point.
+bool Player::find_surrounding_frames(int64_t pts, int stream_idx, int64_t *pts_lower, int64_t *pts_upper)
+{
+	lock_guard<mutex> lock(frame_mu);
+
+	// Find the first frame such that frame.pts >= pts.
+	auto it = lower_bound(frames[stream_idx].begin(),
+		frames[stream_idx].end(),
+		pts);
+	if (it == frames[stream_idx].end()) {
+		return false;
+	}
+	*pts_upper = *it;
+
+	// Find the last frame such that in_pts <= frame.pts (if any).
+	if (it == frames[stream_idx].begin()) {
+		*pts_lower = *it;
+	} else {
+		*pts_lower = *(it - 1);
+	}
+	assert(pts >= *pts_lower);
+	assert(pts <= *pts_upper);
+	return true;
 }
 
 Player::Player(JPEGFrameView *destination, bool also_output_to_stream)
