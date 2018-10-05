@@ -141,21 +141,20 @@ void Player::thread_func(bool also_output_to_stream)
 
 			// Snap to input frame: If we can do so with less than 1% jitter
 			// (ie., move less than 1% of an _output_ frame), do so.
-			double in_pts_lower_as_frameno = (in_pts_lower - in_pts_origin) * output_framerate / TIMEBASE / speed;
-			double in_pts_upper_as_frameno = (in_pts_upper - in_pts_origin) * output_framerate / TIMEBASE / speed;
-			if (fabs(in_pts_lower_as_frameno - frameno) < 0.01) {
-				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false);
-				if (video_stream != nullptr) {
-					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_lower);
+			bool snapped = false;
+			for (int64_t snap_pts : { in_pts_lower, in_pts_upper }) {
+				double snap_pts_as_frameno = (snap_pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
+				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
+					destination->setFrame(stream_idx, snap_pts, /*interpolated=*/false);
+					if (video_stream != nullptr) {
+						video_stream->schedule_original_frame(lrint(out_pts), stream_idx, snap_pts);
+					}
+					in_pts_origin += snap_pts - in_pts;
+					snapped = true;
+					break;
 				}
-				in_pts_origin += in_pts_lower - in_pts;
-				continue;
-			} else if (fabs(in_pts_upper_as_frameno - frameno) < 0.01) {
-				destination->setFrame(stream_idx, in_pts_upper, /*interpolated=*/false);
-				if (video_stream != nullptr) {
-					video_stream->schedule_original_frame(lrint(out_pts), stream_idx, in_pts_upper);
-				}
-				in_pts_origin += in_pts_upper - in_pts;
+			}
+			if (snapped) {
 				continue;
 			}
 
