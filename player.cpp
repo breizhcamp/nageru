@@ -69,6 +69,7 @@ void Player::thread_func(bool also_output_to_stream)
 			clip = current_clip;
 			stream_idx = current_stream_idx;
 		}
+got_clip:
 		steady_clock::time_point origin = steady_clock::now();
 		int64_t in_pts_origin = clip.pts_in;
 		int64_t out_pts_origin = pts;
@@ -173,6 +174,18 @@ void Player::thread_func(bool also_output_to_stream)
 				// will be unblocked.
 				destination->setFrame(stream_idx, pts, /*interpolated=*/true);
 				video_stream->schedule_interpolated_frame(pts, stream_idx, in_pts_lower, in_pts_upper, alpha);
+			}
+		}
+
+		if (next_clip_callback != nullptr) {
+			Clip next_clip = next_clip_callback();
+			if (next_clip.pts_in != -1) {
+				clip = next_clip;
+				stream_idx = next_clip.stream_idx;  // Override is used for previews only, and next_clip is used for live ony.
+				if (done_callback != nullptr) {
+					done_callback();
+				}
+				goto got_clip;
 			}
 		}
 

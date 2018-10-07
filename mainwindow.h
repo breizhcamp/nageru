@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QMainWindow>
 
+#include "clip_list.h"
 #include "db.h"
 #include "state.pb.h"
 
@@ -68,6 +69,7 @@ private:
 	void preview_angle_clicked(unsigned stream_idx);
 	void play_clicked();
 	void live_player_clip_done();
+	Clip live_player_get_next_clip();
 	void live_player_clip_progress(double played_this_clip, double total_length);
 	void playlist_duplicate();
 	void playlist_remove();

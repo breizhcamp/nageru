@@ -30,6 +30,11 @@ public:
 
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
+	using next_clip_callback_func = std::function<Clip()>;
+	void set_next_clip_callback(next_clip_callback_func cb) { next_clip_callback = cb; }
+
+	// Not thread-safe to set concurrently with playing.
+	// Will be called back from the player thread.
 	using progress_callback_func = std::function<void(double played_this_clip, double total_length)>;
 	void set_progress_callback(progress_callback_func cb) { progress_callback = cb; }
 
@@ -45,6 +50,7 @@ private:
 
 	JPEGFrameView *destination;
 	done_callback_func done_callback;
+	next_clip_callback_func next_clip_callback;
 	progress_callback_func progress_callback;
 
 	std::mutex mu;

@@ -126,6 +126,7 @@ MainWindow::MainWindow()
 			live_player_clip_done();
 		});
 	});
+	live_player->set_next_clip_callback(bind(&MainWindow::live_player_get_next_clip, this));
 	live_player->set_progress_callback([this](double played_this_clip, double total_length) {
 		post_to_main_thread([this, played_this_clip, total_length] {
 			live_player_clip_progress(played_this_clip, total_length);
@@ -326,14 +327,22 @@ void MainWindow::play_clicked()
 void MainWindow::live_player_clip_done()
 {
 	int row = playlist_clips->get_currently_playing();
-	if (row != -1 && row < int(playlist_clips->size()) - 1) {
-		++row;
-		const Clip &clip = *playlist_clips->clip(row);
-		live_player->play_clip(clip, clip.stream_idx);
-		playlist_clips->set_currently_playing(row, 0.0f);
-	} else {
-		playlist_clips->set_currently_playing(-1, 0.0f);
+	if (row == -1 || row == int(playlist_clips->size()) - 1) {
 		ui->live_label->setText("Current output (paused)");
+		playlist_clips->set_currently_playing(-1, 0.0f);
+	} else {
+		playlist_clips->set_currently_playing(row + 1, 0.0f);
+	}
+}
+
+Clip MainWindow::live_player_get_next_clip()
+{
+	// FIXME: threading
+	int row = playlist_clips->get_currently_playing();
+	if (row != -1 && row < int(playlist_clips->size()) - 1) {
+		return *playlist_clips->clip(row + 1);
+	} else {
+		return Clip();
 	}
 }
 
