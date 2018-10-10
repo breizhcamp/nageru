@@ -22,6 +22,7 @@
 #include "post_to_main_thread.h"
 #include "vaapi_jpeg_decoder.h"
 #include "video_stream.h"
+#include "ycbcr_converter.h"
 
 using namespace movit;
 using namespace std;
@@ -317,33 +318,11 @@ void JPEGFrameView::initializeGL()
 		jpeg_decoder_thread = std::thread(jpeg_decoder_thread_func);
 	});
 
+	ycbcr_converter.reset(new YCbCrConverter(YCbCrConverter::OUTPUT_TO_RGBA, resource_pool));
+
 	ImageFormat inout_format;
 	inout_format.color_space = COLORSPACE_sRGB;
 	inout_format.gamma_curve = GAMMA_sRGB;
-
-	ycbcr_format.luma_coefficients = YCBCR_REC_709;
-	ycbcr_format.full_range = false;
-	ycbcr_format.num_levels = 256;
-	ycbcr_format.chroma_subsampling_x = 2;
-	ycbcr_format.chroma_subsampling_y = 1;
-	ycbcr_format.cb_x_position = 0.0f;  // H.264 -- _not_ JPEG, even though our input is MJPEG-encoded
-	ycbcr_format.cb_y_position = 0.5f;  // Irrelevant.
-	ycbcr_format.cr_x_position = 0.0f;
-	ycbcr_format.cr_y_position = 0.5f;
-
-	// Planar Y'CbCr decoding chain.
-	planar_chain.reset(new EffectChain(1280, 720, resource_pool));
-	ycbcr_planar_input = (movit::YCbCrInput *)planar_chain->add_input(new YCbCrInput(inout_format, ycbcr_format, 1280, 720, YCBCR_INPUT_PLANAR));
-	planar_chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
-	planar_chain->set_dither_bits(8);
-	planar_chain->finalize();
-
-	// Semiplanar Y'CbCr decoding chain (for images coming from VA-API).
-	semiplanar_chain.reset(new EffectChain(1280, 720, resource_pool));
-	ycbcr_semiplanar_input = (movit::YCbCrInput *)semiplanar_chain->add_input(new YCbCrInput(inout_format, ycbcr_format, 1280, 720, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
-	semiplanar_chain->add_output(inout_format, OUTPUT_ALPHA_FORMAT_POSTMULTIPLIED);
-	semiplanar_chain->set_dither_bits(8);
-	semiplanar_chain->finalize();
 
 	overlay_chain.reset(new EffectChain(overlay_base_width, overlay_base_height, resource_pool));
 	overlay_input = (movit::FlatInput *)overlay_chain->add_input(new FlatInput(inout_format, FORMAT_GRAYSCALE, GL_UNSIGNED_BYTE, overlay_base_width, overlay_base_height));
@@ -373,11 +352,7 @@ void JPEGFrameView::paintGL()
 	}
 
 	check_error();
-	if (current_frame->is_semiplanar) {
-		semiplanar_chain->render_to_screen();
-	} else {
-		planar_chain->render_to_screen();
-	}
+	current_chain->render_to_screen();
 
 	if (overlay_image != nullptr) {
 		if (overlay_input_needs_refresh) {
@@ -394,28 +369,7 @@ void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
 {
 	post_to_main_thread([this, frame] {
 		current_frame = frame;
-		ycbcr_format.chroma_subsampling_x = frame->chroma_subsampling_x;
-		ycbcr_format.chroma_subsampling_y = frame->chroma_subsampling_y;
-
-		if (frame->is_semiplanar) {
-			ycbcr_semiplanar_input->change_ycbcr_format(ycbcr_format);
-			ycbcr_semiplanar_input->set_width(frame->width);
-			ycbcr_semiplanar_input->set_height(frame->height);
-			ycbcr_semiplanar_input->set_pixel_data(0, frame->y.get());
-			ycbcr_semiplanar_input->set_pixel_data(1, frame->cbcr.get());
-			ycbcr_semiplanar_input->set_pitch(0, frame->pitch_y);
-			ycbcr_semiplanar_input->set_pitch(1, frame->pitch_chroma);
-		} else {
-			ycbcr_planar_input->change_ycbcr_format(ycbcr_format);
-			ycbcr_planar_input->set_width(frame->width);
-			ycbcr_planar_input->set_height(frame->height);
-			ycbcr_planar_input->set_pixel_data(0, frame->y.get());
-			ycbcr_planar_input->set_pixel_data(1, frame->cb.get());
-			ycbcr_planar_input->set_pixel_data(2, frame->cr.get());
-			ycbcr_planar_input->set_pitch(0, frame->pitch_y);
-			ycbcr_planar_input->set_pitch(1, frame->pitch_chroma);
-			ycbcr_planar_input->set_pitch(2, frame->pitch_chroma);
-		}
+		current_chain = ycbcr_converter->prepare_chain_for_conversion(frame);
 		update();
 	});
 }

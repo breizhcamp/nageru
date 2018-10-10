@@ -25,6 +25,7 @@ class Interpolate;
 class Mux;
 class QSurface;
 class QSurfaceFormat;
+class YCbCrConverter;
 
 class VideoStream {
 public:
@@ -78,14 +79,7 @@ private:
 	std::string stream_mux_header;
 	bool seen_sync_markers = false;
 
-	// Effectively only converts from 4:2:2 to 4:4:4.
-	// TODO: Have a separate version with ResampleEffect, for scaling?
-	std::unique_ptr<movit::EffectChain> ycbcr_planar_convert_chain;
-	std::unique_ptr<movit::EffectChain> ycbcr_semiplanar_convert_chain;
-
-	movit::YCbCrInput *ycbcr_planar_input;
-	movit::YCbCrInput *ycbcr_semiplanar_input;
-	movit::YCbCrFormat ycbcr_format;
+	std::unique_ptr<YCbCrConverter> ycbcr_converter;
 
 	// Frame interpolation.
 	std::unique_ptr<DISComputeFlow> compute_flow;

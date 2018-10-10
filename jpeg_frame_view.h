@@ -14,6 +14,7 @@
 #include <thread>
 
 #include "jpeg_frame.h"
+#include "ycbcr_converter.h"
 
 struct JPEGID {
 	unsigned stream_idx;
@@ -59,13 +60,10 @@ private:
 	// The stream index of the latest frame we displayed.
 	unsigned current_stream_idx = 0;
 
-	std::unique_ptr<movit::EffectChain> planar_chain;
-	std::shared_ptr<Frame> current_frame;  // So that we hold on to the pixels.
-	movit::YCbCrInput *ycbcr_planar_input;
-	movit::YCbCrFormat ycbcr_format;
+	std::unique_ptr<YCbCrConverter> ycbcr_converter;
+	movit::EffectChain *current_chain = nullptr;  // Owned by ycbcr_converter.
 
-	std::unique_ptr<movit::EffectChain> semiplanar_chain;
-	movit::YCbCrInput *ycbcr_semiplanar_input;
+	std::shared_ptr<Frame> current_frame;  // So that we hold on to the pixels.
 
 	static constexpr int overlay_base_width = 16, overlay_base_height = 16;
 	int overlay_width = overlay_base_width, overlay_height = overlay_base_height;
