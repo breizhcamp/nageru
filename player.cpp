@@ -50,6 +50,9 @@ void Player::thread_func(bool also_output_to_stream)
 
 	constexpr double output_framerate = 60000.0 / 1001.0;  // FIXME: make configurable
 	int64_t pts = 0;
+	Clip next_clip;
+	bool got_next_clip = false;
+	double next_clip_fade_time = -1.0;
 
 	for ( ;; ) {
 		// Wait until we're supposed to play something.
@@ -104,6 +107,42 @@ got_clip:
 				continue;
 			}
 
+			double time_left_this_clip = double(clip.pts_out - in_pts) / TIMEBASE / speed;
+			if (!got_next_clip && next_clip_callback != nullptr && time_left_this_clip <= clip.fade_time_seconds) {
+				// Find the next clip so that we can begin a fade.
+				next_clip = next_clip_callback();
+				if (next_clip.pts_in != -1) {
+					got_next_clip = true;
+
+					double duration_next_clip = (next_clip.pts_out - next_clip.pts_in) / TIMEBASE / speed;
+					next_clip_fade_time = std::min(time_left_this_clip, duration_next_clip);
+					fprintf(stderr, "decided on %.3f seconds fade time [%f %f]\n", next_clip_fade_time, time_left_this_clip, duration_next_clip);
+				}
+			}
+
+			// TODO: If more than half-way through the fade, interpolate the next clip
+			// instead of the current one.
+
+			int secondary_stream_idx = -1;
+			int64_t secondary_pts = -1;
+			float fade_alpha = 0.0f;
+			if (got_next_clip) {
+				int64_t in_pts_lower, in_pts_upper;
+				bool ok = find_surrounding_frames(in_pts, next_clip.stream_idx, &in_pts_lower, &in_pts_upper);
+				if (ok) {
+					secondary_stream_idx = next_clip.stream_idx;
+					secondary_pts = in_pts_lower;
+					fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
+				}
+			}
+
+			if (progress_callback != nullptr) {
+				// NOTE: None of this will take into account any snapping done below.
+				double played_this_clip = double(in_pts - clip.pts_in) / TIMEBASE / speed;
+				double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / speed;
+				progress_callback(played_this_clip, total_length);
+			}
+
 			int64_t in_pts_lower, in_pts_upper;
 			bool ok = find_surrounding_frames(in_pts, stream_idx, &in_pts_lower, &in_pts_upper);
 			if (!ok || in_pts_upper >= clip.pts_out) {
@@ -124,17 +163,14 @@ got_clip:
 				}
 			}
 
-			if (progress_callback != nullptr) {
-				// NOTE: None of this will take into account any snapping done below.
-				double played_this_clip = double(in_pts - clip.pts_in) / TIMEBASE / speed;
-				double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / speed;
-				progress_callback(played_this_clip, total_length);
-			}
-
 			if (in_pts_lower == in_pts_upper) {
-				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false);
+				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
 				if (video_stream != nullptr) {
-					video_stream->schedule_original_frame(pts, stream_idx, in_pts_lower);
+					if (secondary_stream_idx == -1) {
+						video_stream->schedule_original_frame(pts, stream_idx, in_pts_lower);
+					} else {
+						video_stream->schedule_faded_frame(pts, stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha);
+					}
 				}
 				continue;
 			}
@@ -145,9 +181,13 @@ got_clip:
 			for (int64_t snap_pts : { in_pts_lower, in_pts_upper }) {
 				double snap_pts_as_frameno = (snap_pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
-					destination->setFrame(stream_idx, snap_pts, /*interpolated=*/false);
+					destination->setFrame(stream_idx, snap_pts, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
 					if (video_stream != nullptr) {
-						video_stream->schedule_original_frame(pts, stream_idx, snap_pts);
+						if (secondary_stream_idx == -1) {
+							video_stream->schedule_original_frame(pts, stream_idx, snap_pts);
+						} else {
+							video_stream->schedule_faded_frame(pts, stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
+						}
 					}
 					in_pts_origin += snap_pts - in_pts;
 					snapped = true;
@@ -168,25 +208,35 @@ got_clip:
 
 			if (video_stream == nullptr) {
 				// Previews don't do any interpolation.
-				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false);
+				assert(secondary_stream_idx == -1);
+				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false, fade_alpha);
 			} else {
 				// Calculate the interpolated frame. When it's done, the destination
 				// will be unblocked.
-				destination->setFrame(stream_idx, pts, /*interpolated=*/true);
-				video_stream->schedule_interpolated_frame(pts, stream_idx, in_pts_lower, in_pts_upper, alpha);
+				destination->setFrame(stream_idx, pts, /*interpolated=*/true, secondary_stream_idx, secondary_pts, fade_alpha);
+				video_stream->schedule_interpolated_frame(pts, stream_idx, in_pts_lower, in_pts_upper, alpha, secondary_stream_idx, secondary_pts, fade_alpha);
 			}
 		}
 
-		if (next_clip_callback != nullptr) {
-			Clip next_clip = next_clip_callback();
+		// The clip ended.
+
+		// Last-ditch effort to get the next clip (if e.g. the fade time was zero seconds).
+		if (!got_next_clip && next_clip_callback != nullptr) {
+			next_clip = next_clip_callback();
 			if (next_clip.pts_in != -1) {
-				clip = next_clip;
-				stream_idx = next_clip.stream_idx;  // Override is used for previews only, and next_clip is used for live ony.
-				if (done_callback != nullptr) {
-					done_callback();
-				}
-				goto got_clip;
+				got_next_clip = true;
 			}
+		}
+
+		// Switch to next clip if we got it.
+		if (got_next_clip) {
+			clip = next_clip;
+			stream_idx = next_clip.stream_idx;  // Override is used for previews only, and next_clip is used for live ony.
+			if (done_callback != nullptr) {
+				done_callback();
+			}
+			got_next_clip = false;
+			goto got_clip;
 		}
 
 		{

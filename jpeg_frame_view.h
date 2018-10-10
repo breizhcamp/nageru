@@ -8,6 +8,7 @@
 
 #include <movit/effect_chain.h>
 #include <movit/flat_input.h>
+#include <movit/mix_effect.h>
 #include <movit/ycbcr_input.h>
 
 #include <memory>
@@ -36,14 +37,14 @@ class JPEGFrameView : public QGLWidget {
 public:
 	JPEGFrameView(QWidget *parent);
 
-	void setFrame(unsigned stream_idx, int64_t pts, bool interpolated);
+	void setFrame(unsigned stream_idx, int64_t pts, bool interpolated, int secondary_stream_idx = -1, int64_t secondary_pts = -1, float fade_alpha = 0.0f);
 	static void insert_interpolated_frame(unsigned stream_idx, int64_t pts, std::shared_ptr<Frame> frame);
 
 	void mousePressEvent(QMouseEvent *event) override;
 
 	unsigned get_stream_idx() const { return current_stream_idx; }
 
-	void setDecodedFrame(std::shared_ptr<Frame> frame);
+	void setDecodedFrame(std::shared_ptr<Frame> frame, std::shared_ptr<Frame> secondary_frame, float fade_alpha);
 	void set_overlay(const std::string &text);  // Blank for none.
 
 	static void shutdown();
@@ -64,6 +65,7 @@ private:
 	movit::EffectChain *current_chain = nullptr;  // Owned by ycbcr_converter.
 
 	std::shared_ptr<Frame> current_frame;  // So that we hold on to the pixels.
+	std::shared_ptr<Frame> current_secondary_frame;  // Same.
 
 	static constexpr int overlay_base_width = 16, overlay_base_height = 16;
 	int overlay_width = overlay_base_width, overlay_height = overlay_base_height;

@@ -122,6 +122,7 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const {
 		case Column::IN:
 		case Column::OUT:
 		case Column::DURATION:
+		case Column::FADE_TIME:
 			return Qt::AlignRight + Qt::AlignVCenter;
 		case Column::CAMERA:
 			return Qt::AlignCenter;
@@ -173,6 +174,13 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const {
 		return qlonglong(clips[row].stream_idx + 1);
 	case Column::DESCRIPTION:
 		return QString::fromStdString(clips[row].descriptions[clips[row].stream_idx]);
+	case Column::FADE_TIME: {
+		stringstream ss;
+		ss.imbue(locale("C"));
+		ss.precision(3);
+		ss << fixed << clips[row].fade_time_seconds;
+		return QString::fromStdString(ss.str());
+	}
 	default:
 		return "";
 	}
@@ -223,6 +231,8 @@ QVariant PlayList::headerData(int section, Qt::Orientation orientation, int role
 		return "Camera";
 	case Column::DESCRIPTION:
 		return "Description";
+	case Column::FADE_TIME:
+		return "Fade time";
 	default:
 		return "";
 	}
@@ -258,6 +268,7 @@ Qt::ItemFlags PlayList::flags(const QModelIndex &index) const
 	switch (Column(column)) {
 	case Column::DESCRIPTION:
 	case Column::CAMERA:
+	case Column::FADE_TIME:
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable;
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable;
 	default:
@@ -312,6 +323,16 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 			return false;
 		}
 		clips[row].stream_idx = camera_idx - 1;
+		emit_data_changed(row);
+		return true;
+	}
+	case Column::FADE_TIME: {
+		bool ok;
+		double val = value.toDouble(&ok);
+		if (!ok || !(val >= 0.0)) {
+			return false;
+		}
+		clips[row].fade_time_seconds = val;
 		emit_data_changed(row);
 		return true;
 	}
@@ -409,6 +430,7 @@ Clip deserialize_clip(const ClipProto &clip_proto)
 		clip.descriptions[camera_idx] = clip_proto.description(camera_idx);
 	}
 	clip.stream_idx = clip_proto.stream_idx();
+	clip.fade_time_seconds = clip_proto.fade_time_seconds();
 	return clip;
 }
 
@@ -420,6 +442,7 @@ void serialize_clip(const Clip &clip, ClipProto *clip_proto)
 		*clip_proto->add_description() = clip.descriptions[camera_idx];
 	}
 	clip_proto->set_stream_idx(clip.stream_idx);
+	clip_proto->set_fade_time_seconds(clip.fade_time_seconds);
 }
 
 }  // namespace

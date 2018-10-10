@@ -6,6 +6,7 @@ message ClipProto {
 	int64 pts_out = 2;
 	repeated string description = 3;
 	int64 stream_idx = 4;
+	double fade_time_seconds = 5;
 }
 
 message ClipListProto {

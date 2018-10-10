@@ -150,21 +150,30 @@ vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cb_data, const
 VideoStream::VideoStream()
 {
 	ycbcr_converter.reset(new YCbCrConverter(YCbCrConverter::OUTPUT_TO_DUAL_YCBCR, /*resource_pool=*/nullptr));
+	ycbcr_semiplanar_converter.reset(new YCbCrConverter(YCbCrConverter::OUTPUT_TO_SEMIPLANAR, /*resource_pool=*/nullptr));
 
 	GLuint input_tex[num_interpolate_slots], gray_tex[num_interpolate_slots];
+	GLuint fade_y_output_tex[num_interpolate_slots], fade_cbcr_output_tex[num_interpolate_slots];
 	GLuint cb_tex[num_interpolate_slots], cr_tex[num_interpolate_slots];
 
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 10, input_tex);
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 10, gray_tex);
+	glCreateTextures(GL_TEXTURE_2D, 10, fade_y_output_tex);
+	glCreateTextures(GL_TEXTURE_2D, 10, fade_cbcr_output_tex);
 	glCreateTextures(GL_TEXTURE_2D, 10, cb_tex);
 	glCreateTextures(GL_TEXTURE_2D, 10, cr_tex);
 	check_error();
+
 	constexpr size_t width = 1280, height = 720;  // FIXME: adjustable width, height
 	int levels = find_num_levels(width, height);
 	for (size_t i = 0; i < num_interpolate_slots; ++i) {
 		glTextureStorage3D(input_tex[i], levels, GL_RGBA8, width, height, 2);
 		check_error();
 		glTextureStorage3D(gray_tex[i], levels, GL_R8, width, height, 2);
+		check_error();
+		glTextureStorage2D(fade_y_output_tex[i], 1, GL_R8, width, height);
+		check_error();
+		glTextureStorage2D(fade_cbcr_output_tex[i], 1, GL_RG8, width, height);
 		check_error();
 		glTextureStorage2D(cb_tex[i], 1, GL_R8, width / 2, height);
 		check_error();
@@ -174,9 +183,13 @@ VideoStream::VideoStream()
 		InterpolatedFrameResources resource;
 		resource.input_tex = input_tex[i];
 		resource.gray_tex = gray_tex[i];
+		resource.fade_y_output_tex = fade_y_output_tex[i];
+		resource.fade_cbcr_output_tex = fade_cbcr_output_tex[i];
 		resource.cb_tex = cb_tex[i];
 		resource.cr_tex = cr_tex[i];
 		glCreateFramebuffers(2, resource.input_fbos);
+		check_error();
+		glCreateFramebuffers(1, &resource.fade_fbo);
 		check_error();
 
 		glNamedFramebufferTextureLayer(resource.input_fbos[0], GL_COLOR_ATTACHMENT0, input_tex[i], 0, 0);
@@ -187,11 +200,17 @@ VideoStream::VideoStream()
 		check_error();
 		glNamedFramebufferTextureLayer(resource.input_fbos[1], GL_COLOR_ATTACHMENT1, gray_tex[i], 0, 1);
 		check_error();
+		glNamedFramebufferTexture(resource.fade_fbo, GL_COLOR_ATTACHMENT0, fade_y_output_tex[i], 0);
+		check_error();
+		glNamedFramebufferTexture(resource.fade_fbo, GL_COLOR_ATTACHMENT1, fade_cbcr_output_tex[i], 0);
+		check_error();
 
 		GLuint bufs[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 		glNamedFramebufferDrawBuffers(resource.input_fbos[0], 2, bufs);
 		check_error();
 		glNamedFramebufferDrawBuffers(resource.input_fbos[1], 2, bufs);
+		check_error();
+		glNamedFramebufferDrawBuffers(resource.fade_fbo, 2, bufs);
 		check_error();
 
 		glCreateBuffers(1, &resource.pbo);
@@ -206,6 +225,7 @@ VideoStream::VideoStream()
 
 	compute_flow.reset(new DISComputeFlow(width, height, operating_point2));
 	interpolate.reset(new Interpolate(operating_point2, /*split_ycbcr_output=*/true));
+	interpolate_no_split.reset(new Interpolate(operating_point2, /*split_ycbcr_output=*/false));
 	chroma_subsampler.reset(new ChromaSubsampler);
 	check_error();
 }
@@ -256,9 +276,84 @@ void VideoStream::schedule_original_frame(int64_t output_pts, unsigned stream_id
 	queue_nonempty.notify_all();
 }
 
-void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha)
+void VideoStream::schedule_faded_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
 {
-	fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f\n", output_pts, input_first_pts, input_second_pts, alpha);
+	fprintf(stderr, "output_pts=%ld  faded         input_pts=%ld,%ld  fade_alpha=%.2f\n", output_pts, input_pts, secondary_input_pts, fade_alpha);
+
+	// Get the temporary OpenGL resources we need for doing the fade.
+	// (We share these with interpolated frames, which is slightly
+	// overkill, but there's no need to waste resources on keeping
+	// separate pools around.)
+	InterpolatedFrameResources resources;
+	{
+		unique_lock<mutex> lock(queue_lock);
+		if (interpolate_resources.empty()) {
+			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
+			return;
+		}
+		resources = interpolate_resources.front();
+		interpolate_resources.pop_front();
+	}
+
+	bool did_decode;
+
+	JPEGID jpeg_id1;
+	jpeg_id1.stream_idx = stream_idx;
+	jpeg_id1.pts = input_pts;
+	jpeg_id1.interpolated = false;
+	shared_ptr<Frame> frame1 = decode_jpeg_with_cache(jpeg_id1, DECODE_IF_NOT_IN_CACHE, &did_decode);
+
+	JPEGID jpeg_id2;
+	jpeg_id2.stream_idx = secondary_stream_idx;
+	jpeg_id2.pts = secondary_input_pts;
+	jpeg_id2.interpolated = false;
+	shared_ptr<Frame> frame2 = decode_jpeg_with_cache(jpeg_id2, DECODE_IF_NOT_IN_CACHE, &did_decode);
+
+	ycbcr_semiplanar_converter->prepare_chain_for_fade(frame1, frame2, fade_alpha)->render_to_fbo(resources.fade_fbo, 1280, 720);
+
+	QueuedFrame qf;
+	qf.type = QueuedFrame::FADED;
+	qf.output_pts = output_pts;
+	qf.stream_idx = stream_idx;
+	qf.resources = resources;
+	qf.input_first_pts = input_pts;
+
+	qf.secondary_stream_idx = secondary_stream_idx;
+	qf.secondary_input_pts = secondary_input_pts;
+
+	// Subsample and split Cb/Cr.
+	chroma_subsampler->subsample_chroma(resources.fade_cbcr_output_tex, 1280, 720, resources.cb_tex, resources.cr_tex);
+
+	// Read it down (asynchronously) to the CPU.
+	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, resources.pbo);
+	check_error();
+	glGetTextureImage(resources.fade_y_output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
+	check_error();
+	glGetTextureImage(resources.cb_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3, BUFFER_OFFSET(1280 * 720));
+	check_error();
+	glGetTextureImage(resources.cr_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3 - 640 * 720, BUFFER_OFFSET(1280 * 720 + 640 * 720));
+	check_error();
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+	// Set a fence we can wait for to make sure the CPU sees the read.
+	glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+	check_error();
+	qf.fence = RefCountedGLsync(GL_SYNC_GPU_COMMANDS_COMPLETE, /*flags=*/0);
+	check_error();
+
+	unique_lock<mutex> lock(queue_lock);
+	frame_queue.push_back(qf);
+	queue_nonempty.notify_all();
+}
+
+void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
+{
+	if (secondary_stream_idx != -1) {
+		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f  secondary_pts=%ld  fade_alpha=%.2f\n", output_pts, input_first_pts, input_second_pts, alpha, secondary_input_pts, fade_alpha);
+	} else {
+		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f\n", output_pts, input_first_pts, input_second_pts, alpha);
+	}
 
 	// Get the temporary OpenGL resources we need for doing the interpolation.
 	InterpolatedFrameResources resources;
@@ -274,7 +369,7 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	}
 
 	QueuedFrame qf;
-	qf.type = QueuedFrame::INTERPOLATED;
+	qf.type = (secondary_stream_idx == -1) ? QueuedFrame::INTERPOLATED : QueuedFrame::FADED_INTERPOLATED;
 	qf.output_pts = output_pts;
 	qf.stream_idx = stream_idx;
 	qf.resources = resources;
@@ -300,11 +395,33 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	// Compute the interpolated frame.
 	qf.flow_tex = compute_flow->exec(resources.gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 	check_error();
-	tie(qf.output_tex, qf.cbcr_tex) = interpolate->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
-	check_error();
 
-	// Subsample and split Cb/Cr.
-	chroma_subsampler->subsample_chroma(qf.cbcr_tex, 1280, 720, resources.cb_tex, resources.cr_tex);
+	if (secondary_stream_idx != -1) {
+		// Fade. First kick off the interpolation.
+		tie(qf.output_tex, ignore) = interpolate_no_split->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
+		check_error();
+
+		// Now decode the image we are fading against.
+		JPEGID jpeg_id;
+		jpeg_id.stream_idx = secondary_stream_idx;
+		jpeg_id.pts = secondary_input_pts;
+		jpeg_id.interpolated = false;
+		bool did_decode;
+		shared_ptr<Frame> frame2 = decode_jpeg_with_cache(jpeg_id, DECODE_IF_NOT_IN_CACHE, &did_decode);
+
+		// Then fade against it, putting it into the fade Y' and CbCr textures.
+		ycbcr_semiplanar_converter->prepare_chain_for_fade_from_texture(qf.output_tex, frame2, fade_alpha)->render_to_fbo(resources.fade_fbo, 1280, 720);
+
+		// Subsample and split Cb/Cr.
+		chroma_subsampler->subsample_chroma(resources.fade_cbcr_output_tex, 1280, 720, resources.cb_tex, resources.cr_tex);
+	} else {
+		tie(qf.output_tex, qf.cbcr_tex) = interpolate->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
+		check_error();
+
+		// Subsample and split Cb/Cr.
+		chroma_subsampler->subsample_chroma(qf.cbcr_tex, 1280, 720, resources.cb_tex, resources.cr_tex);
+	}
+
 
 	// We could have released qf.flow_tex here, but to make sure we don't cause a stall
 	// when trying to reuse it for the next frame, we can just as well hold on to it
@@ -314,7 +431,11 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, resources.pbo);
 	check_error();
-	glGetTextureImage(qf.output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
+	if (secondary_stream_idx != -1) {
+		glGetTextureImage(resources.fade_y_output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
+	} else {
+		glGetTextureImage(qf.output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
+	}
 	check_error();
 	glGetTextureImage(resources.cb_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3, BUFFER_OFFSET(1280 * 720));
 	check_error();
@@ -395,19 +516,13 @@ void VideoStream::encode_thread_func()
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
 			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
-		} else if (qf.type == QueuedFrame::INTERPOLATED) {
+		} else if (qf.type == QueuedFrame::FADED) {
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
-
-			// Send a copy of the frame on to display.
 			shared_ptr<Frame> frame = frame_from_pbo(qf.resources.pbo_contents, 1280, 720);
-			JPEGFrameView::insert_interpolated_frame(qf.stream_idx, qf.output_pts, frame);
 
 			// Now JPEG encode it, and send it on to the stream.
 			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), 1280, 720);
-			compute_flow->release_texture(qf.flow_tex);
-			interpolate->release_texture(qf.output_tex);
-			interpolate->release_texture(qf.cbcr_tex);
 
 			AVPacket pkt;
 			av_init_packet(&pkt);
@@ -419,6 +534,33 @@ void VideoStream::encode_thread_func()
 			// Put the frame resources back.
 			unique_lock<mutex> lock(queue_lock);
 			interpolate_resources.push_back(qf.resources);
+		} else if (qf.type == QueuedFrame::INTERPOLATED || qf.type == QueuedFrame::FADED_INTERPOLATED) {
+			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
+
+			// Send a copy of the frame on to display.
+			shared_ptr<Frame> frame = frame_from_pbo(qf.resources.pbo_contents, 1280, 720);
+			JPEGFrameView::insert_interpolated_frame(qf.stream_idx, qf.output_pts, frame);  // TODO: this is wrong for fades
+
+			// Now JPEG encode it, and send it on to the stream.
+			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), 1280, 720);
+			compute_flow->release_texture(qf.flow_tex);
+			if (qf.type != QueuedFrame::FADED_INTERPOLATED) {
+				interpolate->release_texture(qf.output_tex);
+				interpolate->release_texture(qf.cbcr_tex);
+			}
+
+			AVPacket pkt;
+			av_init_packet(&pkt);
+			pkt.stream_index = 0;
+			pkt.data = (uint8_t *)jpeg.data();
+			pkt.size = jpeg.size();
+			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+
+			// Put the frame resources back.
+			unique_lock<mutex> lock(queue_lock);
+			interpolate_resources.push_back(qf.resources);
+		} else {
+			assert(false);
 		}
 	}
 }

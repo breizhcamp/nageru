@@ -45,11 +45,17 @@ struct LRUFrame {
 	size_t last_used;
 };
 
+struct PendingDecode {
+	JPEGID primary, secondary;
+	float fade_alpha;  // Irrelevant if secondary.stream_idx == -1.
+	JPEGFrameView *destination;
+};
+
 thread JPEGFrameView::jpeg_decoder_thread;
 mutex cache_mu;
 map<JPEGID, LRUFrame, JPEGIDLexicalOrder> cache;  // Under cache_mu.
 condition_variable any_pending_decodes, cache_updated;
-deque<pair<JPEGID, JPEGFrameView *>> pending_decodes;  // Under cache_mu.
+deque<PendingDecode> pending_decodes;  // Under cache_mu.
 atomic<size_t> event_counter{0};
 extern QGLWidget *global_share_widget;
 extern atomic<bool> should_quit;
@@ -202,8 +208,7 @@ void jpeg_decoder_thread_func()
 
 	pthread_setname_np(pthread_self(), "JPEGDecoder");
 	while (!should_quit.load()) {
-		JPEGID id;
-		JPEGFrameView *dest;
+		PendingDecode decode;
 		CacheMissBehavior cache_miss_behavior = DECODE_IF_NOT_IN_CACHE;
 		{
 			unique_lock<mutex> lock(cache_mu);  // TODO: Perhaps under another lock?
@@ -211,13 +216,12 @@ void jpeg_decoder_thread_func()
 				return !pending_decodes.empty() || should_quit.load();
 			});
 			if (should_quit.load()) break;
-			id = pending_decodes.front().first;
-			dest = pending_decodes.front().second;
+			decode = pending_decodes.front();
 			pending_decodes.pop_front();
 
 			size_t num_pending = 0;
-			for (const pair<JPEGID, JPEGFrameView *> &decode : pending_decodes) {
-				if (decode.second == dest) {
+			for (const PendingDecode &other_decode : pending_decodes) {
+				if (other_decode.destination == decode.destination) {
 					++num_pending;
 				}
 			}
@@ -226,49 +230,68 @@ void jpeg_decoder_thread_func()
 			}
 		}
 
-		bool found_in_cache;
-		shared_ptr<Frame> frame;
-		if (id.interpolated) {
-			// Interpolated frames are never decoded by us,
-			// put directly into the cache from VideoStream.
-			unique_lock<mutex> lock(cache_mu);
-			cache_updated.wait(lock, [id] {
-				return cache.count(id) != 0 || should_quit.load();
-			});
-			if (should_quit.load()) break;
-			found_in_cache = true;  // Don't count it as a decode.
-
-			auto it = cache.find(id);
-			assert(it != cache.end());
-
-			it->second.last_used = event_counter++;
-			frame = it->second.frame;
-			if (frame == nullptr) {
-				// We inserted a nullptr as signal that the frame was never
-				// interpolated and that we should stop waiting.
-				// But don't let it linger in the cache anymore.
-				cache.erase(it);
+		shared_ptr<Frame> primary_frame, secondary_frame;
+		bool drop = false;
+		for (int subframe_idx = 0; subframe_idx < 2; ++subframe_idx) {
+			const JPEGID &id = (subframe_idx == 0 ? decode.primary : decode.secondary);
+			if (id.stream_idx == (unsigned)-1) {
+				// No secondary frame.
+				continue;
 			}
-		} else {
-			frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
-		}
 
-		if (frame == nullptr) {
-			assert(id.interpolated || cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
+			bool found_in_cache;
+			shared_ptr<Frame> frame;
+			if (id.interpolated) {
+				// Interpolated frames are never decoded by us,
+				// put directly into the cache from VideoStream.
+				unique_lock<mutex> lock(cache_mu);
+				cache_updated.wait(lock, [id] {
+					return cache.count(id) != 0 || should_quit.load();
+				});
+				if (should_quit.load()) break;
+				found_in_cache = true;  // Don't count it as a decode.
+
+				auto it = cache.find(id);
+				assert(it != cache.end());
+
+				it->second.last_used = event_counter++;
+				frame = it->second.frame;
+				if (frame == nullptr) {
+					// We inserted a nullptr as signal that the frame was never
+					// interpolated and that we should stop waiting.
+					// But don't let it linger in the cache anymore.
+					cache.erase(it);
+				}
+			} else {
+				frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
+			}
+
+			if (frame == nullptr) {
+				assert(id.interpolated || cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
+				drop = true;
+				break;
+			}
+
+			if (!found_in_cache) {
+				++num_decoded;
+				if (num_decoded % 1000 == 0) {
+					fprintf(stderr, "Decoded %zu images, dropped %zu (%.2f%% dropped)\n",
+						num_decoded, num_dropped, (100.0 * num_dropped) / (num_decoded + num_dropped));
+				}
+			}
+			if (subframe_idx == 0) {
+				primary_frame = move(frame);
+			} else {
+				secondary_frame = move(frame);
+			}
+		}
+		if (drop) {
 			++num_dropped;
 			continue;
 		}
 
-		if (!found_in_cache) {
-			++num_decoded;
-			if (num_decoded % 1000 == 0) {
-				fprintf(stderr, "Decoded %zu images, dropped %zu (%.2f%% dropped)\n",
-					num_decoded, num_dropped, (100.0 * num_dropped) / (num_decoded + num_dropped));
-			}
-		}
-
 		// TODO: Could we get jitter between non-interpolated and interpolated frames here?
-		dest->setDecodedFrame(frame);
+		decode.destination->setDecodedFrame(primary_frame, secondary_frame, decode.fade_alpha);
 	}
 }
 
@@ -282,12 +305,17 @@ JPEGFrameView::JPEGFrameView(QWidget *parent)
 	: QGLWidget(parent, global_share_widget) {
 }
 
-void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts, bool interpolated)
+void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts, bool interpolated, int secondary_stream_idx, int64_t secondary_pts, float fade_alpha)
 {
-	current_stream_idx = stream_idx;
+	current_stream_idx = stream_idx;  // TODO: Does this interact with fades?
 
 	unique_lock<mutex> lock(cache_mu);
-	pending_decodes.emplace_back(JPEGID{ stream_idx, pts, interpolated }, this);
+	PendingDecode decode;
+	decode.primary = JPEGID{ stream_idx, pts, interpolated };
+	decode.secondary = JPEGID{ (unsigned)secondary_stream_idx, secondary_pts, /*interpolated=*/false };
+	decode.fade_alpha = fade_alpha;
+	decode.destination = this;
+	pending_decodes.push_back(decode);
 	any_pending_decodes.notify_all();
 }
 
@@ -365,11 +393,22 @@ void JPEGFrameView::paintGL()
 	}
 }
 
-void JPEGFrameView::setDecodedFrame(std::shared_ptr<Frame> frame)
+namespace {
+
+
+}  // namespace
+
+void JPEGFrameView::setDecodedFrame(shared_ptr<Frame> frame, shared_ptr<Frame> secondary_frame, float fade_alpha)
 {
-	post_to_main_thread([this, frame] {
+	post_to_main_thread([this, frame, secondary_frame, fade_alpha] {
 		current_frame = frame;
-		current_chain = ycbcr_converter->prepare_chain_for_conversion(frame);
+		current_secondary_frame = secondary_frame;
+
+		if (secondary_frame != nullptr) {
+			current_chain = ycbcr_converter->prepare_chain_for_fade(frame, secondary_frame, fade_alpha);
+		} else {
+			current_chain = ycbcr_converter->prepare_chain_for_conversion(frame);
+		}
 		update();
 	});
 }
