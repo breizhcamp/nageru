@@ -7,6 +7,7 @@
 #include "timebase.h"
 #include "ui_mainwindow.h"
 
+#include <future>
 #include <string>
 #include <vector>
 
@@ -21,8 +22,8 @@ using namespace std;
 using namespace std::placeholders;
 
 MainWindow *global_mainwindow = nullptr;
-ClipList *cliplist_clips;
-PlayList *playlist_clips;
+static ClipList *cliplist_clips;
+static PlayList *playlist_clips;
 
 extern int64_t current_pts;
 extern mutex frame_mu;
@@ -337,13 +338,19 @@ void MainWindow::live_player_clip_done()
 
 Clip MainWindow::live_player_get_next_clip()
 {
-	// FIXME: threading
-	int row = playlist_clips->get_currently_playing();
-	if (row != -1 && row < int(playlist_clips->size()) - 1) {
-		return *playlist_clips->clip(row + 1);
-	} else {
-		return Clip();
-	}
+	// playlist_clips can only be accessed on the main thread.
+	// Hopefully, we won't have to wait too long for this to come back.
+	promise<Clip> clip_promise;
+	future<Clip> clip = clip_promise.get_future();
+	post_to_main_thread([this, &clip_promise] {
+		int row = playlist_clips->get_currently_playing();
+		if (row != -1 && row < int(playlist_clips->size()) - 1) {
+			clip_promise.set_value(*playlist_clips->clip(row + 1));
+		} else {
+			clip_promise.set_value(Clip());
+		}
+	});
+	return clip.get();
 }
 
 void MainWindow::live_player_clip_progress(double played_this_clip, double total_length)
