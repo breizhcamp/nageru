@@ -116,7 +116,6 @@ got_clip:
 
 					double duration_next_clip = (next_clip.pts_out - next_clip.pts_in) / TIMEBASE / speed;
 					next_clip_fade_time = std::min(time_left_this_clip, duration_next_clip);
-					fprintf(stderr, "decided on %.3f seconds fade time [%f %f]\n", next_clip_fade_time, time_left_this_clip, duration_next_clip);
 				}
 			}
 
