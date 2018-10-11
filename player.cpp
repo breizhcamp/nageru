@@ -120,19 +120,29 @@ got_clip:
 				}
 			}
 
-			// TODO: If more than half-way through the fade, interpolate the next clip
-			// instead of the current one.
-
+			int primary_stream_idx = stream_idx;
 			int secondary_stream_idx = -1;
-			int64_t secondary_pts = -1;
 			float fade_alpha = 0.0f;
 			if (got_next_clip) {
+				secondary_stream_idx = next_clip.stream_idx;
+				fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
+
+				// If more than half-way through the fade, interpolate the next clip
+				// instead of the current one, since it's more visible.
+				if (fade_alpha >= 0.5f) {
+					swap(primary_stream_idx, secondary_stream_idx);
+					fade_alpha = 1.0f - fade_alpha;
+				}
+			}
+
+			int64_t secondary_pts = -1;
+			if (got_next_clip) {
 				int64_t in_pts_lower, in_pts_upper;
-				bool ok = find_surrounding_frames(in_pts, next_clip.stream_idx, &in_pts_lower, &in_pts_upper);
+				bool ok = find_surrounding_frames(in_pts, secondary_stream_idx, &in_pts_lower, &in_pts_upper);
 				if (ok) {
-					secondary_stream_idx = next_clip.stream_idx;
 					secondary_pts = in_pts_lower;
-					fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
+				} else {
+					secondary_stream_idx = -1;
 				}
 			}
 
@@ -144,7 +154,7 @@ got_clip:
 			}
 
 			int64_t in_pts_lower, in_pts_upper;
-			bool ok = find_surrounding_frames(in_pts, stream_idx, &in_pts_lower, &in_pts_upper);
+			bool ok = find_surrounding_frames(in_pts, primary_stream_idx, &in_pts_lower, &in_pts_upper);
 			if (!ok || in_pts_upper >= clip.pts_out) {
 				break;
 			}
@@ -164,12 +174,12 @@ got_clip:
 			}
 
 			if (in_pts_lower == in_pts_upper) {
-				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
+				destination->setFrame(primary_stream_idx, in_pts_lower, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
 				if (video_stream != nullptr) {
 					if (secondary_stream_idx == -1) {
-						video_stream->schedule_original_frame(pts, stream_idx, in_pts_lower);
+						video_stream->schedule_original_frame(pts, primary_stream_idx, in_pts_lower);
 					} else {
-						video_stream->schedule_faded_frame(pts, stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha);
+						video_stream->schedule_faded_frame(pts, primary_stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha);
 					}
 				}
 				continue;
@@ -181,12 +191,12 @@ got_clip:
 			for (int64_t snap_pts : { in_pts_lower, in_pts_upper }) {
 				double snap_pts_as_frameno = (snap_pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
-					destination->setFrame(stream_idx, snap_pts, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
+					destination->setFrame(primary_stream_idx, snap_pts, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
 					if (video_stream != nullptr) {
 						if (secondary_stream_idx == -1) {
-							video_stream->schedule_original_frame(pts, stream_idx, snap_pts);
+							video_stream->schedule_original_frame(pts, primary_stream_idx, snap_pts);
 						} else {
-							video_stream->schedule_faded_frame(pts, stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
+							video_stream->schedule_faded_frame(pts, primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
 						}
 					}
 					in_pts_origin += snap_pts - in_pts;
@@ -209,12 +219,12 @@ got_clip:
 			if (video_stream == nullptr) {
 				// Previews don't do any interpolation.
 				assert(secondary_stream_idx == -1);
-				destination->setFrame(stream_idx, in_pts_lower, /*interpolated=*/false, fade_alpha);
+				destination->setFrame(primary_stream_idx, in_pts_lower, /*interpolated=*/false, fade_alpha);
 			} else {
 				// Calculate the interpolated frame. When it's done, the destination
 				// will be unblocked.
-				destination->setFrame(stream_idx, pts, /*interpolated=*/true, secondary_stream_idx, secondary_pts, fade_alpha);
-				video_stream->schedule_interpolated_frame(pts, stream_idx, in_pts_lower, in_pts_upper, alpha, secondary_stream_idx, secondary_pts, fade_alpha);
+				destination->setFrame(primary_stream_idx, pts, /*interpolated=*/true, secondary_stream_idx, secondary_pts, fade_alpha);
+				video_stream->schedule_interpolated_frame(pts, primary_stream_idx, in_pts_lower, in_pts_upper, alpha, secondary_stream_idx, secondary_pts, fade_alpha);
 			}
 		}
 
