@@ -27,6 +27,19 @@ enum CacheMissBehavior {
 	RETURN_NULLPTR_IF_NOT_IN_CACHE
 };
 
+// This is, well, a hack. We hope for no collisions.
+inline JPEGID create_jpegid_for_interpolated_fade(unsigned stream_idx, int64_t pts, unsigned secondary_stream_idx, int64_t secondary_pts)
+{
+	JPEGID id;
+	id.stream_idx = (stream_idx << 8) | secondary_stream_idx;
+
+	uint64_t rot = secondary_stream_idx;
+	rot = (rot << 32) | (rot >> 32);
+	id.pts = pts ^ int64_t(rot);
+	id.interpolated = true;
+	return id;
+}
+
 std::string filename_for_frame(unsigned stream_idx, int64_t pts);
 std::shared_ptr<Frame> decode_jpeg(const std::string &filename);
 std::shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss_behavior, bool *did_decode);
@@ -38,7 +51,7 @@ public:
 	JPEGFrameView(QWidget *parent);
 
 	void setFrame(unsigned stream_idx, int64_t pts, bool interpolated, int secondary_stream_idx = -1, int64_t secondary_pts = -1, float fade_alpha = 0.0f);
-	static void insert_interpolated_frame(unsigned stream_idx, int64_t pts, std::shared_ptr<Frame> frame);
+	static void insert_interpolated_frame(JPEGID id, std::shared_ptr<Frame> frame);
 
 	void mousePressEvent(QMouseEvent *event) override;
 

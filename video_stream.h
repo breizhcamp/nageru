@@ -18,6 +18,7 @@ extern "C" {
 #include <movit/mix_effect.h>
 #include <movit/ycbcr_input.h>
 
+#include "jpeg_frame_view.h"
 #include "ref_counted_gl_sync.h"
 
 class ChromaSubsampler;
@@ -82,6 +83,7 @@ private:
 		InterpolatedFrameResources resources;
 		RefCountedGLsync fence;  // Set when the interpolated image is read back to the CPU.
 		GLuint flow_tex, output_tex, cbcr_tex;  // Released in the receiving thread; not really used for anything else.
+		JPEGID id;
 	};
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
 	std::mutex queue_lock;

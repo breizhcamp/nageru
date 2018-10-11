@@ -311,18 +311,22 @@ void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts, bool interpolated
 
 	unique_lock<mutex> lock(cache_mu);
 	PendingDecode decode;
-	decode.primary = JPEGID{ stream_idx, pts, interpolated };
-	decode.secondary = JPEGID{ (unsigned)secondary_stream_idx, secondary_pts, /*interpolated=*/false };
+	if (interpolated && secondary_stream_idx != -1) {
+		// The frame will already be faded for us, so ask for only one; we shouldn't fade it against anything.
+		decode.primary = create_jpegid_for_interpolated_fade(stream_idx, pts, secondary_stream_idx, secondary_pts);
+		decode.secondary = JPEGID{ (unsigned)-1, -1, /*interpolated=*/false };
+	} else {
+		decode.primary = JPEGID{ stream_idx, pts, interpolated };
+		decode.secondary = JPEGID{ (unsigned)secondary_stream_idx, secondary_pts, /*interpolated=*/false };
+	}
 	decode.fade_alpha = fade_alpha;
 	decode.destination = this;
 	pending_decodes.push_back(decode);
 	any_pending_decodes.notify_all();
 }
 
-void JPEGFrameView::insert_interpolated_frame(unsigned stream_idx, int64_t pts, shared_ptr<Frame> frame)
+void JPEGFrameView::insert_interpolated_frame(JPEGID id, shared_ptr<Frame> frame)
 {
-	JPEGID id{ stream_idx, pts, true };
-
 	// We rely on the frame not being evicted from the cache before
 	// jpeg_decoder_thread() sees it and can display it (otherwise,
 	// that thread would hang). With a default cache of 1000 elements,

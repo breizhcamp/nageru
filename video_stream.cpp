@@ -355,13 +355,20 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f\n", output_pts, input_first_pts, input_second_pts, alpha);
 	}
 
+	JPEGID id;
+	if (secondary_stream_idx == -1) {
+		id = JPEGID{ stream_idx, output_pts, /*interpolated=*/true };
+	} else {
+		id = create_jpegid_for_interpolated_fade(stream_idx, output_pts, secondary_stream_idx, secondary_input_pts);
+	}
+
 	// Get the temporary OpenGL resources we need for doing the interpolation.
 	InterpolatedFrameResources resources;
 	{
 		unique_lock<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
-			JPEGFrameView::insert_interpolated_frame(stream_idx, output_pts, nullptr);
+			JPEGFrameView::insert_interpolated_frame(id, nullptr);
 			return;
 		}
 		resources = interpolate_resources.front();
@@ -373,6 +380,7 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	qf.output_pts = output_pts;
 	qf.stream_idx = stream_idx;
 	qf.resources = resources;
+	qf.id = id;
 
 	check_error();
 
@@ -539,7 +547,7 @@ void VideoStream::encode_thread_func()
 
 			// Send a copy of the frame on to display.
 			shared_ptr<Frame> frame = frame_from_pbo(qf.resources.pbo_contents, 1280, 720);
-			JPEGFrameView::insert_interpolated_frame(qf.stream_idx, qf.output_pts, frame);  // TODO: this is wrong for fades
+			JPEGFrameView::insert_interpolated_frame(qf.id, frame);
 
 			// Now JPEG encode it, and send it on to the stream.
 			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), 1280, 720);
