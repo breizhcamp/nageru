@@ -228,6 +228,13 @@ VideoStream::VideoStream()
 	interpolate_no_split.reset(new Interpolate(operating_point2, /*split_ycbcr_output=*/false));
 	chroma_subsampler.reset(new ChromaSubsampler);
 	check_error();
+
+	// The “last frame” is initially black.
+	unique_ptr<uint8_t[]> y(new uint8_t[1280 * 720]);
+	unique_ptr<uint8_t[]> cb_or_cr(new uint8_t[640 * 720]);
+	memset(y.get(), 16, 1280 * 720);
+	memset(cb_or_cr.get(), 128, 640 * 720);
+	last_frame = encode_jpeg(y.get(), cb_or_cr.get(), cb_or_cr.get(), 1280, 720);
 }
 
 VideoStream::~VideoStream() {}
@@ -462,6 +469,16 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	queue_nonempty.notify_all();
 }
 
+void VideoStream::schedule_refresh_frame(int64_t output_pts)
+{
+	AVPacket pkt;
+	av_init_packet(&pkt);
+	pkt.stream_index = 0;
+	pkt.data = (uint8_t *)last_frame.data();
+	pkt.size = last_frame.size();
+	stream_mux->add_packet(pkt, output_pts, output_pts);
+}
+
 namespace {
 
 shared_ptr<Frame> frame_from_pbo(void *contents, size_t width, size_t height)
@@ -524,6 +541,8 @@ void VideoStream::encode_thread_func()
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
 			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+
+			last_frame.assign(&jpeg[0], &jpeg[0] + jpeg.size());
 		} else if (qf.type == QueuedFrame::FADED) {
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
@@ -538,6 +557,7 @@ void VideoStream::encode_thread_func()
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
 			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+			last_frame = move(jpeg);
 
 			// Put the frame resources back.
 			unique_lock<mutex> lock(queue_lock);
@@ -563,6 +583,7 @@ void VideoStream::encode_thread_func()
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
 			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+			last_frame = move(jpeg);
 
 			// Put the frame resources back.
 			unique_lock<mutex> lock(queue_lock);

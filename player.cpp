@@ -55,14 +55,27 @@ void Player::thread_func(bool also_output_to_stream)
 	double next_clip_fade_time = -1.0;
 
 	for ( ;; ) {
+		bool clip_ready;
+		steady_clock::time_point before_sleep = steady_clock::now();
+
 		// Wait until we're supposed to play something.
 		{
 			unique_lock<mutex> lock(queue_state_mu);
-			new_clip_changed.wait(lock, [this]{
+			clip_ready = new_clip_changed.wait_for(lock, milliseconds(100), [this]{
 				return new_clip_ready && current_clip.pts_in != -1;
 			});
 			new_clip_ready = false;
 			playing = true;
+		}
+
+		steady_clock::duration time_slept = steady_clock::now() - before_sleep;
+		pts += duration_cast<duration<size_t, TimebaseRatio>>(time_slept).count();
+
+		if (!clip_ready) {
+			if (video_stream != nullptr) {
+				video_stream->schedule_refresh_frame(pts);
+			}
+			continue;
 		}
 
 		Clip clip;

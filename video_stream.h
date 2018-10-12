@@ -39,6 +39,7 @@ public:
 	void schedule_original_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts);
 	void schedule_faded_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha);
 	void schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1, float fade_alpha = 0.0f); // -1 = no secondary frame.
+	void schedule_refresh_frame(int64_t output_pts);
 
 private:
 
@@ -100,6 +101,8 @@ private:
 	std::unique_ptr<DISComputeFlow> compute_flow;
 	std::unique_ptr<Interpolate> interpolate, interpolate_no_split;
 	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
+
+	std::vector<uint8_t> last_frame;
 };
 
 #endif  // !defined(_VIDEO_STREAM_H)

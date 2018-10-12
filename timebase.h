@@ -1,6 +1,8 @@
 #ifndef _TIMEBASE_H
 #define _TIMEBASE_H 1
 
+#include <ratio>
+
 // Common timebase that allows us to represent one frame exactly in all the
 // relevant frame rates:
 //
@@ -21,5 +23,7 @@
 // get 59.94 precisely (so there will be a marginal amount of pts jitter),
 // but can do at least 50 and 60 precisely, and months of streaming.
 #define COARSE_TIMEBASE 300
+
+using TimebaseRatio = std::ratio<1, TIMEBASE>;
 
 #endif  // !defined(_TIMEBASE_H)
