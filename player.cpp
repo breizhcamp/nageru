@@ -85,12 +85,14 @@ void Player::thread_func(bool also_output_to_stream)
 			clip = current_clip;
 			stream_idx = current_stream_idx;
 		}
-got_clip:
 		steady_clock::time_point origin = steady_clock::now();
 		int64_t in_pts_origin = clip.pts_in;
+got_clip:
 		int64_t out_pts_origin = pts;
 
 		// Start playing exactly at a frame.
+		// TODO: Snap secondary (fade-to) clips in the same fashion
+		// so that we don't get jank here).
 		{
 			lock_guard<mutex> lock(frame_mu);
 
@@ -106,6 +108,7 @@ got_clip:
 		// TODO: Lock to a rational multiple of the frame rate if possible.
 		double speed = 0.5;
 
+		int64_t in_pts_start_next_clip = -1;
 		for (int frameno = 0; ; ++frameno) {  // Ends when the clip ends.
 			double out_pts = out_pts_origin + TIMEBASE * frameno / output_framerate;
 			steady_clock::time_point next_frame_start =
@@ -129,6 +132,7 @@ got_clip:
 
 					double duration_next_clip = (next_clip.pts_out - next_clip.pts_in) / TIMEBASE / speed;
 					next_clip_fade_time = std::min(time_left_this_clip, duration_next_clip);
+					in_pts_start_next_clip = next_clip.pts_in + lrint(next_clip_fade_time * TIMEBASE * speed);
 				}
 			}
 
@@ -149,8 +153,9 @@ got_clip:
 
 			int64_t secondary_pts = -1;
 			if (got_next_clip) {
+				int64_t in_pts_secondary = lrint(next_clip.pts_in + TIMEBASE * frameno * speed / output_framerate);
 				int64_t in_pts_lower, in_pts_upper;
-				bool ok = find_surrounding_frames(in_pts, secondary_stream_idx, &in_pts_lower, &in_pts_upper);
+				bool ok = find_surrounding_frames(in_pts_secondary, secondary_stream_idx, &in_pts_lower, &in_pts_upper);
 				if (ok) {
 					secondary_pts = in_pts_lower;
 				} else {
@@ -199,6 +204,7 @@ got_clip:
 
 			// Snap to input frame: If we can do so with less than 1% jitter
 			// (ie., move less than 1% of an _output_ frame), do so.
+			// TODO: Snap secondary (fade-to) clips in the same fashion.
 			bool snapped = false;
 			for (int64_t snap_pts : { in_pts_lower, in_pts_upper }) {
 				double snap_pts_as_frameno = (snap_pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
@@ -247,6 +253,7 @@ got_clip:
 			next_clip = next_clip_callback();
 			if (next_clip.pts_in != -1) {
 				got_next_clip = true;
+				in_pts_start_next_clip = next_clip.pts_in;
 			}
 		}
 
@@ -258,6 +265,10 @@ got_clip:
 				done_callback();
 			}
 			got_next_clip = false;
+
+			// Start the next clip from the point where the fade went out.
+			origin = steady_clock::now();
+			in_pts_origin = in_pts_start_next_clip;
 			goto got_clip;
 		}
 
