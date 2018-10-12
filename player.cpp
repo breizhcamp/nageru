@@ -231,7 +231,7 @@ got_clip:
 			if (video_stream == nullptr) {
 				// Previews don't do any interpolation.
 				assert(secondary_stream_idx == -1);
-				destination->setFrame(primary_stream_idx, in_pts_lower, /*interpolated=*/false, fade_alpha);
+				destination->setFrame(primary_stream_idx, in_pts_lower, /*interpolated=*/false);
 			} else {
 				// Calculate the interpolated frame. When it's done, the destination
 				// will be unblocked.
