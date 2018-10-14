@@ -54,6 +54,9 @@ MainWindow::MainWindow()
 	ui->playlist->setModel(playlist_clips);
 	connect(playlist_clips, &PlayList::any_content_changed, this, &MainWindow::content_changed);
 
+	// For un-highlighting when we lose focus.
+	ui->clip_list->installEventFilter(this);
+
 	// For scrubbing in the pts columns.
 	ui->clip_list->viewport()->installEventFilter(this);
 	ui->playlist->viewport()->installEventFilter(this);
@@ -137,6 +140,9 @@ MainWindow::MainWindow()
 	defer_timeout = new QTimer(this);
 	defer_timeout->setSingleShot(true);
 	connect(defer_timeout, &QTimer::timeout, this, &MainWindow::defer_timer_expired);
+
+	connect(ui->clip_list->selectionModel(), &QItemSelectionModel::currentChanged,
+		this, &MainWindow::clip_list_selection_changed);
 }
 
 void MainWindow::cue_in_clicked()
@@ -410,6 +416,13 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 	unsigned stream_idx = ui->preview_display->get_stream_idx();
 
+	if (watched == ui->clip_list) {
+		if (event->type() == QEvent::FocusOut) {
+			highlight_camera_input(-1);
+		}
+		return false;
+	}
+
 	if (event->type() != QEvent::Wheel) {
 		last_mousewheel_camera_row = -1;
 	}
@@ -617,6 +630,16 @@ void MainWindow::playlist_selection_changed()
 	ui->play_btn->setEnabled(!playlist_clips->empty());
 }
 
+void MainWindow::clip_list_selection_changed(const QModelIndex &current, const QModelIndex &)
+{
+	int camera_selected = -1;
+	if (current.column() >= int(ClipList::Column::CAMERA_1) &&
+	    current.column() <= int(ClipList::Column::CAMERA_4)) {
+		camera_selected = current.column() - int(ClipList::Column::CAMERA_1);
+	}
+	highlight_camera_input(camera_selected);
+}
+
 void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_left)
 {
 	char time_str[256];
@@ -655,3 +678,26 @@ void MainWindow::exit_triggered()
 	close();
 }
 
+void MainWindow::highlight_camera_input(int stream_idx)
+{
+	if (stream_idx == 0) {
+		ui->input1_frame->setStyleSheet("background: rgb(0,255,0)");
+	} else {
+		ui->input1_frame->setStyleSheet("");
+	}
+	if (stream_idx == 1) {
+		ui->input2_frame->setStyleSheet("background: rgb(0,255,0)");
+	} else {
+		ui->input2_frame->setStyleSheet("");
+	}
+	if (stream_idx == 2) {
+		ui->input3_frame->setStyleSheet("background: rgb(0,255,0)");
+	} else {
+		ui->input3_frame->setStyleSheet("");
+	}
+	if (stream_idx == 3) {
+		ui->input4_frame->setStyleSheet("background: rgb(0,255,0)");
+	} else {
+		ui->input4_frame->setStyleSheet("");
+	}
+}

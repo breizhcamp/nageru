@@ -85,11 +85,15 @@ private:
 	// Also covers when the playlist itself changes.
 	void playlist_selection_changed();
 
+	void clip_list_selection_changed(const QModelIndex &current, const QModelIndex &previous);
+
 	void resizeEvent(QResizeEvent *event) override;
 	bool eventFilter(QObject *watched, QEvent *event) override;
 
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
 	void exit_triggered();
+
+	void highlight_camera_input(int stream_idx);
 
 private slots:
 	void relayout();
