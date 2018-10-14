@@ -1,21 +1,18 @@
 #ifndef _JPEG_FRAME_VIEW_H
 #define _JPEG_FRAME_VIEW_H 1
 
-#include <epoxy/gl.h>
+#include "jpeg_frame.h"
+#include "ycbcr_converter.h"
+
 #include <QGLWidget>
-
-#include <stdint.h>
-
+#include <epoxy/gl.h>
+#include <memory>
 #include <movit/effect_chain.h>
 #include <movit/flat_input.h>
 #include <movit/mix_effect.h>
 #include <movit/ycbcr_input.h>
-
-#include <memory>
+#include <stdint.h>
 #include <thread>
-
-#include "jpeg_frame.h"
-#include "ycbcr_converter.h"
 
 struct JPEGID {
 	unsigned stream_idx;

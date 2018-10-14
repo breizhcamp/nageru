@@ -1,6 +1,8 @@
 #define NO_SDL_GLEXT 1
 
-#include <epoxy/gl.h>
+#include "flow.h"
+#include "gpu_timers.h"
+#include "util.h"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_error.h>
@@ -9,21 +11,16 @@
 #include <SDL2/SDL_keyboard.h>
 #include <SDL2/SDL_mouse.h>
 #include <SDL2/SDL_video.h>
-
+#include <algorithm>
 #include <assert.h>
+#include <deque>
+#include <epoxy/gl.h>
 #include <getopt.h>
+#include <map>
+#include <memory>
+#include <stack>
 #include <stdio.h>
 #include <unistd.h>
-
-#include "flow.h"
-#include "gpu_timers.h"
-#include "util.h"
-
-#include <algorithm>
-#include <deque>
-#include <memory>
-#include <map>
-#include <stack>
 #include <vector>
 
 #define BUFFER_OFFSET(i) ((char *)nullptr + (i))
@@ -418,7 +415,7 @@ void interpolate_image(int argc, char **argv, int optind)
 
 int main(int argc, char **argv)
 {
-        static const option long_options[] = {
+	static const option long_options[] = {
 		{ "smoothness-relative-weight", required_argument, 0, 's' },  // alpha.
 		{ "intensity-relative-weight", required_argument, 0, 'i' },  // delta.
 		{ "gradient-relative-weight", required_argument, 0, 'g' },  // gamma.

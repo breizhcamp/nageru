@@ -5,9 +5,6 @@ extern "C" {
 #include <libavformat/avio.h>
 }
 
-#include <jpeglib.h>
-#include <unistd.h>
-
 #include "chroma_subsampler.h"
 #include "context.h"
 #include "flow.h"
@@ -20,6 +17,8 @@ extern "C" {
 #include "ycbcr_converter.h"
 
 #include <epoxy/glx.h>
+#include <jpeglib.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -134,8 +133,8 @@ vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cb_data, const
 	for (unsigned y = 0; y < height; y += 8) {
 		for (unsigned yy = 0; yy < 8; ++yy) {
 			yptr[yy] = const_cast<JSAMPROW>(&y_data[(y + yy) * width]);
-			cbptr[yy] = const_cast<JSAMPROW>(&cb_data[(y + yy) * width/2]);
-			crptr[yy] = const_cast<JSAMPROW>(&cr_data[(y + yy) * width/2]);
+			cbptr[yy] = const_cast<JSAMPROW>(&cb_data[(y + yy) * width / 2]);
+			crptr[yy] = const_cast<JSAMPROW>(&cr_data[(y + yy) * width / 2]);
 		}
 
 		jpeg_write_raw_data(&cinfo, data, /*num_lines=*/8);
@@ -217,7 +216,7 @@ VideoStream::VideoStream()
 		check_error();
 		glNamedBufferStorage(resource.pbo, width * height * 4, nullptr, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
 		check_error();
- 		resource.pbo_contents = glMapNamedBufferRange(resource.pbo, 0, width * height * 4, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT); 
+		resource.pbo_contents = glMapNamedBufferRange(resource.pbo, 0, width * height * 4, GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT);
 		interpolate_resources.push_back(resource);
 	}
 
@@ -276,7 +275,7 @@ void VideoStream::schedule_original_frame(int64_t output_pts, unsigned stream_id
 	qf.type = QueuedFrame::ORIGINAL;
 	qf.output_pts = output_pts;
 	qf.stream_idx = stream_idx;
-	qf.input_first_pts = input_pts;	
+	qf.input_first_pts = input_pts;
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(qf);
@@ -436,7 +435,6 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 		// Subsample and split Cb/Cr.
 		chroma_subsampler->subsample_chroma(qf.cbcr_tex, 1280, 720, resources.cb_tex, resources.cr_tex);
 	}
-
 
 	// We could have released qf.flow_tex here, but to make sure we don't cause a stall
 	// when trying to reuse it for the next frame, we can just as well hold on to it
@@ -618,4 +616,3 @@ int VideoStream::write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType ty
 	}
 	return buf_size;
 }
-

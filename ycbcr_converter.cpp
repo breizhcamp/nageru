@@ -1,9 +1,9 @@
 #include "ycbcr_converter.h"
 
+#include "jpeg_frame.h"
+
 #include <movit/mix_effect.h>
 #include <movit/ycbcr_input.h>
-
-#include "jpeg_frame.h"
 
 using namespace std;
 using namespace movit;

@@ -1,13 +1,4 @@
-#include <algorithm>
-#include <chrono>
-#include <condition_variable>
-#include <mutex>
-#include <thread>
-#include <vector>
-
-#include <stdio.h>
-
-#include <movit/util.h>
+#include "player.h"
 
 #include "clip_list.h"
 #include "context.h"
@@ -16,9 +7,17 @@
 #include "httpd.h"
 #include "jpeg_frame_view.h"
 #include "mux.h"
-#include "player.h"
 #include "timebase.h"
 #include "video_stream.h"
+
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <movit/util.h>
+#include <mutex>
+#include <stdio.h>
+#include <thread>
+#include <vector>
 
 using namespace std;
 using namespace std::chrono;
@@ -45,7 +44,7 @@ void Player::thread_func(bool also_output_to_stream)
 		video_stream.reset(new VideoStream);
 		video_stream->start();
 	}
-	
+
 	check_error();
 
 	constexpr double output_framerate = 60000.0 / 1001.0;  // FIXME: make configurable
@@ -61,7 +60,7 @@ void Player::thread_func(bool also_output_to_stream)
 		// Wait until we're supposed to play something.
 		{
 			unique_lock<mutex> lock(queue_state_mu);
-			clip_ready = new_clip_changed.wait_for(lock, milliseconds(100), [this]{
+			clip_ready = new_clip_changed.wait_for(lock, milliseconds(100), [this] {
 				return new_clip_ready && current_clip.pts_in != -1;
 			});
 			new_clip_ready = false;
@@ -331,7 +330,7 @@ void Player::play_clip(const Clip &clip, unsigned stream_idx)
 
 void Player::override_angle(unsigned stream_idx)
 {
-	// Corner case: If a new clip is waiting to be played, change its stream and then we're done. 
+	// Corner case: If a new clip is waiting to be played, change its stream and then we're done.
 	{
 		unique_lock<mutex> lock(queue_state_mu);
 		if (new_clip_ready) {
@@ -362,7 +361,7 @@ void Player::override_angle(unsigned stream_idx)
 		}
 		pts_out = current_clip.pts_out;
 	}
-			
+
 	lock_guard<mutex> lock(frame_mu);
 	auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts_out);
 	if (it == frames[stream_idx].end()) {

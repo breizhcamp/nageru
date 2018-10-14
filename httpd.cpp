@@ -3,13 +3,13 @@
 #include <assert.h>
 #include <byteswap.h>
 #include <endian.h>
+#include <memory>
 #include <microhttpd.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
 #include <time.h>
-#include <memory>
 extern "C" {
 #include <libavutil/avutil.h>
 }
@@ -75,8 +75,8 @@ int HTTPD::answer_to_connection_thunk(void *cls, MHD_Connection *connection,
 
 int HTTPD::answer_to_connection(MHD_Connection *connection,
                                 const char *url, const char *method,
-				const char *version, const char *upload_data,
-				size_t *upload_data_size, void **con_cls)
+                                const char *version, const char *upload_data,
+                                size_t *upload_data_size, void **con_cls)
 {
 	// See if the URL ends in “.metacube”.
 	HTTPD::Stream::Framing framing;
@@ -154,7 +154,7 @@ ssize_t HTTPD::Stream::reader_callback_thunk(void *cls, uint64_t pos, char *buf,
 ssize_t HTTPD::Stream::reader_callback(uint64_t pos, char *buf, size_t max)
 {
 	unique_lock<mutex> lock(buffer_mutex);
-	has_buffered_data.wait(lock, [this]{ return should_quit || !buffered_data.empty(); });
+	has_buffered_data.wait(lock, [this] { return should_quit || !buffered_data.empty(); });
 	if (should_quit) {
 		return 0;
 	}
@@ -253,7 +253,7 @@ void HTTPD::Stream::add_data(const char *buf, size_t buf_size, HTTPD::Stream::Da
 		buffered_data.emplace_back((char *)&packet, sizeof(packet));
 	}
 
-	has_buffered_data.notify_all();	
+	has_buffered_data.notify_all();
 }
 
 void HTTPD::Stream::stop()

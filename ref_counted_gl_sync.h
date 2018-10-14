@@ -16,7 +16,7 @@ class RefCountedGLsync : public RefCountedGLsyncBase {
 public:
 	RefCountedGLsync() {}
 
-	RefCountedGLsync(GLenum condition, GLbitfield flags) 
+	RefCountedGLsync(GLenum condition, GLbitfield flags)
 		: RefCountedGLsyncBase(locked_glFenceSync(condition, flags), glDeleteSync) {}
 
 private:

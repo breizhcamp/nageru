@@ -1,12 +1,11 @@
 // Evaluate a .flo file against ground truth,
 // outputting the average end-point error.
 
-#include <assert.h>
-#include <stdio.h>
-
-#include <memory>
-
 #include "util.h"
+
+#include <assert.h>
+#include <memory>
+#include <stdio.h>
 
 using namespace std;
 

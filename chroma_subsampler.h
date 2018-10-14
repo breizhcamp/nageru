@@ -1,9 +1,9 @@
 #ifndef _CHROMA_SUBSAMPLER_H
 #define _CHROMA_SUBSAMPLER_H 1
 
-#include <epoxy/gl.h>
-
 #include "flow.h"
+
+#include <epoxy/gl.h>
 
 class ChromaSubsampler {
 public:

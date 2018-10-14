@@ -1,7 +1,7 @@
 #include "chroma_subsampler.h"
 
-#include <string>
 #include <movit/util.h>
+#include <string>
 
 #define BUFFER_OFFSET(i) ((char *)nullptr + (i))
 
@@ -83,10 +83,10 @@ ChromaSubsampler::ChromaSubsampler()
 		2.0f, 0.0f
 	};
 	glCreateBuffers(1, &vbo);
-        glNamedBufferData(vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glNamedBufferData(vbo, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-        GLint position_attrib = 0;  // Hard-coded in every vertex shader.
+	GLint position_attrib = 0;  // Hard-coded in every vertex shader.
 	glEnableVertexArrayAttrib(vao, position_attrib);
 	glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
@@ -112,7 +112,7 @@ void ChromaSubsampler::subsample_chroma(GLuint cbcr_tex, unsigned width, unsigne
 	glProgramUniform2f(cbcr_program, uniform_chroma_offset_0, -1.0f / width, 0.0f);
 	glProgramUniform2f(cbcr_program, uniform_chroma_offset_1, -0.0f / width, 0.0f);
 
-	glViewport(0, 0, width/2, height);
+	glViewport(0, 0, width / 2, height);
 	fbos.render_to(cb_tex, cr_tex);
 
 	glBindVertexArray(vao);

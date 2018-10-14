@@ -1,21 +1,20 @@
 #define NO_SDL_GLEXT 1
 
-#include <epoxy/gl.h>
-
-#include <assert.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-
 #include "flow.h"
+
 #include "gpu_timers.h"
 #include "util.h"
 
 #include <algorithm>
+#include <assert.h>
 #include <deque>
-#include <memory>
+#include <epoxy/gl.h>
 #include <map>
+#include <memory>
 #include <stack>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #include <vector>
 
 #define BUFFER_OFFSET(i) ((char *)nullptr + (i))
@@ -80,7 +79,7 @@ string read_file(const string &filename)
 	}
 	if (ret == 0) {
 		fprintf(stderr, "Short read when trying to read %d bytes from %s\n",
-				size, filename.c_str());
+		        size, filename.c_str());
 		exit(1);
 	}
 	fclose(fp);
@@ -88,11 +87,10 @@ string read_file(const string &filename)
 	return str;
 }
 
-
 GLuint compile_shader(const string &shader_src, GLenum type)
 {
 	GLuint obj = glCreateShader(type);
-	const GLchar* source[] = { shader_src.data() };
+	const GLchar *source[] = { shader_src.data() };
 	const GLint length[] = { (GLint)shader_src.size() };
 	glShaderSource(obj, 1, source, length);
 	glCompileShader(obj);

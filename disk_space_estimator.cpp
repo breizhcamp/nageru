@@ -1,11 +1,11 @@
 #include "disk_space_estimator.h"
 
+#include "timebase.h"
+
+#include <memory>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
-#include <memory>
-
-#include "timebase.h"
 
 DiskSpaceEstimator::DiskSpaceEstimator(DiskSpaceEstimator::callback_t callback)
 	: callback(callback)

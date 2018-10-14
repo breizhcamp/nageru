@@ -1,9 +1,8 @@
 #ifndef _YCBCR_CONVERTER_H
 #define _YCBCR_CONVERTER_H 1
 
-#include <memory>
-
 #include <epoxy/gl.h>
+#include <memory>
 #include <movit/ycbcr_input.h>
 
 namespace movit {
@@ -58,4 +57,4 @@ private:
 // TODO: make private
 void setup_input_for_frame(std::shared_ptr<Frame> frame, const movit::YCbCrFormat &ycbcr_format, movit::YCbCrInput *input);
 
-#endif   // !defined(_YCBCR_CONVERTER_H)
+#endif  // !defined(_YCBCR_CONVERTER_H)

@@ -2,6 +2,7 @@
 #define DB_H 1
 
 #include "state.pb.h"
+
 #include <sqlite3.h>
 
 class DB {

@@ -1,12 +1,12 @@
+#include "clip_list.h"
+
 #include "mainwindow.h"
+#include "timebase.h"
+#include "ui_mainwindow.h"
 
 #include <math.h>
 #include <string>
 #include <vector>
-
-#include "clip_list.h"
-#include "timebase.h"
-#include "ui_mainwindow.h"
 
 using namespace std;
 
@@ -40,27 +40,36 @@ string duration_to_string(int64_t pts_diff)
 	return buf;
 }
 
-int ClipList::rowCount(const QModelIndex &parent) const {
-	if (parent.isValid()) return 0;
+int ClipList::rowCount(const QModelIndex &parent) const
+{
+	if (parent.isValid())
+		return 0;
 	return clips.size();
 }
 
-int PlayList::rowCount(const QModelIndex &parent) const {
-	if (parent.isValid()) return 0;
+int PlayList::rowCount(const QModelIndex &parent) const
+{
+	if (parent.isValid())
+		return 0;
 	return clips.size();
 }
 
-int ClipList::columnCount(const QModelIndex &parent) const {
-	if (parent.isValid()) return 0;
+int ClipList::columnCount(const QModelIndex &parent) const
+{
+	if (parent.isValid())
+		return 0;
 	return int(Column::NUM_COLUMNS);
 }
 
-int PlayList::columnCount(const QModelIndex &parent) const {
-	if (parent.isValid()) return 0;
+int PlayList::columnCount(const QModelIndex &parent) const
+{
+	if (parent.isValid())
+		return 0;
 	return int(Column::NUM_COLUMNS);
 }
 
-QVariant ClipList::data(const QModelIndex &parent, int role) const {
+QVariant ClipList::data(const QModelIndex &parent, int role) const
+{
 	if (!parent.isValid())
 		return QVariant();
 	const int row = parent.row(), column = parent.column();
@@ -108,7 +117,8 @@ QVariant ClipList::data(const QModelIndex &parent, int role) const {
 	}
 }
 
-QVariant PlayList::data(const QModelIndex &parent, int role) const {
+QVariant PlayList::data(const QModelIndex &parent, int role) const
+{
 	if (!parent.isValid())
 		return QVariant();
 	const int row = parent.row(), column = parent.column();
@@ -186,7 +196,8 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const {
 	}
 }
 
-QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role) const {
+QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role) const
+{
 	if (role != Qt::DisplayRole)
 		return QVariant();
 	if (orientation != Qt::Horizontal)
@@ -212,7 +223,8 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 	}
 }
 
-QVariant PlayList::headerData(int section, Qt::Orientation orientation, int role) const {
+QVariant PlayList::headerData(int section, Qt::Orientation orientation, int role) const
+{
 	if (role != Qt::DisplayRole)
 		return QVariant();
 	if (orientation != Qt::Horizontal)
@@ -379,7 +391,7 @@ void PlayList::move_clips(size_t first, size_t last, int delta)
 		beginMoveRows(QModelIndex(), first, last, QModelIndex(), first - 1);
 		rotate(clips.begin() + first - 1, clips.begin() + first, clips.begin() + last + 1);
 	} else {
-		beginMoveRows(QModelIndex(), first, last, QModelIndex(), first + (last-first+1) + 1);
+		beginMoveRows(QModelIndex(), first, last, QModelIndex(), first + (last - first + 1) + 1);
 		first = clips.size() - first - 1;
 		last = clips.size() - last - 1;
 		rotate(clips.rbegin() + last - 1, clips.rbegin() + last, clips.rbegin() + first + 1);

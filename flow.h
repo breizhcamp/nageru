@@ -5,13 +5,13 @@
 // in-between frames. The main user interface is the DISComputeFlow and Interpolate
 // classes (also GrayscaleConversion can be useful).
 
-#include <stdint.h>
-#include <epoxy/gl.h>
 #include <array>
+#include <epoxy/gl.h>
 #include <map>
 #include <mutex>
-#include <vector>
+#include <stdint.h>
 #include <utility>
+#include <vector>
 
 class ScopedTimer;
 
@@ -110,7 +110,6 @@ private:
 	// TODO: Delete these on destruction.
 	std::map<std::array<GLuint, num_elements>, GLuint> fbos;
 };
-
 
 // Same, but with a depth texture.
 template<size_t num_elements>
@@ -422,7 +421,8 @@ public:
 	// after use.
 	GLuint exec(GLuint tex, FlowDirection flow_direction, ResizeStrategy resize_strategy);
 
-	void release_texture(GLuint tex) {
+	void release_texture(GLuint tex)
+	{
 		pool.release_texture(tex);
 	}
 
@@ -548,7 +548,8 @@ public:
 	// two-layer RGBA8 texture with mipmaps (unless flow_level == 0).
 	std::pair<GLuint, GLuint> exec(GLuint image_tex, GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint width, GLuint height, float alpha);
 
-	void release_texture(GLuint tex) {
+	void release_texture(GLuint tex)
+	{
 		pool.release_texture(tex);
 	}
 

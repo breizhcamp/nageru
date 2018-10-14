@@ -1,28 +1,27 @@
 #include "jpeg_frame_view.h"
 
-#include <jpeglib.h>
-#include <stdint.h>
-#include <unistd.h>
-
-#include <atomic>
-#include <condition_variable>
-#include <deque>
-#include <mutex>
-#include <thread>
-#include <utility>
+#include "defs.h"
+#include "post_to_main_thread.h"
+#include "video_stream.h"
+#include "ycbcr_converter.h"
 
 #include <QMouseEvent>
 #include <QScreen>
-
-#include <movit/resource_pool.h>
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <jpeglib.h>
 #include <movit/init.h>
+#include <movit/resource_pool.h>
 #include <movit/util.h>
+#include <mutex>
+#include <stdint.h>
+#include <thread>
+#include <unistd.h>
+#include <utility>
 
-#include "defs.h"
-#include "post_to_main_thread.h"
+// Must come after the Qt stuff.
 #include "vaapi_jpeg_decoder.h"
-#include "video_stream.h"
-#include "ycbcr_converter.h"
 
 using namespace movit;
 using namespace std;
@@ -146,7 +145,7 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 		jpeg_read_raw_data(&dinfo, data, v_mcu_size);
 	}
 
-	(void) jpeg_finish_decompress(&dinfo);
+	(void)jpeg_finish_decompress(&dinfo);
 	jpeg_destroy_decompress(&dinfo);
 	fclose(fp);
 
@@ -215,7 +214,8 @@ void jpeg_decoder_thread_func()
 			any_pending_decodes.wait(lock, [] {
 				return !pending_decodes.empty() || should_quit.load();
 			});
-			if (should_quit.load()) break;
+			if (should_quit.load())
+				break;
 			decode = pending_decodes.front();
 			pending_decodes.pop_front();
 
@@ -248,7 +248,8 @@ void jpeg_decoder_thread_func()
 				cache_updated.wait(lock, [id] {
 					return cache.count(id) != 0 || should_quit.load();
 				});
-				if (should_quit.load()) break;
+				if (should_quit.load())
+					break;
 				found_in_cache = true;  // Don't count it as a decode.
 
 				auto it = cache.find(id);
@@ -302,7 +303,8 @@ void JPEGFrameView::shutdown()
 }
 
 JPEGFrameView::JPEGFrameView(QWidget *parent)
-	: QGLWidget(parent, global_share_widget) {
+	: QGLWidget(parent, global_share_widget)
+{
 }
 
 void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts, bool interpolated, int secondary_stream_idx, int64_t secondary_pts, float fade_alpha)
@@ -398,7 +400,6 @@ void JPEGFrameView::paintGL()
 }
 
 namespace {
-
 
 }  // namespace
 

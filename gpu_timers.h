@@ -1,11 +1,10 @@
 #ifndef _GPU_TIMERS_H
 #define _GPU_TIMERS_H 1
 
+#include <epoxy/gl.h>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include <epoxy/gl.h>
 
 extern bool enable_timing;
 extern bool detailed_timing;

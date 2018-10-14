@@ -1,25 +1,24 @@
 #include "vaapi_jpeg_decoder.h"
 
+#include "jpeg_frame.h"
+#include "memcpy_interleaved.h"
+
 #include <X11/Xlib.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
 #include <jpeglib.h>
+#include <list>
+#include <mutex>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <unistd.h>
 #include <va/va.h>
 #include <va/va_drm.h>
 #include <va/va_x11.h>
-
-#include <list>
-#include <mutex>
-#include <string>
-
-#include "jpeg_frame.h"
-#include "memcpy_interleaved.h"
 
 using namespace std;
 
@@ -27,7 +26,7 @@ static unique_ptr<VADisplayWithCleanup> va_dpy;
 static VAConfigID config_id;
 static VAImageFormat uyvy_format;
 bool vaapi_jpeg_decoding_usable = false;
-	
+
 struct VAResources {
 	unsigned width, height;
 	VASurfaceID surface;
@@ -108,7 +107,8 @@ class ReleaseVAResources {
 public:
 	ReleaseVAResources(const VAResources &resources)
 		: resources(resources) {}
-	~ReleaseVAResources() {
+	~ReleaseVAResources()
+	{
 		if (!committed) {
 			release_va_resources(resources);
 		}
@@ -170,7 +170,8 @@ unique_ptr<VADisplayWithCleanup> try_open_va(const string &va_display, string *e
 {
 	unique_ptr<VADisplayWithCleanup> va_dpy = va_open_display(va_display);
 	if (va_dpy == nullptr) {
-		if (error) *error = "Opening VA display failed";
+		if (error)
+			*error = "Opening VA display failed";
 		return nullptr;
 	}
 	int major_ver, minor_ver;
@@ -178,14 +179,16 @@ unique_ptr<VADisplayWithCleanup> try_open_va(const string &va_display, string *e
 	if (va_status != VA_STATUS_SUCCESS) {
 		char buf[256];
 		snprintf(buf, sizeof(buf), "vaInitialize() failed with status %d\n", va_status);
-		if (error != nullptr) *error = buf;
+		if (error != nullptr)
+			*error = buf;
 		return nullptr;
 	}
 
 	int num_entrypoints = vaMaxNumEntrypoints(va_dpy->va_dpy);
 	unique_ptr<VAEntrypoint[]> entrypoints(new VAEntrypoint[num_entrypoints]);
 	if (entrypoints == nullptr) {
-		if (error != nullptr) *error = "Failed to allocate memory for VA entry points";
+		if (error != nullptr)
+			*error = "Failed to allocate memory for VA entry points";
 		return nullptr;
 	}
 
@@ -199,7 +202,8 @@ unique_ptr<VADisplayWithCleanup> try_open_va(const string &va_display, string *e
 		return va_dpy;
 	}
 
-	if (error != nullptr) *error = "Can't find VAEntrypointVLD for the JPEG profile";
+	if (error != nullptr)
+		*error = "Can't find VAEntrypointVLD for the JPEG profile";
 	return nullptr;
 }
 
@@ -422,7 +426,7 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	memset(&parms, 0, sizeof(parms));
 	parms.slice_data_size = str.size();
 	parms.slice_data_offset = 0;
-	parms.slice_data_flag = VA_SLICE_DATA_FLAG_ALL;	
+	parms.slice_data_flag = VA_SLICE_DATA_FLAG_ALL;
 	parms.slice_horizontal_position = 0;
 	parms.slice_vertical_position = 0;
 	for (int component_idx = 0; component_idx < dinfo.num_components; ++component_idx) {
@@ -431,7 +435,7 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 		parms.components[component_idx].dc_table_selector = comp->dc_tbl_no;
 		parms.components[component_idx].ac_table_selector = comp->ac_tbl_no;
 		if (parms.components[component_idx].dc_table_selector > 1 ||
-	  	    parms.components[component_idx].ac_table_selector > 1) {
+		    parms.components[component_idx].ac_table_selector > 1) {
 			fprintf(stderr, "Uses too many Huffman tables\n");
 			return nullptr;
 		}

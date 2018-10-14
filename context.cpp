@@ -1,12 +1,10 @@
-#include <stdio.h>
-
-#include <string>
-
 #include <QGL>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QSurface>
 #include <QSurfaceFormat>
+#include <stdio.h>
+#include <string>
 
 QGLWidget *global_share_widget = nullptr;
 

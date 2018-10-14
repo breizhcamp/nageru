@@ -1,15 +1,14 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <stdbool.h>
-#include <sys/types.h>
-
-#include <QLabel>
-#include <QMainWindow>
-
 #include "clip_list.h"
 #include "db.h"
 #include "state.pb.h"
+
+#include <QLabel>
+#include <QMainWindow>
+#include <stdbool.h>
+#include <sys/types.h>
 
 namespace Ui {
 class MainWindow;
@@ -17,8 +16,7 @@ class MainWindow;
 
 class Player;
 
-class MainWindow : public QMainWindow
-{
+class MainWindow : public QMainWindow {
 	Q_OBJECT
 
 public:
@@ -102,4 +100,3 @@ private slots:
 extern MainWindow *global_mainwindow;
 
 #endif
-

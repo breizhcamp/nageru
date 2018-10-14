@@ -7,16 +7,14 @@
 #include "timebase.h"
 #include "ui_mainwindow.h"
 
-#include <future>
-#include <string>
-#include <vector>
-
 #include <QMouseEvent>
-#include <QWheelEvent>
 #include <QShortcut>
 #include <QTimer>
-
+#include <QWheelEvent>
+#include <future>
 #include <sqlite3.h>
+#include <string>
+#include <vector>
 
 using namespace std;
 using namespace std::placeholders;
@@ -199,7 +197,8 @@ void MainWindow::queue_clicked()
 
 void MainWindow::preview_clicked()
 {
-	if (cliplist_clips->empty()) return;
+	if (cliplist_clips->empty())
+		return;
 
 	QItemSelectionModel *selected = ui->clip_list->selectionModel();
 	if (!selected->hasSelection()) {
@@ -315,7 +314,8 @@ void MainWindow::state_changed(const StateProto &state)
 
 void MainWindow::play_clicked()
 {
-	if (playlist_clips->empty()) return;
+	if (playlist_clips->empty())
+		return;
 
 	QItemSelectionModel *selected = ui->playlist->selectionModel();
 	int row;
@@ -366,7 +366,7 @@ void MainWindow::live_player_clip_progress(double played_this_clip, double total
 	double remaining = total_length - played_this_clip;
 	for (int row = playlist_clips->get_currently_playing() + 1; row < int(playlist_clips->size()); ++row) {
 		const Clip clip = *playlist_clips->clip(row);
-		remaining += double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;   // FIXME: stop hardcoding speed.
+		remaining += double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;  // FIXME: stop hardcoding speed.
 	}
 	int remaining_ms = lrint(remaining * 1e3);
 
@@ -444,7 +444,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		}
 		int column = destination->columnAt(mouse->x());
 		int row = destination->rowAt(mouse->y());
-		if (column == -1 || row == -1) return false;
+		if (column == -1 || row == -1)
+			return false;
 
 		if (type == SCRUBBING_CLIP_LIST) {
 			if (ClipList::Column(column) == ClipList::Column::IN) {
@@ -596,7 +597,8 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 {
 	if (rounding == LAST_BEFORE) {
 		lock_guard<mutex> lock(frame_mu);
-		if (frames[stream_idx].empty()) return;
+		if (frames[stream_idx].empty())
+			return;
 		auto it = lower_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts);
 		if (it != frames[stream_idx].end()) {
 			pts = *it;
@@ -604,7 +606,8 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 	} else {
 		assert(rounding == FIRST_AT_OR_AFTER);
 		lock_guard<mutex> lock(frame_mu);
-		if (frames[stream_idx].empty()) return;
+		if (frames[stream_idx].empty())
+			return;
 		auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts - 1);
 		if (it != frames[stream_idx].end()) {
 			pts = *it;
@@ -667,10 +670,10 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
 
 	std::string label = buf;
 
-	post_to_main_thread([this, label]{
-			disk_free_label->setText(QString::fromStdString(label));
-			ui->menuBar->setCornerWidget(disk_free_label);  // Need to set this again for the sizing to get right.
-			});
+	post_to_main_thread([this, label] {
+		disk_free_label->setText(QString::fromStdString(label));
+		ui->menuBar->setCornerWidget(disk_free_label);  // Need to set this again for the sizing to get right.
+	});
 }
 
 void MainWindow::exit_triggered()

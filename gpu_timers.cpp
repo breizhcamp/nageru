@@ -1,6 +1,6 @@
-#include <epoxy/gl.h>
-
 #include "gpu_timers.h"
+
+#include <epoxy/gl.h>
 
 using namespace std;
 
@@ -54,7 +54,8 @@ void GPUTimers::print()
 			size_t num_subtimers = 0;
 			GLint64 sum_subtimers = 0;
 			for (size_t j = i + 1; j < timers.size() && timers[j].level > timers[i].level; ++j) {
-				if (timers[j].level != timers[i].level + 1) continue;
+				if (timers[j].level != timers[i].level + 1)
+					continue;
 				++num_subtimers;
 				sum_subtimers += find_elapsed(timers[j].query);
 			}

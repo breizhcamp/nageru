@@ -67,7 +67,7 @@ void DB::store_state(const StateProto &state)
 	}
 
 	sqlite3_stmt *stmt;
-    	ret = sqlite3_prepare(db, "INSERT INTO state VALUES (?)", -1, &stmt, 0);
+	ret = sqlite3_prepare(db, "INSERT INTO state VALUES (?)", -1, &stmt, 0);
 	if (ret != SQLITE_OK) {
 		fprintf(stderr, "INSERT prepare: %s\n", sqlite3_errmsg(db));
 		exit(1);

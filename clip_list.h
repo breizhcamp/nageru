@@ -1,15 +1,13 @@
 #ifndef _CLIP_LIST_H
 #define _CLIP_LIST_H 1
 
-#include <QAbstractTableModel>
-
-#include <stdint.h>
-
-#include <vector>
-#include <string>
-
 #include "defs.h"
 #include "state.pb.h"
+
+#include <QAbstractTableModel>
+#include <stdint.h>
+#include <string>
+#include <vector>
 
 struct Clip {
 	int64_t pts_in = -1, pts_out = -1;  // pts_in is inclusive, pts_out is exclusive.
@@ -28,7 +26,8 @@ struct ClipProxy {
 public:
 	ClipProxy(Clip &clip, DataChangedReceiver *clip_list, size_t row)
 		: clip(clip), clip_list(clip_list), row(row) {}
-	~ClipProxy() {
+	~ClipProxy()
+	{
 		if (clip_list != nullptr) {
 			clip_list->emit_data_changed(row);
 		}

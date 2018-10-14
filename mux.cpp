@@ -1,12 +1,12 @@
 #include "mux.h"
 
+#include <algorithm>
 #include <assert.h>
+#include <mutex>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <algorithm>
-#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -171,7 +171,8 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational t
 		lock_guard<mutex> lock(mu);
 		if (write_strategy == WriteStrategy::WRITE_BACKGROUND) {
 			packet_queue.push_back(QueuedPacket{ av_packet_clone(&pkt_copy), pts });
-			if (plug_count == 0) packet_queue_ready.notify_all();
+			if (plug_count == 0)
+				packet_queue_ready.notify_all();
 		} else if (plug_count > 0) {
 			packet_queue.push_back(QueuedPacket{ av_packet_clone(&pkt_copy), pts });
 		} else {

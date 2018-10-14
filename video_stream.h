@@ -1,25 +1,24 @@
 #ifndef _VIDEO_STREAM_H
 #define _VIDEO_STREAM_H 1
 
-#include <stdint.h>
 #include <epoxy/gl.h>
+#include <stdint.h>
 
 extern "C" {
 #include <libavformat/avio.h>
 }
 
+#include "jpeg_frame_view.h"
+#include "ref_counted_gl_sync.h"
+
 #include <condition_variable>
 #include <deque>
-#include <mutex>
-#include <string>
-#include <thread>
-
 #include <movit/effect_chain.h>
 #include <movit/mix_effect.h>
 #include <movit/ycbcr_input.h>
-
-#include "jpeg_frame_view.h"
-#include "ref_counted_gl_sync.h"
+#include <mutex>
+#include <string>
+#include <thread>
 
 class ChromaSubsampler;
 class DISComputeFlow;
@@ -38,11 +37,10 @@ public:
 
 	void schedule_original_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts);
 	void schedule_faded_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha);
-	void schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1, float fade_alpha = 0.0f); // -1 = no secondary frame.
+	void schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1, float fade_alpha = 0.0f);  // -1 = no secondary frame.
 	void schedule_refresh_frame(int64_t output_pts);
 
 private:
-
 	void encode_thread_func();
 	std::thread encode_thread;
 
@@ -72,7 +70,7 @@ private:
 		int64_t output_pts;
 		enum Type { ORIGINAL, FADED, INTERPOLATED, FADED_INTERPOLATED } type;
 		unsigned stream_idx;
-		int64_t input_first_pts;  // The only pts for original frames.	
+		int64_t input_first_pts;  // The only pts for original frames.
 
 		// For fades only (including fades against interpolated frames).
 		int secondary_stream_idx = -1;

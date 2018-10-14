@@ -1,15 +1,14 @@
 #include <assert.h>
-#include <dirent.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <sys/types.h>
-
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <dirent.h>
 #include <memory>
 #include <mutex>
+#include <stdint.h>
+#include <stdio.h>
 #include <string>
+#include <sys/types.h>
 #include <thread>
 #include <vector>
 
@@ -17,24 +16,23 @@ extern "C" {
 #include <libavformat/avformat.h>
 }
 
-#include <QApplication>
-
-#include <movit/init.h>
-#include <movit/util.h>
-
 #include "clip_list.h"
 #include "context.h"
 #include "defs.h"
 #include "disk_space_estimator.h"
-#include "mainwindow.h"
 #include "ffmpeg_raii.h"
 #include "httpd.h"
+#include "mainwindow.h"
 #include "player.h"
 #include "post_to_main_thread.h"
 #include "ref_counted_gl_sync.h"
 #include "timebase.h"
 #include "ui_mainwindow.h"
 #include "vaapi_jpeg_decoder.h"
+
+#include <QApplication>
+#include <movit/init.h>
+#include <movit/util.h>
 
 using namespace std;
 using namespace std::chrono;

@@ -9,16 +9,15 @@
 //
 // The bitrate is measured over a simple 30-second sliding window.
 
-#include <stdint.h>
-#include <sys/types.h>
-#include <deque>
-#include <functional>
-#include <string>
-
 #include "timebase.h"
 
-class DiskSpaceEstimator
-{
+#include <deque>
+#include <functional>
+#include <stdint.h>
+#include <string>
+#include <sys/types.h>
+
+class DiskSpaceEstimator {
 public:
 	typedef std::function<void(off_t free_bytes, double estimated_seconds_left)> callback_t;
 	DiskSpaceEstimator(callback_t callback);
