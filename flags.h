@@ -6,6 +6,7 @@
 struct Flags {
 	std::string stream_source;
 	bool slow_down_input = false;
+	int interpolation_quality = 2;
 };
 extern Flags global_flags;
 

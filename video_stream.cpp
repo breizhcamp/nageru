@@ -7,6 +7,7 @@ extern "C" {
 
 #include "chroma_subsampler.h"
 #include "context.h"
+#include "flags.h"
 #include "flow.h"
 #include "httpd.h"
 #include "jpeg_frame_view.h"
@@ -222,9 +223,22 @@ VideoStream::VideoStream()
 
 	check_error();
 
-	compute_flow.reset(new DISComputeFlow(width, height, operating_point2));
-	interpolate.reset(new Interpolate(operating_point2, /*split_ycbcr_output=*/true));
-	interpolate_no_split.reset(new Interpolate(operating_point2, /*split_ycbcr_output=*/false));
+	OperatingPoint op;
+	if (global_flags.interpolation_quality == 1) {
+		op = operating_point1;
+	} else if (global_flags.interpolation_quality == 2) {
+		op = operating_point2;
+	} else if (global_flags.interpolation_quality == 3) {
+		op = operating_point3;
+	} else if (global_flags.interpolation_quality == 4) {
+		op = operating_point4;
+	} else {
+		assert(false);
+	}
+
+	compute_flow.reset(new DISComputeFlow(width, height, op));
+	interpolate.reset(new Interpolate(op, /*split_ycbcr_output=*/true));
+	interpolate_no_split.reset(new Interpolate(op, /*split_ycbcr_output=*/false));
 	chroma_subsampler.reset(new ChromaSubsampler);
 	check_error();
 
