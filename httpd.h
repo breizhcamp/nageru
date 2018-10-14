@@ -31,9 +31,15 @@ public:
 	HTTPD();
 	~HTTPD();
 
+	enum StreamType {
+		MAIN_STREAM,
+		MULTICAM_STREAM,
+		NUM_STREAM_TYPES
+	};
+
 	// Should be called before start().
-	void set_header(const std::string &data) {
-		header = data;
+	void set_header(StreamType stream_type, const std::string &data) {
+		header[stream_type] = data;
 	}
 
 	// Should be called before start() (due to threading issues).
@@ -47,7 +53,7 @@ public:
 
 	void start(int port);
 	void stop();
-	void add_data(const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase);
+	void add_data(StreamType stream_type, const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase);
 	int64_t get_num_connected_clients() const {
 		return metric_num_connected_clients.load();
 	}
@@ -72,7 +78,8 @@ private:
 			FRAMING_RAW,
 			FRAMING_METACUBE
 		};
-		Stream(HTTPD *parent, Framing framing) : parent(parent), framing(framing) {}
+		Stream(HTTPD *parent, Framing framing, StreamType stream_type)
+			: parent(parent), framing(framing), stream_type(stream_type) {}
 
 		static ssize_t reader_callback_thunk(void *cls, uint64_t pos, char *buf, size_t max);
 		ssize_t reader_callback(uint64_t pos, char *buf, size_t max);
@@ -85,6 +92,7 @@ private:
 		void add_data(const char *buf, size_t size, DataType data_type, int64_t time, AVRational timebase);
 		void stop();
 		HTTPD *get_parent() const { return parent; }
+		StreamType get_stream_type() const { return stream_type; }
 
 	private:
 		HTTPD *parent;
@@ -96,6 +104,7 @@ private:
 		std::deque<std::string> buffered_data;  // Protected by <buffer_mutex>.
 		size_t used_of_buffered_data = 0;  // How many bytes of the first element of <buffered_data> that is already used. Protected by <mutex>.
 		size_t seen_keyframe = false;
+		StreamType stream_type;
 	};
 
 	MHD_Daemon *mhd = nullptr;
@@ -106,7 +115,7 @@ private:
 		CORSPolicy cors_policy;
 	};
 	std::unordered_map<std::string, Endpoint> endpoints;
-	std::string header;
+	std::string header[NUM_STREAM_TYPES];
 
 	// Metrics.
 	std::atomic<int64_t> metric_num_connected_clients{0};

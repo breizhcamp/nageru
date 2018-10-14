@@ -190,7 +190,7 @@ nageru_link_with += audio
 # Mixer objects.
 srcs += ['chroma_subsampler.cpp', 'v210_converter.cpp', 'mixer.cpp', 'pbo_frame_allocator.cpp',
 	'context.cpp', 'theme.cpp', 'image_input.cpp', 'alsa_output.cpp',
-	'disk_space_estimator.cpp', 'timecode_renderer.cpp', 'tweaked_inputs.cpp']
+	'disk_space_estimator.cpp', 'timecode_renderer.cpp', 'tweaked_inputs.cpp', 'mjpeg_encoder.cpp']
 
 # Streaming and encoding objects (largely the set that is shared between Nageru and Kaeru).
 stream_srcs = ['quicksync_encoder.cpp', 'x264_encoder.cpp', 'x264_dynamic.cpp', 'x264_speed_control.cpp', 'video_encoder.cpp',

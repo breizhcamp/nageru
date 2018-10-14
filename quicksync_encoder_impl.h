@@ -20,6 +20,7 @@
 #include "timebase.h"
 #include "print_latency.h"
 #include "ref_counted_gl_sync.h"
+#include "va_display_with_cleanup.h"
 
 #define SURFACE_NUM 16 /* 16 surfaces for source YUV */
 #define MAX_NUM_REF1 16 // Seemingly a hardware-fixed value, not related to SURFACE_NUM
@@ -38,16 +39,6 @@ class ResourcePool;
 class DiskSpaceEstimator;
 class QSurface;
 class X264Encoder;
-
-struct VADisplayWithCleanup {
-	~VADisplayWithCleanup();
-
-	VADisplay va_dpy;
-	Display *x11_display = nullptr;
-	bool can_use_zerocopy = true;
-	int drm_fd = -1;
-};
-std::unique_ptr<VADisplayWithCleanup> va_open_display(const std::string &va_display);  // Can return nullptr on failure.
 
 class QuickSyncEncoderImpl {
 public:

@@ -46,12 +46,14 @@
 #include "flags.h"
 #include "input_mapping.h"
 #include "metrics.h"
+#include "mjpeg_encoder.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_gl_sync.h"
 #include "resampling_queue.h"
 #include "timebase.h"
 #include "timecode_renderer.h"
 #include "v210_converter.h"
+#include "va_display_with_cleanup.h"
 #include "video_encoder.h"
 
 #undef Status
@@ -356,6 +358,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	display_chain->finalize();
 
 	video_encoder.reset(new VideoEncoder(resource_pool.get(), h264_encoder_surface, global_flags.va_display, global_flags.width, global_flags.height, &httpd, global_disk_space_estimator));
+	mjpeg_encoder.reset(new MJPEGEncoder(&httpd, global_flags.va_display));
 
 	// Must be instantiated after VideoEncoder has initialized global_flags.use_zerocopy.
 	theme.reset(new Theme(global_flags.theme_filename, global_flags.theme_dirs, resource_pool.get(), num_cards));
@@ -499,6 +502,7 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 Mixer::~Mixer()
 {
+	mjpeg_encoder->stop();
 	httpd.stop();
 	BMUSBCapture::stop_bm_thread();
 
@@ -954,6 +958,9 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 			new_frame.upload_func = upload_func;
 			new_frame.dropped_frames = dropped_frames;
 			new_frame.received_timestamp = video_frame.received_timestamp;  // Ignore the audio timestamp.
+			new_frame.video_format = video_format;
+			new_frame.y_offset = y_offset;
+			new_frame.cbcr_offset = cbcr_offset;
 			card->new_frames.push_back(move(new_frame));
 			card->jitter_history.frame_arrived(video_frame.received_timestamp, frame_length, dropped_frames);
 			card->may_have_dropped_last_frame = false;
@@ -1062,6 +1069,14 @@ void Mixer::thread_func()
 			if (new_frame->upload_func) {
 				new_frame->upload_func();
 				new_frame->upload_func = nullptr;
+			}
+
+			// There are situations where we could possibly want to
+			// include FFmpeg inputs (CEF inputs are unlikely),
+			// but they're not necessarily in 4:2:2 Y'CbCr, so it would
+			// require more functionality the the JPEG encoder.
+			if (card_index < num_cards) {
+				mjpeg_encoder->upload_frame(pts_int, card_index, new_frame->frame, new_frame->video_format, new_frame->y_offset, new_frame->cbcr_offset);
 			}
 		}
 

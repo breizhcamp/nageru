@@ -42,6 +42,7 @@
 class ALSAOutput;
 class ChromaSubsampler;
 class DeckLinkOutput;
+class MJPEGEncoder;
 class QSurface;
 class QSurfaceFormat;
 class TimecodeRenderer;
@@ -475,6 +476,7 @@ private:
 	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
 	std::unique_ptr<v210Converter> v210_converter;
 	std::unique_ptr<VideoEncoder> video_encoder;
+	std::unique_ptr<MJPEGEncoder> mjpeg_encoder;
 
 	std::unique_ptr<TimecodeRenderer> timecode_renderer;
 	std::atomic<bool> display_timecode_in_stream{false};
@@ -530,6 +532,12 @@ private:
 			std::function<void()> upload_func;  // Needs to be called to actually upload the texture to OpenGL.
 			unsigned dropped_frames = 0;  // Number of dropped frames before this one.
 			std::chrono::steady_clock::time_point received_timestamp = std::chrono::steady_clock::time_point::min();
+
+			// Used for MJPEG encoding. (upload_func packs everything it needs
+			// into the functor, but would otherwise also use these.)
+			// width=0 or height=0 means a broken frame, ie., do not upload.
+			bmusb::VideoFormat video_format;
+			size_t y_offset, cbcr_offset;
 		};
 		std::deque<NewFrame> new_frames;
 		std::condition_variable new_frames_changed;  // Set whenever new_frames is changed.

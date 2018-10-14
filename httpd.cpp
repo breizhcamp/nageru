@@ -58,11 +58,13 @@ void HTTPD::stop()
 	}
 }
 
-void HTTPD::add_data(const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase)
+void HTTPD::add_data(StreamType stream_type, const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase)
 {
 	unique_lock<mutex> lock(streams_mutex);
 	for (Stream *stream : streams) {
-		stream->add_data(buf, size, keyframe ? Stream::DATA_TYPE_KEYFRAME : Stream::DATA_TYPE_OTHER, time, timebase);
+		if (stream->get_stream_type() == stream_type) {
+			stream->add_data(buf, size, keyframe ? Stream::DATA_TYPE_KEYFRAME : Stream::DATA_TYPE_OTHER, time, timebase);
+		}
 	}
 }
 
@@ -86,6 +88,12 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		framing = HTTPD::Stream::FRAMING_METACUBE;
 	} else {
 		framing = HTTPD::Stream::FRAMING_RAW;
+	}
+	HTTPD::StreamType stream_type;
+	if (strcmp(url, "/multicam.mp4") == 0) {
+		stream_type = HTTPD::StreamType::MULTICAM_STREAM;
+	} else {
+		stream_type = HTTPD::StreamType::MAIN_STREAM;
 	}
 
 	if (strcmp(url, "/metrics") == 0) {
@@ -121,8 +129,8 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		return ret;
 	}
 
-	HTTPD::Stream *stream = new HTTPD::Stream(this, framing);
-	stream->add_data(header.data(), header.size(), Stream::DATA_TYPE_HEADER, AV_NOPTS_VALUE, AVRational{ 1, 0 });
+	HTTPD::Stream *stream = new HTTPD::Stream(this, framing, stream_type);
+	stream->add_data(header[stream_type].data(), header[stream_type].size(), Stream::DATA_TYPE_HEADER, AV_NOPTS_VALUE, AVRational{ 1, 0 });
 	{
 		unique_lock<mutex> lock(streams_mutex);
 		streams.insert(stream);

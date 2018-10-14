@@ -265,6 +265,9 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
 			} else {
 				memcpy(current_video_frame.data, frame_bytes, num_bytes);
 			}
+			if (current_video_frame.data_copy != nullptr) {
+				memcpy(current_video_frame.data_copy, frame_bytes, num_bytes);
+			}
 			current_video_frame.len += num_bytes;
 
 			video_format.width = width;

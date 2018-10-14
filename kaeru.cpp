@@ -31,6 +31,8 @@ BasicStats *global_basic_stats = nullptr;
 QuittableSleeper should_quit;
 MuxMetrics stream_mux_metrics;
 
+namespace {
+
 int write_packet(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time)
 {
 	static bool seen_sync_markers = false;
@@ -47,12 +49,14 @@ int write_packet(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType ty
 
 	if (type == AVIO_DATA_MARKER_HEADER) {
 		stream_mux_header.append((char *)buf, buf_size);
-		httpd->set_header(stream_mux_header);
+		httpd->set_header(HTTPD::MAIN_STREAM, stream_mux_header);
 	} else {
-		httpd->add_data((char *)buf, buf_size, type == AVIO_DATA_MARKER_SYNC_POINT, time, AVRational{ AV_TIME_BASE, 1 });
+		httpd->add_data(HTTPD::MAIN_STREAM, (char *)buf, buf_size, type == AVIO_DATA_MARKER_SYNC_POINT, time, AVRational{ AV_TIME_BASE, 1 });
 	}
 	return buf_size;
 }
+
+}  // namespace
 
 unique_ptr<Mux> create_mux(HTTPD *httpd, AVOutputFormat *oformat, X264Encoder *x264_encoder, AudioEncoder *audio_encoder)
 {

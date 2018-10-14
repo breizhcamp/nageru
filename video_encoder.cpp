@@ -216,9 +216,9 @@ int VideoEncoder::write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType t
 
 	if (type == AVIO_DATA_MARKER_HEADER) {
 		stream_mux_header.append((char *)buf, buf_size);
-		httpd->set_header(stream_mux_header);
+		httpd->set_header(HTTPD::MAIN_STREAM, stream_mux_header);
 	} else {
-		httpd->add_data((char *)buf, buf_size, type == AVIO_DATA_MARKER_SYNC_POINT, time, AVRational{ AV_TIME_BASE, 1 });
+		httpd->add_data(HTTPD::MAIN_STREAM, (char *)buf, buf_size, type == AVIO_DATA_MARKER_SYNC_POINT, time, AVRational{ AV_TIME_BASE, 1 });
 	}
 	return buf_size;
 }

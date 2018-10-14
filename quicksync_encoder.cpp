@@ -1939,8 +1939,6 @@ void QuickSyncEncoderImpl::add_packet_for_uncompressed_frame(int64_t pts, int64_
 	stream_mux->add_packet(pkt, pts, pts);
 }
 
-namespace {
-
 void memcpy_with_pitch(uint8_t *dst, const uint8_t *src, size_t src_width, size_t dst_pitch, size_t height)
 {
 	if (src_width == dst_pitch) {
@@ -1953,8 +1951,6 @@ void memcpy_with_pitch(uint8_t *dst, const uint8_t *src, size_t src_width, size_
 		}
 	}
 }
-
-}  // namespace
 
 void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, int display_frame_num, int64_t pts, int64_t duration)
 {
