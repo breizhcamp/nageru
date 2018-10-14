@@ -360,6 +360,21 @@ Clip MainWindow::live_player_get_next_clip()
 	return clip.get();
 }
 
+static string format_duration(double t)
+{
+	int t_ms = lrint(t * 1e3);
+
+	int ms = t_ms % 1000;
+	t_ms /= 1000;
+	int s = t_ms % 60;
+	t_ms /= 60;
+	int m = t_ms;
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "%d:%02d.%03d", m, s, ms);
+	return buf;
+}
+
 void MainWindow::live_player_clip_progress(double played_this_clip, double total_length)
 {
 	playlist_clips->set_currently_playing(playlist_clips->get_currently_playing(), played_this_clip / total_length);
@@ -369,17 +384,7 @@ void MainWindow::live_player_clip_progress(double played_this_clip, double total
 		const Clip clip = *playlist_clips->clip(row);
 		remaining += double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;  // FIXME: stop hardcoding speed.
 	}
-	int remaining_ms = lrint(remaining * 1e3);
-
-	int ms = remaining_ms % 1000;
-	remaining_ms /= 1000;
-	int s = remaining_ms % 60;
-	remaining_ms /= 60;
-	int m = remaining_ms;
-
-	char buf[256];
-	snprintf(buf, sizeof(buf), "%d:%02d.%03d left", m, s, ms);
-	set_output_status(buf);
+	set_output_status(format_duration(remaining) + " left");
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
@@ -632,6 +637,17 @@ void MainWindow::playlist_selection_changed()
 	ui->playlist_move_down_btn->setEnabled(
 		any_selected && selected->selectedRows().back().row() < int(playlist_clips->size()) - 1);
 	ui->play_btn->setEnabled(!playlist_clips->empty());
+
+	if (!any_selected) {
+		set_output_status("paused");
+	} else {
+		double remaining = 0.0;
+		for (int row = selected->selectedRows().front().row(); row < int(playlist_clips->size()); ++row) {
+			const Clip clip = *playlist_clips->clip(row);
+			remaining += double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;  // FIXME: stop hardcoding speed.
+		}
+		set_output_status(format_duration(remaining) + " ready");
+	}
 }
 
 void MainWindow::clip_list_selection_changed(const QModelIndex &current, const QModelIndex &)
