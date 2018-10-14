@@ -134,6 +134,7 @@ MainWindow::MainWindow()
 			live_player_clip_progress(played_this_clip, total_length);
 		});
 	});
+	set_output_status("paused");
 
 	defer_timeout = new QTimer(this);
 	defer_timeout->setSingleShot(true);
@@ -335,7 +336,7 @@ void MainWindow::live_player_clip_done()
 {
 	int row = playlist_clips->get_currently_playing();
 	if (row == -1 || row == int(playlist_clips->size()) - 1) {
-		ui->live_label->setText("Current output (paused)");
+		set_output_status("paused");
 		playlist_clips->set_currently_playing(-1, 0.0f);
 	} else {
 		playlist_clips->set_currently_playing(row + 1, 0.0f);
@@ -377,8 +378,8 @@ void MainWindow::live_player_clip_progress(double played_this_clip, double total
 	int m = remaining_ms;
 
 	char buf[256];
-	snprintf(buf, sizeof(buf), "Current output (%d:%02d.%03d left)", m, s, ms);
-	ui->live_label->setText(buf);
+	snprintf(buf, sizeof(buf), "%d:%02d.%03d left", m, s, ms);
+	set_output_status(buf);
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
@@ -703,4 +704,17 @@ void MainWindow::highlight_camera_input(int stream_idx)
 	} else {
 		ui->input4_frame->setStyleSheet("");
 	}
+}
+
+void MainWindow::set_output_status(const string &status)
+{
+	ui->live_label->setText(QString::fromStdString("Current output (" + status + ")"));
+
+	lock_guard<mutex> lock(queue_status_mu);
+	queue_status = status;
+}
+
+pair<string, string> MainWindow::get_queue_status() const {
+	lock_guard<mutex> lock(queue_status_mu);
+	return {queue_status, "text/plain"};
 }

@@ -5,10 +5,13 @@
 #include "db.h"
 #include "state.pb.h"
 
+#include <mutex>
 #include <QLabel>
 #include <QMainWindow>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <string>
+#include <utility>
 
 namespace Ui {
 class MainWindow;
@@ -21,6 +24,9 @@ class MainWindow : public QMainWindow {
 
 public:
 	MainWindow();
+
+	// HTTP callback. TODO: Does perhaps not belong to MainWindow?
+	std::pair<std::string, std::string> get_queue_status() const;
 
 //private:
 	Ui::MainWindow *ui;
@@ -60,6 +66,9 @@ private:
 	bool currently_deferring_model_changes = false;
 	std::string current_change_id;
 
+	mutable std::mutex queue_status_mu;
+	std::string queue_status;  // Under queue_status_mu.
+
 	void cue_in_clicked();
 	void cue_out_clicked();
 	void queue_clicked();
@@ -69,6 +78,7 @@ private:
 	void live_player_clip_done();
 	Clip live_player_get_next_clip();
 	void live_player_clip_progress(double played_this_clip, double total_length);
+	void set_output_status(const std::string &status);
 	void playlist_duplicate();
 	void playlist_remove();
 	void playlist_move(int delta);

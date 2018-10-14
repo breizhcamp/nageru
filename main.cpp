@@ -76,7 +76,6 @@ int main(int argc, char **argv)
 
 	avformat_network_init();
 	global_httpd = new HTTPD;
-	global_httpd->start(DEFAULT_HTTPD_PORT);
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
 
@@ -112,8 +111,11 @@ int main(int argc, char **argv)
 		// TODO: Delete the surface, too.
 	}
 
-	MainWindow mainWindow;
-	mainWindow.show();
+	MainWindow main_window;
+	main_window.show();
+
+	global_httpd->add_endpoint("/queue_status", bind(&MainWindow::get_queue_status, &main_window), HTTPD::NO_CORS_POLICY);
+	global_httpd->start(DEFAULT_HTTPD_PORT);
 
 	init_jpeg_vaapi();
 
