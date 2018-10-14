@@ -3,6 +3,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <dirent.h>
+#include <getopt.h>
 #include <memory>
 #include <mutex>
 #include <stdint.h>
@@ -21,6 +22,7 @@ extern "C" {
 #include "defs.h"
 #include "disk_space_estimator.h"
 #include "ffmpeg_raii.h"
+#include "flags.h"
 #include "httpd.h"
 #include "mainwindow.h"
 #include "player.h"
@@ -61,6 +63,17 @@ int record_thread_func();
 
 int main(int argc, char **argv)
 {
+	parse_flags(argc, argv);
+	if (optind == argc) {
+		global_flags.stream_source = "multiangle.mp4";
+		global_flags.slow_down_input = true;
+	} else if (optind + 1 == argc) {
+		global_flags.stream_source = argv[optind];
+	} else {
+		usage();
+		exit(1);
+	}
+
 	avformat_network_init();
 	global_httpd = new HTTPD;
 	global_httpd->start(DEFAULT_HTTPD_PORT);
@@ -161,9 +174,9 @@ void load_existing_frames()
 
 int record_thread_func()
 {
-	auto format_ctx = avformat_open_input_unique("multiangle.mp4", nullptr, nullptr);
+	auto format_ctx = avformat_open_input_unique(global_flags.stream_source.c_str(), nullptr, nullptr);
 	if (format_ctx == nullptr) {
-		fprintf(stderr, "%s: Error opening file\n", "example.mp4");
+		fprintf(stderr, "%s: Error opening file\n", global_flags.stream_source.c_str());
 		return 1;
 	}
 
@@ -222,8 +235,7 @@ int record_thread_func()
 		assert(pkt.stream_index < MAX_STREAMS);
 		frames[pkt.stream_index].push_back(pts);
 
-		// Hack. Remove when we're dealing with live streams.
-		if (last_pts != -1) {
+		if (last_pts != -1 && global_flags.slow_down_input) {
 			this_thread::sleep_for(microseconds((pts - last_pts) * 1000000 / TIMEBASE));
 		}
 		last_pts = pts;
