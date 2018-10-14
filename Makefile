@@ -99,7 +99,7 @@ BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o metrics.o
 ifneq ($(CEF_DIR),)
 CEF_RESOURCES = natives_blob.bin snapshot_blob.bin v8_context_snapshot.bin
 CEF_RESOURCES += cef.pak cef_100_percent.pak cef_200_percent.pak cef_extensions.pak devtools_resources.pak
-CEF_RESOURCES += libEGL.so libGLESv2.so swiftshader/libEGL.so swiftshader/libGLESv2.so
+CEF_RESOURCES += libEGL.so libGLESv2.so
 CEF_RESOURCES += locales/en-US.pak
 ifneq ($(CEF_NO_ICUDTL),yes)
 CEF_RESOURCES += icudtl.dat
@@ -127,12 +127,6 @@ libEGL.so: $(CEF_LIB_DIR)/libEGL.so
 	$(CEF_CP) $< $@
 libGLESv2.so: $(CEF_LIB_DIR)/libGLESv2.so
 	$(CEF_CP) $< $@
-swiftshader/:
-	mkdir swiftshader/
-swiftshader/libEGL.so: | swiftshader/ $(CEF_LIB_DIR)/swiftshader/libEGL.so
-	$(CEF_CP) $(CEF_LIB_DIR)/swiftshader/libEGL.so $@
-swiftshader/libGLESv2.so: | swiftshader/ $(CEF_LIB_DIR)/swiftshader/libGLESv2.so
-	$(CEF_CP) $(CEF_LIB_DIR)/swiftshader/libGLESv2.so $@
 locales/:
 	mkdir locales/
 locales/en-US.pak: | locales/ $(CEF_RESOURCE_DIR)/locales/en-US.pak
