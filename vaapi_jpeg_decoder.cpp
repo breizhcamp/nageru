@@ -332,11 +332,10 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 		return nullptr;
 	}
 	if (dinfo.comp_info[0].h_samp_factor != 2 ||
-	    dinfo.comp_info[0].v_samp_factor != 2 ||
 	    dinfo.comp_info[1].h_samp_factor != 1 ||
-	    dinfo.comp_info[1].v_samp_factor != 2 ||
+	    dinfo.comp_info[1].v_samp_factor != dinfo.comp_info[0].v_samp_factor ||
 	    dinfo.comp_info[2].h_samp_factor != 1 ||
-	    dinfo.comp_info[2].v_samp_factor != 2) {
+	    dinfo.comp_info[2].v_samp_factor != dinfo.comp_info[0].v_samp_factor) {
 		fprintf(stderr, "Not 4:2:2. (Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
 			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
 			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
