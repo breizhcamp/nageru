@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <thread>
 #include <vector>
@@ -73,6 +74,17 @@ int main(int argc, char **argv)
 	} else {
 		usage();
 		exit(1);
+	}
+
+	string frame_dir = global_flags.working_directory + "/frames";
+
+	struct stat st;
+	if (stat(frame_dir.c_str(), &st) == -1) {
+		fprintf(stderr, "%s does not exist, creating it.\n", frame_dir.c_str());
+		if (mkdir(frame_dir.c_str(), 0777) == -1) {
+			perror(global_flags.working_directory.c_str());
+			exit(1);
+		}
 	}
 
 	avformat_network_init();
