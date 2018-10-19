@@ -2,6 +2,7 @@
 
 #include "clip_list.h"
 #include "disk_space_estimator.h"
+#include "flags.h"
 #include "player.h"
 #include "post_to_main_thread.h"
 #include "timebase.h"
@@ -29,7 +30,7 @@ extern vector<int64_t> frames[MAX_STREAMS];
 
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow),
-	  db("futatabi.db")
+	  db(global_flags.working_directory + "/futatabi.db")
 {
 	global_mainwindow = this;
 	ui->setupUi(this);

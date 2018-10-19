@@ -4,11 +4,11 @@
 
 using namespace std;
 
-DB::DB(const char *filename)
+DB::DB(const std::string &filename)
 {
-	int ret = sqlite3_open(filename, &db);
+	int ret = sqlite3_open(filename.c_str(), &db);
 	if (ret != SQLITE_OK) {
-		fprintf(stderr, "%s: %s\n", filename, sqlite3_errmsg(db));
+		fprintf(stderr, "%s: %s\n", filename.c_str(), sqlite3_errmsg(db));
 		exit(1);
 	}
 

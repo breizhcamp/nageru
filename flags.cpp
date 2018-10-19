@@ -28,6 +28,7 @@ void usage()
 	fprintf(stderr, "                                  2 = default (realtime 720p on fast embedded GPUs)\n");
 	fprintf(stderr, "                                  3 = good (realtime 720p on GTX 970 or so)\n");
 	fprintf(stderr, "                                  4 = best (not realtime on any current GPU)\n");
+	fprintf(stderr, "  -d, --working-directory DIR     where to store frames and database\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -36,11 +37,12 @@ void parse_flags(int argc, char * const argv[])
 		{ "help", no_argument, 0, OPTION_HELP },
 		{ "slow-down-input", no_argument, 0, OPTION_SLOW_DOWN_INPUT },
 		{ "interpolation-quality", required_argument, 0, 'q' },
+		{ "working-directory", required_argument, 0, 'd' },
 		{ 0, 0, 0, 0 }
 	};
 	for ( ;; ) {
 		int option_index = 0;
-		int c = getopt_long(argc, argv, "q:", long_options, &option_index);
+		int c = getopt_long(argc, argv, "q:d:", long_options, &option_index);
 
 		if (c == -1) {
 			break;
@@ -51,6 +53,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 'q':
 			global_flags.interpolation_quality = atoi(optarg);
+			break;
+		case 'd':
+			global_flags.working_directory = optarg;
 			break;
 		case OPTION_HELP:
 			usage();

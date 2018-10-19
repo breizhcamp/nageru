@@ -50,7 +50,8 @@ int64_t current_pts = 0;
 string filename_for_frame(unsigned stream_idx, int64_t pts)
 {
 	char filename[256];
-	snprintf(filename, sizeof(filename), "frames/cam%d-pts%09ld.jpeg", stream_idx, pts);
+	snprintf(filename, sizeof(filename), "%s/frames/cam%d-pts%09ld.jpeg",
+		global_flags.working_directory.c_str(), stream_idx, pts);
 	return filename;
 }
 

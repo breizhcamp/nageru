@@ -4,10 +4,11 @@
 #include "state.pb.h"
 
 #include <sqlite3.h>
+#include <string>
 
 class DB {
 public:
-	explicit DB(const char *filename);
+	explicit DB(const std::string &filename);
 	DB(const DB &) = delete;
 
 	StateProto get_state();

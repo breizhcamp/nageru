@@ -5,6 +5,7 @@
 
 struct Flags {
 	std::string stream_source;
+	std::string working_directory = ".";
 	bool slow_down_input = false;
 	int interpolation_quality = 2;
 };
