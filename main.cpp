@@ -146,7 +146,8 @@ int main(int argc, char **argv)
 
 void load_existing_frames()
 {
-	DIR *dir = opendir("frames/");
+	string frame_dir = global_flags.working_directory + "/frames";
+	DIR *dir = opendir(frame_dir.c_str());
 	if (dir == nullptr) {
 		perror("frames/");
 		start_pts = 0;
