@@ -594,6 +594,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			}
 		}
 		currently_deferring_model_changes = false;
+		return true;  // Don't scroll.
 	} else if (event->type() == QEvent::MouseButtonRelease) {
 		scrubbing = false;
 	}
