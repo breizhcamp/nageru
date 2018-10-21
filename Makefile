@@ -33,7 +33,7 @@ OBJS += state.pb.o
 
 all: futatabi flow vis eval
 
-mainwindow.o: ui_mainwindow.h
+mainwindow.o: ui_mainwindow.h state.pb.h
 
 clip_list.h: state.pb.h
 
