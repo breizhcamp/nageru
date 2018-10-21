@@ -551,6 +551,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		int row = destination->rowAt(wheel->y());
 		if (column == -1 || row == -1) return false;
 
+		// Only adjust pts with the wheel if the given row is selected.
+		if (!destination->hasFocus() ||
+		    row != destination->selectionModel()->currentIndex().row()) {
+			return false;
+		}
+
 		currently_deferring_model_changes = true;
 		{
 			current_change_id = (watched == ui->clip_list->viewport()) ? "cliplist:" : "playlist:";
