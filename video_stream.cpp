@@ -483,12 +483,13 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 
 void VideoStream::schedule_refresh_frame(int64_t output_pts)
 {
-	AVPacket pkt;
-	av_init_packet(&pkt);
-	pkt.stream_index = 0;
-	pkt.data = (uint8_t *)last_frame.data();
-	pkt.size = last_frame.size();
-	stream_mux->add_packet(pkt, output_pts, output_pts);
+	QueuedFrame qf;
+	qf.type = QueuedFrame::REFRESH;
+	qf.output_pts = output_pts;
+
+	unique_lock<mutex> lock(queue_lock);
+	frame_queue.push_back(qf);
+	queue_nonempty.notify_all();
 }
 
 namespace {
@@ -600,6 +601,13 @@ void VideoStream::encode_thread_func()
 			// Put the frame resources back.
 			unique_lock<mutex> lock(queue_lock);
 			interpolate_resources.push_back(qf.resources);
+		} else if (qf.type == QueuedFrame::REFRESH) {
+			AVPacket pkt;
+			av_init_packet(&pkt);
+			pkt.stream_index = 0;
+			pkt.data = (uint8_t *)last_frame.data();
+			pkt.size = last_frame.size();
+			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 		} else {
 			assert(false);
 		}

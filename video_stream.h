@@ -68,7 +68,7 @@ private:
 
 	struct QueuedFrame {
 		int64_t output_pts;
-		enum Type { ORIGINAL, FADED, INTERPOLATED, FADED_INTERPOLATED } type;
+		enum Type { ORIGINAL, FADED, INTERPOLATED, FADED_INTERPOLATED, REFRESH } type;
 		unsigned stream_idx;
 		int64_t input_first_pts;  // The only pts for original frames.
 
