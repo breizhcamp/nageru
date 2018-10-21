@@ -54,6 +54,7 @@ void Player::thread_func(bool also_output_to_stream)
 	double next_clip_fade_time = -1.0;
 
 	for ( ;; ) {
+wait_for_clip:
 		bool clip_ready;
 		steady_clock::time_point before_sleep = steady_clock::now();
 
@@ -185,7 +186,9 @@ got_clip:
 				new_clip_changed.wait_until(lock, next_frame_start, [this]{
 					return new_clip_ready || override_stream_idx != -1;
 				});
-				if (new_clip_ready) break;
+				if (new_clip_ready) {
+					goto wait_for_clip;
+				}
 				if (override_stream_idx != -1) {
 					stream_idx = override_stream_idx;
 					override_stream_idx = -1;
