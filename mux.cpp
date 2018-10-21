@@ -197,7 +197,7 @@ void Mux::write_packet_or_die(const AVPacket &pkt, int64_t unscaled_pts)
 	int64_t old_pos = avctx->pb->pos;
 	if (av_interleaved_write_frame(avctx, const_cast<AVPacket *>(&pkt)) < 0) {
 		fprintf(stderr, "av_interleaved_write_frame() failed\n");
-		exit(1);
+		abort();
 	}
 	avio_flush(avctx->pb);
 	for (MuxMetrics *metric : metrics) {
