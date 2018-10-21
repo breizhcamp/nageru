@@ -115,6 +115,10 @@ got_clip:
 			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * speed / output_framerate);
 			pts = lrint(out_pts);
 
+			if (in_pts >= clip.pts_out) {
+				break;
+			}
+
 			steady_clock::duration time_behind = steady_clock::now() - next_frame_start;
 			if (time_behind >= milliseconds(200)) {
 				fprintf(stderr, "WARNING: %ld ms behind, dropping a frame (no matter the type).\n",
@@ -137,22 +141,22 @@ got_clip:
 
 			int primary_stream_idx = stream_idx;
 			int secondary_stream_idx = -1;
+			int64_t secondary_pts = -1;
+			int64_t in_pts_secondary = -1;
 			float fade_alpha = 0.0f;
 			if (got_next_clip) {
 				secondary_stream_idx = next_clip.stream_idx;
+				in_pts_secondary = lrint(next_clip.pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * speed);
 				fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
 
 				// If more than half-way through the fade, interpolate the next clip
 				// instead of the current one, since it's more visible.
 				if (fade_alpha >= 0.5f) {
 					swap(primary_stream_idx, secondary_stream_idx);
+					swap(in_pts, in_pts_secondary);
 					fade_alpha = 1.0f - fade_alpha;
 				}
-			}
 
-			int64_t secondary_pts = -1;
-			if (got_next_clip) {
-				int64_t in_pts_secondary = lrint(next_clip.pts_in + TIMEBASE * frameno * speed / output_framerate);
 				int64_t in_pts_lower, in_pts_upper;
 				bool ok = find_surrounding_frames(in_pts_secondary, secondary_stream_idx, &in_pts_lower, &in_pts_upper);
 				if (ok) {
@@ -171,7 +175,7 @@ got_clip:
 
 			int64_t in_pts_lower, in_pts_upper;
 			bool ok = find_surrounding_frames(in_pts, primary_stream_idx, &in_pts_lower, &in_pts_upper);
-			if (!ok || in_pts_upper >= clip.pts_out) {
+			if (!ok) {
 				break;
 			}
 
