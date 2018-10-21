@@ -1,5 +1,6 @@
 #include "vaapi_jpeg_decoder.h"
 
+#include "jpeg_destroyer.h"
 #include "jpeg_frame.h"
 #include "memcpy_interleaved.h"
 
@@ -304,6 +305,7 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	jpeg_error_mgr jerr;
 	dinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_decompress(&dinfo);
+	JPEGDestroyer destroy_dinfo(&dinfo);
 
 	FILE *fp = fopen(filename.c_str(), "rb");
 	if (fp == nullptr) {

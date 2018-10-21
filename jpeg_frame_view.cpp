@@ -1,6 +1,7 @@
 #include "jpeg_frame_view.h"
 
 #include "defs.h"
+#include "jpeg_destroyer.h"
 #include "post_to_main_thread.h"
 #include "video_stream.h"
 #include "ycbcr_converter.h"
@@ -76,6 +77,7 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 	jpeg_error_mgr jerr;
 	dinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_decompress(&dinfo);
+	JPEGDestroyer destroy_dinfo(&dinfo);
 
 	FILE *fp = fopen(filename.c_str(), "rb");
 	if (fp == nullptr) {
@@ -146,7 +148,6 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 	}
 
 	(void)jpeg_finish_decompress(&dinfo);
-	jpeg_destroy_decompress(&dinfo);
 	fclose(fp);
 
 	return frame;
