@@ -16,7 +16,7 @@ struct YCbCrFormat;
 
 struct Frame;
 
-struct YCbCrConverter {
+class YCbCrConverter {
 public:
 	enum OutputMode {
 		OUTPUT_TO_RGBA,         // One texture (bottom-left origin): RGBA
