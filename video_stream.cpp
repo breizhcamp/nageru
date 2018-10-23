@@ -458,6 +458,8 @@ bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 
 		// Subsample and split Cb/Cr.
 		chroma_subsampler->subsample_chroma(resources.fade_cbcr_output_tex, 1280, 720, resources.cb_tex, resources.cr_tex);
+
+		interpolate_no_split->release_texture(qf.output_tex);
 	} else {
 		tie(qf.output_tex, qf.cbcr_tex) = interpolate->exec(resources.input_tex, resources.gray_tex, qf.flow_tex, 1280, 720, alpha);
 		check_error();
