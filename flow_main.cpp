@@ -261,15 +261,15 @@ void compute_flow_only(int argc, char **argv, int optind)
 	glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex_gray);
 	glTextureStorage3D(tex_gray, levels, GL_R8, width1, height1, 2);
 
-	GrayscaleConversion gray;
-	gray.exec(image_tex, tex_gray, width1, height1, /*num_layers=*/2);
-	glGenerateTextureMipmap(tex_gray);
-
 	OperatingPoint op = operating_point3;
 	if (!enable_variational_refinement) {
 		op.variational_refinement = false;
 	}
-	DISComputeFlow compute_flow(width1, height1, op);
+
+	DISComputeFlow compute_flow(width1, height1, op);  // Must be initialized before gray.
+	GrayscaleConversion gray;
+	gray.exec(image_tex, tex_gray, width1, height1, /*num_layers=*/2);
+	glGenerateTextureMipmap(tex_gray);
 
 	if (enable_warmup) {
 		in_warmup = true;
