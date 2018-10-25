@@ -281,7 +281,7 @@ void VideoStream::stop()
 	encode_thread.join();
 }
 
-void VideoStream::schedule_original_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts)
+void VideoStream::schedule_original_frame(int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_pts)
 {
 	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, input_pts);
 
@@ -290,13 +290,14 @@ void VideoStream::schedule_original_frame(int64_t output_pts, unsigned stream_id
 	qf.output_pts = output_pts;
 	qf.stream_idx = stream_idx;
 	qf.input_first_pts = input_pts;
+	qf.display_func = move(display_func);
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(qf);
 	queue_nonempty.notify_all();
 }
 
-void VideoStream::schedule_faded_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
+void VideoStream::schedule_faded_frame(int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
 {
 	fprintf(stderr, "output_pts=%ld  faded         input_pts=%ld,%ld  fade_alpha=%.2f\n", output_pts, input_pts, secondary_input_pts, fade_alpha);
 
@@ -337,6 +338,7 @@ void VideoStream::schedule_faded_frame(int64_t output_pts, unsigned stream_idx, 
 	qf.stream_idx = stream_idx;
 	qf.resources = resources;
 	qf.input_first_pts = input_pts;
+	qf.display_func = move(display_func);
 
 	qf.secondary_stream_idx = secondary_stream_idx;
 	qf.secondary_input_pts = secondary_input_pts;
@@ -367,7 +369,7 @@ void VideoStream::schedule_faded_frame(int64_t output_pts, unsigned stream_idx, 
 	queue_nonempty.notify_all();
 }
 
-void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
+void VideoStream::schedule_interpolated_frame(int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
 {
 	if (secondary_stream_idx != -1) {
 		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f  secondary_pts=%ld  fade_alpha=%.2f\n", output_pts, input_first_pts, input_second_pts, alpha, secondary_input_pts, fade_alpha);
@@ -388,7 +390,6 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 		unique_lock<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
-			JPEGFrameView::insert_interpolated_frame(id, nullptr);
 			return;
 		}
 		resources = interpolate_resources.front();
@@ -401,6 +402,7 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	qf.stream_idx = stream_idx;
 	qf.resources = resources;
 	qf.id = id;
+	qf.display_func = move(display_func);
 
 	check_error();
 
@@ -481,11 +483,12 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, unsigned strea
 	queue_nonempty.notify_all();
 }
 
-void VideoStream::schedule_refresh_frame(int64_t output_pts)
+void VideoStream::schedule_refresh_frame(int64_t output_pts, function<void()> &&display_func)
 {
 	QueuedFrame qf;
 	qf.type = QueuedFrame::REFRESH;
 	qf.output_pts = output_pts;
+	qf.display_func = move(display_func);
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(qf);
@@ -610,6 +613,9 @@ void VideoStream::encode_thread_func()
 			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 		} else {
 			assert(false);
+		}
+		if (qf.display_func != nullptr) {
+			qf.display_func();
 		}
 	}
 }

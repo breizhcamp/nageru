@@ -13,6 +13,7 @@ extern "C" {
 
 #include <condition_variable>
 #include <deque>
+#include <functional>
 #include <movit/effect_chain.h>
 #include <movit/mix_effect.h>
 #include <movit/ycbcr_input.h>
@@ -35,10 +36,12 @@ public:
 	void start();
 	void stop();
 
-	void schedule_original_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts);
-	void schedule_faded_frame(int64_t output_pts, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha);
-	void schedule_interpolated_frame(int64_t output_pts, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1, float fade_alpha = 0.0f);  // -1 = no secondary frame.
-	void schedule_refresh_frame(int64_t output_pts);
+	// “display_func” is called after the frame has been calculated (if needed)
+	// and has gone out to the stream.
+	void schedule_original_frame(int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_pts);
+	void schedule_faded_frame(int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha);
+	void schedule_interpolated_frame(int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1, float fade_alpha = 0.0f);  // -1 = no secondary frame.
+	void schedule_refresh_frame(int64_t output_pts, std::function<void()> &&display_func);
 
 private:
 	void encode_thread_func();
@@ -83,6 +86,8 @@ private:
 		RefCountedGLsync fence;  // Set when the interpolated image is read back to the CPU.
 		GLuint flow_tex, output_tex, cbcr_tex;  // Released in the receiving thread; not really used for anything else.
 		JPEGID id;
+
+		std::function<void()> display_func;  // Called when the image is done decoding.
 	};
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
 	std::mutex queue_lock;

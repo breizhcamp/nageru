@@ -54,7 +54,7 @@ struct PendingDecode {
 thread JPEGFrameView::jpeg_decoder_thread;
 mutex cache_mu;
 map<JPEGID, LRUFrame, JPEGIDLexicalOrder> cache;  // Under cache_mu.
-condition_variable any_pending_decodes, cache_updated;
+condition_variable any_pending_decodes;
 deque<PendingDecode> pending_decodes;  // Under cache_mu.
 atomic<size_t> event_counter{0};
 extern QGLWidget *global_share_widget;
@@ -246,24 +246,16 @@ void jpeg_decoder_thread_func()
 				// Interpolated frames are never decoded by us,
 				// put directly into the cache from VideoStream.
 				unique_lock<mutex> lock(cache_mu);
-				cache_updated.wait(lock, [id] {
-					return cache.count(id) != 0 || should_quit.load();
-				});
-				if (should_quit.load())
-					break;
-				found_in_cache = true;  // Don't count it as a decode.
-
 				auto it = cache.find(id);
-				assert(it != cache.end());
-
-				it->second.last_used = event_counter++;
-				frame = it->second.frame;
-				if (frame == nullptr) {
-					// We inserted a nullptr as signal that the frame was never
-					// interpolated and that we should stop waiting.
-					// But don't let it linger in the cache anymore.
-					cache.erase(it);
+				if (it != cache.end()) {
+					it->second.last_used = event_counter++;
+					frame = it->second.frame;
+				} else {
+					// This can only really happen if it disappeared out of the
+					// LRU really, really fast. Which shouldn't happen.
+					fprintf(stderr, "WARNING: Interpolated JPEG was supposed to be in the cache, but was not\n");
 				}
+				found_in_cache = true;  // Don't count it as a decode.
 			} else {
 				frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
 			}
@@ -336,7 +328,6 @@ void JPEGFrameView::insert_interpolated_frame(JPEGID id, shared_ptr<Frame> frame
 	// that would sound like a reasonable assumption.
 	unique_lock<mutex> lock(cache_mu);
 	cache[id] = LRUFrame{ std::move(frame), event_counter++ };
-	cache_updated.notify_all();
 }
 
 ResourcePool *resource_pool = nullptr;
