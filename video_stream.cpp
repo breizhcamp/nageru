@@ -292,6 +292,10 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts, in
 {
 	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, input_pts);
 
+	// Preload the file from disk, so that the encoder thread does not get stalled.
+	// TODO: Consider sending it through the queue instead.
+	(void)read_file(filename_for_frame(stream_idx, input_pts));
+
 	QueuedFrame qf;
 	qf.local_pts = local_pts;
 	qf.type = QueuedFrame::ORIGINAL;
