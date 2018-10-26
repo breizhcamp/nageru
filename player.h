@@ -64,6 +64,11 @@ private:
 	int override_stream_idx = -1;  // Under queue_state_mu.
 
 	std::unique_ptr<VideoStream> video_stream;  // Can be nullptr.
+
+	// under queue_state_mu. Part of this instead of VideoStream so that we own
+	// its lock and can sleep on it.
+	size_t num_queued_frames = 0;
+	static constexpr size_t max_queued_frames = 10;
 };
 
 #endif  // !defined(_PLAYER_H)

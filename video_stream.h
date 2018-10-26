@@ -11,6 +11,7 @@ extern "C" {
 #include "jpeg_frame_view.h"
 #include "ref_counted_gl_sync.h"
 
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -35,13 +36,15 @@ public:
 	~VideoStream();
 	void start();
 	void stop();
+	void clear_queue();
 
 	// “display_func” is called after the frame has been calculated (if needed)
-	// and has gone out to the stream.
-	void schedule_original_frame(int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_pts);
-	void schedule_faded_frame(int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha);
-	void schedule_interpolated_frame(int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1, float fade_alpha = 0.0f);  // -1 = no secondary frame.
-	void schedule_refresh_frame(int64_t output_pts, std::function<void()> &&display_func);
+	// and has gone out to the stream. Returns false on failure (ie., couldn't
+	// schedule the frame due to lack of resources).
+	void schedule_original_frame(std::chrono::steady_clock::time_point, int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_pts);
+	bool schedule_faded_frame(std::chrono::steady_clock::time_point, int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha);
+	bool schedule_interpolated_frame(std::chrono::steady_clock::time_point, int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1, float fade_alpha = 0.0f);  // -1 = no secondary frame.
+	void schedule_refresh_frame(std::chrono::steady_clock::time_point, int64_t output_pts, std::function<void()> &&display_func);
 
 private:
 	void encode_thread_func();
@@ -67,9 +70,11 @@ private:
 		void *pbo_contents;  // Persistently mapped.
 	};
 	std::deque<InterpolatedFrameResources> interpolate_resources;  // Under <queue_lock>.
-	static constexpr size_t num_interpolate_slots = 10;
+	static constexpr size_t num_interpolate_slots = 15;  // Should be larger than Player::max_queued_frames, or we risk mass-dropping frames.
 
 	struct QueuedFrame {
+		std::chrono::steady_clock::time_point local_pts;
+
 		int64_t output_pts;
 		enum Type { ORIGINAL, FADED, INTERPOLATED, FADED_INTERPOLATED, REFRESH } type;
 		unsigned stream_idx;
@@ -91,7 +96,7 @@ private:
 	};
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
 	std::mutex queue_lock;
-	std::condition_variable queue_nonempty;
+	std::condition_variable queue_changed;
 
 	std::unique_ptr<Mux> stream_mux;  // To HTTP.
 	std::string stream_mux_header;

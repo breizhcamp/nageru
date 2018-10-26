@@ -73,7 +73,7 @@ wait_for_clip:
 
 		if (!clip_ready) {
 			if (video_stream != nullptr) {
-				video_stream->schedule_refresh_frame(pts, /*display_func=*/nullptr);
+				video_stream->schedule_refresh_frame(steady_clock::now(), pts, /*display_func=*/nullptr);
 			}
 			continue;
 		}
@@ -85,7 +85,7 @@ wait_for_clip:
 			clip = current_clip;
 			stream_idx = current_stream_idx;
 		}
-		steady_clock::time_point origin = steady_clock::now();
+		steady_clock::time_point origin = steady_clock::now();  // TODO: Add a 100 ms buffer for ramp-up?
 		int64_t in_pts_origin = clip.pts_in;
 got_clip:
 		int64_t out_pts_origin = pts;
@@ -180,13 +180,21 @@ got_clip:
 				break;
 			}
 
-			// Sleep until the next frame start, or until there's a new clip we're supposed to play.
+			// If the queue is full (which is really the state we'd like to be in),
+			// wait until there's room for one more frame (ie., one was output from
+			// VideoStream), or until or until there's a new clip we're supposed to play.
 			{
 				unique_lock<mutex> lock(queue_state_mu);
-				new_clip_changed.wait_until(lock, next_frame_start, [this]{
+				new_clip_changed.wait(lock, [this]{
+					if (video_stream != nullptr && num_queued_frames < max_queued_frames) {
+						return true;
+					}
 					return new_clip_ready || override_stream_idx != -1;
 				});
 				if (new_clip_ready) {
+					if (video_stream != nullptr) {
+						video_stream->clear_queue();
+					}
 					goto wait_for_clip;
 				}
 				if (override_stream_idx != -1) {
@@ -199,14 +207,21 @@ got_clip:
 			if (in_pts_lower == in_pts_upper) {
 				auto display_func = [this, primary_stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha]{
 					destination->setFrame(primary_stream_idx, in_pts_lower, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
+					unique_lock<mutex> lock(queue_state_mu);
+					assert(num_queued_frames > 0);
+					--num_queued_frames;
 				};
 				if (video_stream == nullptr) {
 					display_func();
 				} else {
 					if (secondary_stream_idx == -1) {
-						video_stream->schedule_original_frame(pts, display_func, primary_stream_idx, in_pts_lower);
+						video_stream->schedule_original_frame(next_frame_start, pts, display_func, primary_stream_idx, in_pts_lower);
+						unique_lock<mutex> lock(queue_state_mu);
+						++num_queued_frames;
 					} else {
-						video_stream->schedule_faded_frame(pts, display_func, primary_stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha);
+						bool ok = video_stream->schedule_faded_frame(next_frame_start, pts, display_func, primary_stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha);
+						unique_lock<mutex> lock(queue_state_mu);
+						if (ok) ++num_queued_frames;
 					}
 				}
 				continue;
@@ -221,14 +236,21 @@ got_clip:
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
 					auto display_func = [this, primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha]{
 						destination->setFrame(primary_stream_idx, snap_pts, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
+						unique_lock<mutex> lock(queue_state_mu);
+						assert(num_queued_frames > 0);
+						--num_queued_frames;
 					};
 					if (video_stream == nullptr) {
 						display_func();
 					} else {
 						if (secondary_stream_idx == -1) {
-							video_stream->schedule_original_frame(pts, display_func, primary_stream_idx, snap_pts);
+							video_stream->schedule_original_frame(next_frame_start, pts, display_func, primary_stream_idx, snap_pts);
+							unique_lock<mutex> lock(queue_state_mu);
+							++num_queued_frames;
 						} else {
-							video_stream->schedule_faded_frame(pts, display_func, primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
+							bool ok = video_stream->schedule_faded_frame(next_frame_start, pts, display_func, primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
+							unique_lock<mutex> lock(queue_state_mu);
+							if (ok) ++num_queued_frames;
 						}
 					}
 					in_pts_origin += snap_pts - in_pts;
@@ -253,12 +275,14 @@ got_clip:
 				assert(secondary_stream_idx == -1);
 				destination->setFrame(primary_stream_idx, in_pts_lower, /*interpolated=*/false);
 			} else {
-				// Calculate the interpolated frame. When it's done, the destination
-				// will be unblocked.
 				auto display_func = [this, primary_stream_idx, pts, secondary_stream_idx, secondary_pts, fade_alpha]{
 					destination->setFrame(primary_stream_idx, pts, /*interpolated=*/true, secondary_stream_idx, secondary_pts, fade_alpha);
+					assert(num_queued_frames > 0);
+					--num_queued_frames;
 				};
-				video_stream->schedule_interpolated_frame(pts, display_func, primary_stream_idx, in_pts_lower, in_pts_upper, alpha, secondary_stream_idx, secondary_pts, fade_alpha);
+				bool ok = video_stream->schedule_interpolated_frame(next_frame_start, pts, display_func, primary_stream_idx, in_pts_lower, in_pts_upper, alpha, secondary_stream_idx, secondary_pts, fade_alpha);
+				unique_lock<mutex> lock(queue_state_mu);
+				if (ok) ++num_queued_frames;
 			}
 		}
 

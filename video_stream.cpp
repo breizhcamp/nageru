@@ -22,6 +22,7 @@ extern "C" {
 #include <unistd.h>
 
 using namespace std;
+using namespace std::chrono;
 
 extern HTTPD *global_httpd;
 
@@ -156,12 +157,12 @@ VideoStream::VideoStream()
 	GLuint fade_y_output_tex[num_interpolate_slots], fade_cbcr_output_tex[num_interpolate_slots];
 	GLuint cb_tex[num_interpolate_slots], cr_tex[num_interpolate_slots];
 
-	glCreateTextures(GL_TEXTURE_2D_ARRAY, 10, input_tex);
-	glCreateTextures(GL_TEXTURE_2D_ARRAY, 10, gray_tex);
-	glCreateTextures(GL_TEXTURE_2D, 10, fade_y_output_tex);
-	glCreateTextures(GL_TEXTURE_2D, 10, fade_cbcr_output_tex);
-	glCreateTextures(GL_TEXTURE_2D, 10, cb_tex);
-	glCreateTextures(GL_TEXTURE_2D, 10, cr_tex);
+	glCreateTextures(GL_TEXTURE_2D_ARRAY, num_interpolate_slots, input_tex);
+	glCreateTextures(GL_TEXTURE_2D_ARRAY, num_interpolate_slots, gray_tex);
+	glCreateTextures(GL_TEXTURE_2D, num_interpolate_slots, fade_y_output_tex);
+	glCreateTextures(GL_TEXTURE_2D, num_interpolate_slots, fade_cbcr_output_tex);
+	glCreateTextures(GL_TEXTURE_2D, num_interpolate_slots, cb_tex);
+	glCreateTextures(GL_TEXTURE_2D, num_interpolate_slots, cr_tex);
 	check_error();
 
 	constexpr size_t width = 1280, height = 720;  // FIXME: adjustable width, height
@@ -281,11 +282,18 @@ void VideoStream::stop()
 	encode_thread.join();
 }
 
-void VideoStream::schedule_original_frame(int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_pts)
+void VideoStream::clear_queue()
+{
+	unique_lock<mutex> lock(queue_lock);
+	frame_queue.clear();
+}
+
+void VideoStream::schedule_original_frame(steady_clock::time_point local_pts, int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_pts)
 {
 	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, input_pts);
 
 	QueuedFrame qf;
+	qf.local_pts = local_pts;
 	qf.type = QueuedFrame::ORIGINAL;
 	qf.output_pts = output_pts;
 	qf.stream_idx = stream_idx;
@@ -294,10 +302,10 @@ void VideoStream::schedule_original_frame(int64_t output_pts, function<void()> &
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(qf);
-	queue_nonempty.notify_all();
+	queue_changed.notify_all();
 }
 
-void VideoStream::schedule_faded_frame(int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
+bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
 {
 	fprintf(stderr, "output_pts=%ld  faded         input_pts=%ld,%ld  fade_alpha=%.2f\n", output_pts, input_pts, secondary_input_pts, fade_alpha);
 
@@ -310,7 +318,7 @@ void VideoStream::schedule_faded_frame(int64_t output_pts, function<void()> &&di
 		unique_lock<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
-			return;
+			return false;
 		}
 		resources = interpolate_resources.front();
 		interpolate_resources.pop_front();
@@ -333,6 +341,7 @@ void VideoStream::schedule_faded_frame(int64_t output_pts, function<void()> &&di
 	ycbcr_semiplanar_converter->prepare_chain_for_fade(frame1, frame2, fade_alpha)->render_to_fbo(resources.fade_fbo, 1280, 720);
 
 	QueuedFrame qf;
+	qf.local_pts = local_pts;
 	qf.type = QueuedFrame::FADED;
 	qf.output_pts = output_pts;
 	qf.stream_idx = stream_idx;
@@ -366,10 +375,11 @@ void VideoStream::schedule_faded_frame(int64_t output_pts, function<void()> &&di
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(qf);
-	queue_nonempty.notify_all();
+	queue_changed.notify_all();
+	return true;
 }
 
-void VideoStream::schedule_interpolated_frame(int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
+bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts, int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
 {
 	if (secondary_stream_idx != -1) {
 		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f  secondary_pts=%ld  fade_alpha=%.2f\n", output_pts, input_first_pts, input_second_pts, alpha, secondary_input_pts, fade_alpha);
@@ -390,7 +400,7 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, function<void(
 		unique_lock<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
-			return;
+			return false;
 		}
 		resources = interpolate_resources.front();
 		interpolate_resources.pop_front();
@@ -480,10 +490,11 @@ void VideoStream::schedule_interpolated_frame(int64_t output_pts, function<void(
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(qf);
-	queue_nonempty.notify_all();
+	queue_changed.notify_all();
+	return true;
 }
 
-void VideoStream::schedule_refresh_frame(int64_t output_pts, function<void()> &&display_func)
+void VideoStream::schedule_refresh_frame(steady_clock::time_point local_pts, int64_t output_pts, function<void()> &&display_func)
 {
 	QueuedFrame qf;
 	qf.type = QueuedFrame::REFRESH;
@@ -492,7 +503,7 @@ void VideoStream::schedule_refresh_frame(int64_t output_pts, function<void()> &&
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(qf);
-	queue_nonempty.notify_all();
+	queue_changed.notify_all();
 }
 
 namespace {
@@ -541,9 +552,22 @@ void VideoStream::encode_thread_func()
 		QueuedFrame qf;
 		{
 			unique_lock<mutex> lock(queue_lock);
-			queue_nonempty.wait(lock, [this]{
+
+			// Wait until we have a frame to play.
+			queue_changed.wait(lock, [this]{
 				return !frame_queue.empty();
 			});
+			steady_clock::time_point frame_start = frame_queue.front().local_pts;
+
+			// Now sleep until the frame is supposed to start (the usual case),
+			// _or_ clear_queue() happened.
+			bool aborted = queue_changed.wait_until(lock, frame_start, [this, frame_start]{
+				return frame_queue.empty() || frame_queue.front().local_pts != frame_start;
+			});
+			if (aborted) {
+				// clear_queue() happened, so don't play this frame after all.
+				continue;
+			}
 			qf = frame_queue.front();
 			frame_queue.pop_front();
 		}
