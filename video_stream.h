@@ -70,6 +70,8 @@ private:
 	// Allocated at the very start; if we're empty, we start dropping frames
 	// (so that we don't build up an infinite interpolation backlog).
 	struct InterpolatedFrameResources {
+		VideoStream *owner;  // Used only for IFRReleaser, below.
+
 		GLuint input_tex;  // Layered (contains both input frames), Y'CbCr.
 		GLuint gray_tex;  // Same, but Y only.
 		GLuint input_fbos[2];  // For rendering to the two layers of input_tex.
@@ -83,8 +85,20 @@ private:
 		GLuint pbo;  // For reading the data back.
 		void *pbo_contents;  // Persistently mapped.
 	};
-	std::deque<InterpolatedFrameResources> interpolate_resources;  // Under <queue_lock>.
+	std::mutex queue_lock;
+	std::deque<std::unique_ptr<InterpolatedFrameResources>> interpolate_resources;  // Under <queue_lock>.
 	static constexpr size_t num_interpolate_slots = 15;  // Should be larger than Player::max_queued_frames, or we risk mass-dropping frames.
+
+	struct IFRReleaser {
+		void operator() (InterpolatedFrameResources *ifr) const
+		{
+			if (ifr != nullptr) {
+				std::unique_lock<std::mutex> lock(ifr->owner->queue_lock);
+				ifr->owner->interpolate_resources.emplace_back(ifr);
+			}
+		}
+	};
+	using BorrowedInterpolatedFrameResources = std::unique_ptr<InterpolatedFrameResources, IFRReleaser>;
 
 	struct QueuedFrame {
 		std::chrono::steady_clock::time_point local_pts;
@@ -101,7 +115,7 @@ private:
 		// For interpolated frames only.
 		int64_t input_second_pts;
 		float alpha;
-		InterpolatedFrameResources resources;
+		BorrowedInterpolatedFrameResources resources;
 		RefCountedGLsync fence;  // Set when the interpolated image is read back to the CPU.
 		GLuint flow_tex, output_tex, cbcr_tex;  // Released in the receiving thread; not really used for anything else.
 		JPEGID id;
@@ -111,7 +125,6 @@ private:
 		QueueSpotHolder queue_spot_holder;
 	};
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
-	std::mutex queue_lock;
 	std::condition_variable queue_changed;
 
 	std::unique_ptr<Mux> stream_mux;  // To HTTP.
