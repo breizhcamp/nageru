@@ -305,7 +305,7 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts, in
 	qf.display_func = move(display_func);
 
 	unique_lock<mutex> lock(queue_lock);
-	frame_queue.push_back(qf);
+	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 }
 
@@ -378,7 +378,7 @@ bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	check_error();
 
 	unique_lock<mutex> lock(queue_lock);
-	frame_queue.push_back(qf);
+	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 	return true;
 }
@@ -495,7 +495,7 @@ bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	check_error();
 
 	unique_lock<mutex> lock(queue_lock);
-	frame_queue.push_back(qf);
+	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 	return true;
 }
@@ -508,7 +508,7 @@ void VideoStream::schedule_refresh_frame(steady_clock::time_point local_pts, int
 	qf.display_func = move(display_func);
 
 	unique_lock<mutex> lock(queue_lock);
-	frame_queue.push_back(qf);
+	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 }
 
@@ -574,7 +574,7 @@ void VideoStream::encode_thread_func()
 				// clear_queue() happened, so don't play this frame after all.
 				continue;
 			}
-			qf = frame_queue.front();
+			qf = move(frame_queue.front());
 			frame_queue.pop_front();
 		}
 
