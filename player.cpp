@@ -194,6 +194,7 @@ got_clip:
 				if (new_clip_ready) {
 					if (video_stream != nullptr) {
 						video_stream->clear_queue();
+						num_queued_frames = 0;
 					}
 					goto wait_for_clip;
 				}
@@ -210,6 +211,7 @@ got_clip:
 					unique_lock<mutex> lock(queue_state_mu);
 					assert(num_queued_frames > 0);
 					--num_queued_frames;
+					new_clip_changed.notify_all();
 				};
 				if (video_stream == nullptr) {
 					display_func();
@@ -239,6 +241,7 @@ got_clip:
 						unique_lock<mutex> lock(queue_state_mu);
 						assert(num_queued_frames > 0);
 						--num_queued_frames;
+						new_clip_changed.notify_all();
 					};
 					if (video_stream == nullptr) {
 						display_func();
@@ -279,6 +282,7 @@ got_clip:
 					destination->setFrame(primary_stream_idx, pts, /*interpolated=*/true, secondary_stream_idx, secondary_pts, fade_alpha);
 					assert(num_queued_frames > 0);
 					--num_queued_frames;
+					new_clip_changed.notify_all();
 				};
 				bool ok = video_stream->schedule_interpolated_frame(next_frame_start, pts, display_func, primary_stream_idx, in_pts_lower, in_pts_upper, alpha, secondary_stream_idx, secondary_pts, fade_alpha);
 				unique_lock<mutex> lock(queue_state_mu);
