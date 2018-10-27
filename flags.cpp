@@ -23,7 +23,7 @@ void usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "      --help                      print usage information\n");
 	fprintf(stderr, "      --slow-down-input           slow down input to realtime (default on if no\n");
-	fprintf(stderr, "                                    source URL given)");
+	fprintf(stderr, "                                    source URL given)\n");
 	fprintf(stderr, "  -q, --interpolation-quality N   1 = fastest\n");
 	fprintf(stderr, "                                  2 = default (realtime 720p on fast embedded GPUs)\n");
 	fprintf(stderr, "                                  3 = good (realtime 720p on GTX 970 or so)\n");
