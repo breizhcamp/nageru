@@ -145,7 +145,7 @@ got_clip:
 			int64_t secondary_pts = -1;
 			int64_t in_pts_secondary = -1;
 			float fade_alpha = 0.0f;
-			if (got_next_clip) {
+			if (got_next_clip && time_left_this_clip <= next_clip_fade_time) {
 				secondary_stream_idx = next_clip.stream_idx;
 				in_pts_secondary = lrint(next_clip.pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * speed);
 				fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
