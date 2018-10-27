@@ -10,6 +10,7 @@ extern "C" {
 
 #include "jpeg_frame_view.h"
 #include "ref_counted_gl_sync.h"
+#include "queue_spot_holder.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -39,22 +40,25 @@ public:
 	void clear_queue();
 
 	// “display_func” is called after the frame has been calculated (if needed)
-	// and has gone out to the stream. Returns false on failure (ie., couldn't
-	// schedule the frame due to lack of resources).
+	// and has gone out to the stream.
 	void schedule_original_frame(std::chrono::steady_clock::time_point,
 	                             int64_t output_pts, std::function<void()> &&display_func,
+	                             QueueSpotHolder &&queue_spot_holder,
 	                             unsigned stream_idx, int64_t input_pts);
-	bool schedule_faded_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
-	                          std::function<void()> &&display_func, unsigned stream_idx,
-	                          int64_t input_pts, int secondary_stream_idx,
+	void schedule_faded_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
+	                          std::function<void()> &&display_func,
+	                          QueueSpotHolder &&queue_spot_holder,
+	                          unsigned stream_idx, int64_t input_pts, int secondary_stream_idx,
 	                          int64_t secondary_input_pts, float fade_alpha);
-	bool schedule_interpolated_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
-	                          std::function<void()> &&display_func, unsigned stream_idx,
-	                          int64_t input_first_pts, int64_t input_second_pts, float alpha,
-	                          int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1,
+	void schedule_interpolated_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
+	                          std::function<void()> &&display_func,
+	                          QueueSpotHolder &&queue_spot_holder,
+	                          unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts,
+	                          float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1,
 	                          float fade_alpha = 0.0f);  // -1 = no secondary frame.
 	void schedule_refresh_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
-	                            std::function<void()> &&display_func);
+	                            std::function<void()> &&display_func,
+	                            QueueSpotHolder &&queue_spot_holder);
 
 private:
 	void encode_thread_func();
@@ -103,6 +107,8 @@ private:
 		JPEGID id;
 
 		std::function<void()> display_func;  // Called when the image is done decoding.
+
+		QueueSpotHolder queue_spot_holder;
 	};
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
 	std::mutex queue_lock;

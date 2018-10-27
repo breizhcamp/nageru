@@ -2,6 +2,7 @@
 #define _PLAYER_H 1
 
 #include "clip_list.h"
+#include "queue_spot_holder.h"
 
 extern "C" {
 #include <libavformat/avio.h>
@@ -16,7 +17,7 @@ class VideoStream;
 class QSurface;
 class QSurfaceFormat;
 
-class Player {
+class Player : public QueueInterface {
 public:
 	Player(JPEGFrameView *destination, bool also_output_to_stream);
 
@@ -37,6 +38,10 @@ public:
 	// Will be called back from the player thread.
 	using progress_callback_func = std::function<void(double played_this_clip, double total_length)>;
 	void set_progress_callback(progress_callback_func cb) { progress_callback = cb; }
+
+	// QueueInterface.
+	void take_queue_spot() override;
+	void release_queue_spot() override;
 
 private:
 	void thread_func(bool also_output_to_stream);

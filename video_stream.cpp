@@ -290,6 +290,7 @@ void VideoStream::clear_queue()
 
 void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
                                           int64_t output_pts, function<void()> &&display_func,
+                                          QueueSpotHolder &&queue_spot_holder,
                                           unsigned stream_idx, int64_t input_pts)
 {
 	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, input_pts);
@@ -305,15 +306,17 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
 	qf.stream_idx = stream_idx;
 	qf.input_first_pts = input_pts;
 	qf.display_func = move(display_func);
+	qf.queue_spot_holder = move(queue_spot_holder);
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 }
 
-bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64_t output_pts,
-                                       function<void()> &&display_func, unsigned stream_idx,
-                                       int64_t input_pts, int secondary_stream_idx,
+void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64_t output_pts,
+                                       function<void()> &&display_func,
+                                       QueueSpotHolder &&queue_spot_holder,
+                                       unsigned stream_idx, int64_t input_pts, int secondary_stream_idx,
                                        int64_t secondary_input_pts, float fade_alpha)
 {
 	fprintf(stderr, "output_pts=%ld  faded         input_pts=%ld,%ld  fade_alpha=%.2f\n", output_pts, input_pts, secondary_input_pts, fade_alpha);
@@ -327,7 +330,7 @@ bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 		unique_lock<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
-			return false;
+			return;
 		}
 		resources = interpolate_resources.front();
 		interpolate_resources.pop_front();
@@ -357,6 +360,7 @@ bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	qf.resources = resources;
 	qf.input_first_pts = input_pts;
 	qf.display_func = move(display_func);
+	qf.queue_spot_holder = move(queue_spot_holder);
 
 	qf.secondary_stream_idx = secondary_stream_idx;
 	qf.secondary_input_pts = secondary_input_pts;
@@ -385,11 +389,11 @@ bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
-	return true;
 }
 
-bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts,
+void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts,
                                               int64_t output_pts, function<void()> &&display_func,
+                                              QueueSpotHolder &&queue_spot_holder,
                                               unsigned stream_idx, int64_t input_first_pts,
                                               int64_t input_second_pts, float alpha,
                                               int secondary_stream_idx, int64_t secondary_input_pts,
@@ -414,7 +418,7 @@ bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 		unique_lock<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
-			return false;
+			return;
 		}
 		resources = interpolate_resources.front();
 		interpolate_resources.pop_front();
@@ -427,6 +431,7 @@ bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	qf.resources = resources;
 	qf.id = id;
 	qf.display_func = move(display_func);
+	qf.queue_spot_holder = move(queue_spot_holder);
 
 	check_error();
 
@@ -507,16 +512,17 @@ bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
-	return true;
 }
 
 void VideoStream::schedule_refresh_frame(steady_clock::time_point local_pts,
-                                         int64_t output_pts, function<void()> &&display_func)
+                                         int64_t output_pts, function<void()> &&display_func,
+                                         QueueSpotHolder &&queue_spot_holder)
 {
 	QueuedFrame qf;
 	qf.type = QueuedFrame::REFRESH;
 	qf.output_pts = output_pts;
 	qf.display_func = move(display_func);
+	qf.queue_spot_holder = move(queue_spot_holder);
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
