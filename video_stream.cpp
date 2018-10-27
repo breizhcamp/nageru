@@ -288,7 +288,9 @@ void VideoStream::clear_queue()
 	frame_queue.clear();
 }
 
-void VideoStream::schedule_original_frame(steady_clock::time_point local_pts, int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_pts)
+void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
+                                          int64_t output_pts, function<void()> &&display_func,
+                                          unsigned stream_idx, int64_t input_pts)
 {
 	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, input_pts);
 
@@ -309,7 +311,10 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts, in
 	queue_changed.notify_all();
 }
 
-bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
+bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64_t output_pts,
+                                       function<void()> &&display_func, unsigned stream_idx,
+                                       int64_t input_pts, int secondary_stream_idx,
+                                       int64_t secondary_input_pts, float fade_alpha)
 {
 	fprintf(stderr, "output_pts=%ld  faded         input_pts=%ld,%ld  fade_alpha=%.2f\n", output_pts, input_pts, secondary_input_pts, fade_alpha);
 
@@ -383,7 +388,12 @@ bool VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	return true;
 }
 
-bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts, int64_t output_pts, function<void()> &&display_func, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha)
+bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts,
+                                              int64_t output_pts, function<void()> &&display_func,
+                                              unsigned stream_idx, int64_t input_first_pts,
+                                              int64_t input_second_pts, float alpha,
+                                              int secondary_stream_idx, int64_t secondary_input_pts,
+                                              float fade_alpha)
 {
 	if (secondary_stream_idx != -1) {
 		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f  secondary_pts=%ld  fade_alpha=%.2f\n", output_pts, input_first_pts, input_second_pts, alpha, secondary_input_pts, fade_alpha);
@@ -500,7 +510,8 @@ bool VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	return true;
 }
 
-void VideoStream::schedule_refresh_frame(steady_clock::time_point local_pts, int64_t output_pts, function<void()> &&display_func)
+void VideoStream::schedule_refresh_frame(steady_clock::time_point local_pts,
+                                         int64_t output_pts, function<void()> &&display_func)
 {
 	QueuedFrame qf;
 	qf.type = QueuedFrame::REFRESH;

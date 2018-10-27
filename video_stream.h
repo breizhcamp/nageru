@@ -41,10 +41,20 @@ public:
 	// “display_func” is called after the frame has been calculated (if needed)
 	// and has gone out to the stream. Returns false on failure (ie., couldn't
 	// schedule the frame due to lack of resources).
-	void schedule_original_frame(std::chrono::steady_clock::time_point, int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_pts);
-	bool schedule_faded_frame(std::chrono::steady_clock::time_point, int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_pts, int secondary_stream_idx, int64_t secondary_input_pts, float fade_alpha);
-	bool schedule_interpolated_frame(std::chrono::steady_clock::time_point, int64_t output_pts, std::function<void()> &&display_func, unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts, float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1, float fade_alpha = 0.0f);  // -1 = no secondary frame.
-	void schedule_refresh_frame(std::chrono::steady_clock::time_point, int64_t output_pts, std::function<void()> &&display_func);
+	void schedule_original_frame(std::chrono::steady_clock::time_point,
+	                             int64_t output_pts, std::function<void()> &&display_func,
+	                             unsigned stream_idx, int64_t input_pts);
+	bool schedule_faded_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
+	                          std::function<void()> &&display_func, unsigned stream_idx,
+	                          int64_t input_pts, int secondary_stream_idx,
+	                          int64_t secondary_input_pts, float fade_alpha);
+	bool schedule_interpolated_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
+	                          std::function<void()> &&display_func, unsigned stream_idx,
+	                          int64_t input_first_pts, int64_t input_second_pts, float alpha,
+	                          int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1,
+	                          float fade_alpha = 0.0f);  // -1 = no secondary frame.
+	void schedule_refresh_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
+	                            std::function<void()> &&display_func);
 
 private:
 	void encode_thread_func();
