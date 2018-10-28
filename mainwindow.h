@@ -76,8 +76,8 @@ private:
 	void preview_angle_clicked(unsigned stream_idx);
 	void play_clicked();
 	void live_player_clip_done();
-	Clip live_player_get_next_clip();
-	void live_player_clip_progress(double played_this_clip, double total_length);
+	std::pair<Clip, size_t> live_player_get_next_clip();
+	void live_player_clip_progress(const std::map<size_t, double> &progress);
 	void set_output_status(const std::string &status);
 	void playlist_duplicate();
 	void playlist_remove();

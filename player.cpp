@@ -50,6 +50,7 @@ void Player::thread_func(bool also_output_to_stream)
 	constexpr double output_framerate = 60000.0 / 1001.0;  // FIXME: make configurable
 	int64_t pts = 0;
 	Clip next_clip;
+	size_t next_clip_idx = size_t(-1);
 	bool got_next_clip = false;
 	double next_clip_fade_time = -1.0;
 
@@ -79,10 +80,12 @@ wait_for_clip:
 		}
 
 		Clip clip;
+		size_t clip_idx;
 		unsigned stream_idx;
 		{
 			lock_guard<mutex> lock(mu);
 			clip = current_clip;
+			clip_idx = current_clip_idx;
 			stream_idx = current_stream_idx;
 		}
 		steady_clock::time_point origin = steady_clock::now();  // TODO: Add a 100 ms buffer for ramp-up?
@@ -130,7 +133,7 @@ got_clip:
 			double time_left_this_clip = double(clip.pts_out - in_pts) / TIMEBASE / speed;
 			if (!got_next_clip && next_clip_callback != nullptr && time_left_this_clip <= clip.fade_time_seconds) {
 				// Find the next clip so that we can begin a fade.
-				next_clip = next_clip_callback();
+				tie(next_clip, next_clip_idx) = next_clip_callback();
 				if (next_clip.pts_in != -1) {
 					got_next_clip = true;
 
@@ -140,6 +143,9 @@ got_clip:
 				}
 			}
 
+			// pts not affected by the swapping below.
+			int64_t in_pts_for_progress = in_pts, in_pts_secondary_for_progress = -1;
+
 			int primary_stream_idx = stream_idx;
 			int secondary_stream_idx = -1;
 			int64_t secondary_pts = -1;
@@ -148,6 +154,7 @@ got_clip:
 			if (got_next_clip && time_left_this_clip <= next_clip_fade_time) {
 				secondary_stream_idx = next_clip.stream_idx;
 				in_pts_secondary = lrint(next_clip.pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * speed);
+				in_pts_secondary_for_progress = in_pts_secondary;
 				fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
 
 				// If more than half-way through the fade, interpolate the next clip
@@ -169,9 +176,16 @@ got_clip:
 
 			if (progress_callback != nullptr) {
 				// NOTE: None of this will take into account any snapping done below.
-				double played_this_clip = double(in_pts - clip.pts_in) / TIMEBASE / speed;
+				double played_this_clip = double(in_pts_for_progress - clip.pts_in) / TIMEBASE / speed;
 				double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / speed;
-				progress_callback(played_this_clip, total_length);
+				map<size_t, double> progress{{ clip_idx, played_this_clip / total_length }};
+
+				if (got_next_clip && time_left_this_clip <= next_clip_fade_time) {
+					double played_next_clip = double(in_pts_secondary_for_progress - next_clip.pts_in) / TIMEBASE / speed;
+					double total_next_length = double(next_clip.pts_out - next_clip.pts_in) / TIMEBASE / speed;
+					progress[next_clip_idx] = played_next_clip / total_next_length;
+				}
+				progress_callback(progress);
 			}
 
 			int64_t in_pts_lower, in_pts_upper;
@@ -285,7 +299,7 @@ got_clip:
 
 		// Last-ditch effort to get the next clip (if e.g. the fade time was zero seconds).
 		if (!got_next_clip && next_clip_callback != nullptr) {
-			next_clip = next_clip_callback();
+			tie(next_clip, next_clip_idx) = next_clip_callback();
 			if (next_clip.pts_in != -1) {
 				got_next_clip = true;
 				in_pts_start_next_clip = next_clip.pts_in;
@@ -295,6 +309,7 @@ got_clip:
 		// Switch to next clip if we got it.
 		if (got_next_clip) {
 			clip = next_clip;
+			clip_idx = next_clip_idx;
 			stream_idx = next_clip.stream_idx;  // Override is used for previews only, and next_clip is used for live ony.
 			if (done_callback != nullptr) {
 				done_callback();
@@ -348,12 +363,13 @@ Player::Player(JPEGFrameView *destination, bool also_output_to_stream)
 	thread(&Player::thread_func, this, also_output_to_stream).detach();
 }
 
-void Player::play_clip(const Clip &clip, unsigned stream_idx)
+void Player::play_clip(const Clip &clip, size_t clip_idx, unsigned stream_idx)
 {
 	{
 		lock_guard<mutex> lock(mu);
 		current_clip = clip;
 		current_stream_idx = stream_idx;
+		current_clip_idx = clip_idx;
 	}
 
 	{

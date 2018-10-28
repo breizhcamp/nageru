@@ -130,9 +130,9 @@ MainWindow::MainWindow()
 		});
 	});
 	live_player->set_next_clip_callback(bind(&MainWindow::live_player_get_next_clip, this));
-	live_player->set_progress_callback([this](double played_this_clip, double total_length) {
-		post_to_main_thread([this, played_this_clip, total_length] {
-			live_player_clip_progress(played_this_clip, total_length);
+	live_player->set_progress_callback([this](const map<size_t, double> &progress) {
+		post_to_main_thread([this, progress] {
+			live_player_clip_progress(progress);
 		});
 	});
 	set_output_status("paused");
@@ -204,7 +204,7 @@ void MainWindow::preview_clicked()
 
 	QItemSelectionModel *selected = ui->clip_list->selectionModel();
 	if (!selected->hasSelection()) {
-		preview_player->play_clip(*cliplist_clips->back(), 0);
+		preview_player->play_clip(*cliplist_clips->back(), cliplist_clips->size() - 1, 0);
 		return;
 	}
 
@@ -216,7 +216,7 @@ void MainWindow::preview_clicked()
 	} else {
 		stream_idx = ui->preview_display->get_stream_idx();
 	}
-	preview_player->play_clip(*cliplist_clips->clip(index.row()), stream_idx);
+	preview_player->play_clip(*cliplist_clips->clip(index.row()), index.row(), stream_idx);
 }
 
 void MainWindow::preview_angle_clicked(unsigned stream_idx)
@@ -328,7 +328,8 @@ void MainWindow::play_clicked()
 	}
 
 	const Clip &clip = *playlist_clips->clip(row);
-	live_player->play_clip(clip, clip.stream_idx);
+	live_player->play_clip(clip, row, clip.stream_idx);
+	playlist_clips->set_progress({{ row, 0.0f }});
 	playlist_clips->set_currently_playing(row, 0.0f);
 	playlist_selection_changed();
 }
@@ -338,24 +339,26 @@ void MainWindow::live_player_clip_done()
 	int row = playlist_clips->get_currently_playing();
 	if (row == -1 || row == int(playlist_clips->size()) - 1) {
 		set_output_status("paused");
+		playlist_clips->set_progress({});
 		playlist_clips->set_currently_playing(-1, 0.0f);
 	} else {
+		playlist_clips->set_progress({{ row + 1, 0.0f }});
 		playlist_clips->set_currently_playing(row + 1, 0.0f);
 	}
 }
 
-Clip MainWindow::live_player_get_next_clip()
+pair<Clip, size_t> MainWindow::live_player_get_next_clip()
 {
 	// playlist_clips can only be accessed on the main thread.
 	// Hopefully, we won't have to wait too long for this to come back.
-	promise<Clip> clip_promise;
-	future<Clip> clip = clip_promise.get_future();
+	promise<pair<Clip, size_t>> clip_promise;
+	future<pair<Clip, size_t>> clip = clip_promise.get_future();
 	post_to_main_thread([this, &clip_promise] {
 		int row = playlist_clips->get_currently_playing();
 		if (row != -1 && row < int(playlist_clips->size()) - 1) {
-			clip_promise.set_value(*playlist_clips->clip(row + 1));
+			clip_promise.set_value(make_pair(*playlist_clips->clip(row + 1), row + 1));
 		} else {
-			clip_promise.set_value(Clip());
+			clip_promise.set_value(make_pair(Clip(), 0));
 		}
 	});
 	return clip.get();
@@ -376,14 +379,28 @@ static string format_duration(double t)
 	return buf;
 }
 
-void MainWindow::live_player_clip_progress(double played_this_clip, double total_length)
+void MainWindow::live_player_clip_progress(const map<size_t, double> &progress)
 {
-	playlist_clips->set_currently_playing(playlist_clips->get_currently_playing(), played_this_clip / total_length);
+	playlist_clips->set_progress(progress);
 
-	double remaining = total_length - played_this_clip;
-	for (int row = playlist_clips->get_currently_playing() + 1; row < int(playlist_clips->size()); ++row) {
+	// Look at the last clip and then start counting from there.
+	assert(!progress.empty());
+	auto last_it = progress.end();
+	--last_it;
+	double remaining = 0.0;
+	double last_fade_time_seconds = 0.0;
+	for (size_t row = last_it->first; row < playlist_clips->size(); ++row) {
 		const Clip clip = *playlist_clips->clip(row);
-		remaining += double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;  // FIXME: stop hardcoding speed.
+		double clip_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;  // FIXME: stop hardcoding speed.
+		if (row == last_it->first) {
+			// A clip we're playing: Subtract the part we've already played.
+			remaining = clip_length * (1.0 - last_it->second);
+		} else {
+			// A clip we haven't played yet: Subtract the part that's overlapping
+			// with a previous clip (due to fade).
+			remaining += max(clip_length - last_fade_time_seconds, 0.0);
+		}
+		last_fade_time_seconds = min(clip_length, clip.fade_time_seconds);
 	}
 	set_output_status(format_duration(remaining) + " left");
 }
@@ -631,7 +648,7 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 	Clip fake_clip;
 	fake_clip.pts_in = pts;
 	fake_clip.pts_out = pts + 1;
-	preview_player->play_clip(fake_clip, stream_idx);
+	preview_player->play_clip(fake_clip, 0, stream_idx);
 }
 
 void MainWindow::playlist_selection_changed()

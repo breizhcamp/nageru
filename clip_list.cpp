@@ -142,7 +142,10 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const
 	}
 	if (role == Qt::BackgroundRole) {
 		if (Column(column) == Column::PLAYING) {
-			if (row == currently_playing_index) {
+			auto it = current_progress.find(row);
+			if (it != current_progress.end()) {
+				double play_progress = it->second;
+
 				// This only really works well for the first column, for whatever odd Qt reason.
 				QLinearGradient grad(QPointF(0, 0), QPointF(1, 0));
 				grad.setCoordinateMode(grad.QGradient::ObjectBoundingMode);
@@ -165,7 +168,7 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const
 
 	switch (Column(column)) {
 	case Column::PLAYING:
-		return (row == currently_playing_index) ? "→" : "";
+		return current_progress.count(row) ? "→" : "";
 	case Column::IN:
 		return QString::fromStdString(pts_to_string(clips[row].pts_in));
 	case Column::OUT:
@@ -427,6 +430,24 @@ void PlayList::set_currently_playing(int index, double progress)
 		}
 	} else if (index != -1 && fabs(progress - play_progress) > 1e-3) {
 		play_progress = progress;
+		emit dataChanged(this->index(index, column), this->index(index, column));
+	}
+}
+
+void PlayList::set_progress(const map<size_t, double> &progress)
+{
+	const int column = int(Column::PLAYING);
+	map<size_t, double> old_progress = move(this->current_progress);
+	this->current_progress = progress;
+
+	for (auto it : old_progress) {
+		size_t index = it.first;
+		if (current_progress.count(index) == 0) {
+			emit dataChanged(this->index(index, column), this->index(index, column));
+		}
+	}
+	for (auto it : current_progress) {
+		size_t index = it.first;
 		emit dataChanged(this->index(index, column), this->index(index, column));
 	}
 }

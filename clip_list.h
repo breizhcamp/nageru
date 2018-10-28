@@ -6,6 +6,7 @@
 
 #include <QAbstractTableModel>
 #include <stdint.h>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -131,6 +132,8 @@ public:
 	void set_currently_playing(int index, double progress);  // -1 = none.
 	int get_currently_playing() const { return currently_playing_index; }
 
+	void set_progress(const std::map<size_t, double> &progress);
+
 	ClipListProto serialize() const;
 
 	void emit_data_changed(size_t row) override;
@@ -142,6 +145,7 @@ private:
 	std::vector<Clip> clips;
 	int currently_playing_index = -1;
 	double play_progress = 0.0;
+	std::map<size_t, double> current_progress;
 };
 
 #endif  // !defined (_CLIP_LIST_H)

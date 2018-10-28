@@ -21,7 +21,7 @@ class Player : public QueueInterface {
 public:
 	Player(JPEGFrameView *destination, bool also_output_to_stream);
 
-	void play_clip(const Clip &clip, unsigned stream_idx);
+	void play_clip(const Clip &clip, size_t clip_idx, unsigned stream_idx);
 	void override_angle(unsigned stream_idx);  // For the current clip only.
 
 	// Not thread-safe to set concurrently with playing.
@@ -31,12 +31,13 @@ public:
 
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
-	using next_clip_callback_func = std::function<Clip()>;
+	// The second parameter is the clip's position in the play list.
+	using next_clip_callback_func = std::function<std::pair<Clip, size_t>()>;
 	void set_next_clip_callback(next_clip_callback_func cb) { next_clip_callback = cb; }
 
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
-	using progress_callback_func = std::function<void(double played_this_clip, double total_length)>;
+	using progress_callback_func = std::function<void(const std::map<size_t, double> &progress)>;
 	void set_progress_callback(progress_callback_func cb) { progress_callback = cb; }
 
 	// QueueInterface.
@@ -60,6 +61,7 @@ private:
 
 	std::mutex mu;
 	Clip current_clip;  // Under mu. Can have pts_in = -1 for no clip.
+	size_t current_clip_idx;  // Under mu.
 	unsigned current_stream_idx;  // Under mu.
 
 	std::mutex queue_state_mu;
