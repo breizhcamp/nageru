@@ -301,7 +301,7 @@ void init_jpeg_vaapi()
 
 class VABufferDestroyer {
 public:
-	VABufferDestroyer(VADisplay *dpy, VABufferID buf)
+	VABufferDestroyer(VADisplay dpy, VABufferID buf)
 		: dpy(dpy), buf(buf) {}
 
 	~VABufferDestroyer() {
@@ -309,7 +309,7 @@ public:
 	}
 
 private:
-	VADisplay *dpy;
+	VADisplay dpy;
 	VABufferID buf;
 };
 
@@ -378,7 +378,7 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	VABufferID pic_param_buffer;
 	VAStatus va_status = vaCreateBuffer(va_dpy->va_dpy, config_id, VAPictureParameterBufferType, sizeof(pic_param), 1, &pic_param, &pic_param_buffer);
 	CHECK_VASTATUS_RET(va_status, "vaCreateBuffer");
-	VABufferDestroyer destroy_pic_param(&va_dpy->va_dpy, pic_param_buffer);
+	VABufferDestroyer destroy_pic_param(va_dpy->va_dpy, pic_param_buffer);
 
 	// Quantization matrices.
 	VAIQMatrixBufferJPEGBaseline iq;
@@ -403,7 +403,7 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	VABufferID iq_buffer;
 	va_status = vaCreateBuffer(va_dpy->va_dpy, config_id, VAIQMatrixBufferType, sizeof(iq), 1, &iq, &iq_buffer);
 	CHECK_VASTATUS_RET(va_status, "vaCreateBuffer");
-	VABufferDestroyer destroy_iq(&va_dpy->va_dpy, iq_buffer);
+	VABufferDestroyer destroy_iq(va_dpy->va_dpy, iq_buffer);
 
 	// Huffman tables (arithmetic is not supported).
 	VAHuffmanTableBufferJPEGBaseline huff;
@@ -437,7 +437,7 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	VABufferID huff_buffer;
 	va_status = vaCreateBuffer(va_dpy->va_dpy, config_id, VAHuffmanTableBufferType, sizeof(huff), 1, &huff, &huff_buffer);
 	CHECK_VASTATUS_RET(va_status, "vaCreateBuffer");
-	VABufferDestroyer destroy_huff(&va_dpy->va_dpy, huff_buffer);
+	VABufferDestroyer destroy_huff(va_dpy->va_dpy, huff_buffer);
 
 	// Slice parameters (metadata about the slice).
 	VASliceParameterBufferJPEGBaseline parms;
@@ -467,13 +467,13 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	VABufferID slice_param_buffer;
 	va_status = vaCreateBuffer(va_dpy->va_dpy, config_id, VASliceParameterBufferType, sizeof(parms), 1, &parms, &slice_param_buffer);
 	CHECK_VASTATUS_RET(va_status, "vaCreateBuffer");
-	VABufferDestroyer destroy_slice_param(&va_dpy->va_dpy, slice_param_buffer);
+	VABufferDestroyer destroy_slice_param(va_dpy->va_dpy, slice_param_buffer);
 
 	// The actual data.
 	VABufferID data_buffer;
 	va_status = vaCreateBuffer(va_dpy->va_dpy, config_id, VASliceDataBufferType, str.size(), 1, &str[0], &data_buffer);
 	CHECK_VASTATUS_RET(va_status, "vaCreateBuffer");
-	VABufferDestroyer destroy_data(&va_dpy->va_dpy, data_buffer);
+	VABufferDestroyer destroy_data(va_dpy->va_dpy, data_buffer);
 
 	VAResources resources = get_va_resources(dinfo.image_width, dinfo.image_height);
 	ReleaseVAResources release(resources);
