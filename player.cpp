@@ -194,17 +194,27 @@ got_clip:
 				break;
 			}
 
-			// If the queue is full (which is really the state we'd like to be in),
-			// wait until there's room for one more frame (ie., one was output from
-			// VideoStream), or until or until there's a new clip we're supposed to play.
 			{
 				unique_lock<mutex> lock(queue_state_mu);
-				new_clip_changed.wait(lock, [this]{
-					if (video_stream != nullptr && num_queued_frames < max_queued_frames) {
-						return true;
-					}
-					return new_clip_ready || override_stream_idx != -1;
-				});
+				if (video_stream == nullptr) {
+					// No queue, just wait until the right time and then show the frame.
+					new_clip_changed.wait_until(lock, next_frame_start, [this]{
+						return new_clip_ready || override_stream_idx != -1;
+					});
+				} else {
+					// If the queue is full (which is really the state we'd like to be in),
+					// wait until there's room for one more frame (ie., one was output from
+					// VideoStream), or until or until there's a new clip we're supposed to play.
+					//
+					// In this case, we don't sleep until next_frame_start; the displaying is
+					// done by the queue.
+					new_clip_changed.wait(lock, [this]{
+						if (num_queued_frames < max_queued_frames) {
+							return true;
+						}
+						return new_clip_ready || override_stream_idx != -1;
+					});
+				}
 				if (new_clip_ready) {
 					if (video_stream != nullptr) {
 						lock.unlock();  // Urg.
