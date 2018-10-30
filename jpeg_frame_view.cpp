@@ -328,6 +328,7 @@ void JPEGFrameView::insert_interpolated_frame(JPEGID id, shared_ptr<Frame> frame
 	// that would sound like a reasonable assumption.
 	unique_lock<mutex> lock(cache_mu);
 	cache[id] = LRUFrame{ std::move(frame), event_counter++ };
+	prune_cache();
 }
 
 ResourcePool *resource_pool = nullptr;
