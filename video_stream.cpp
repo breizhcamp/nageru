@@ -392,6 +392,7 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	qf.fence = RefCountedGLsync(GL_SYNC_GPU_COMMANDS_COMPLETE, /*flags=*/0);
 	check_error();
 	qf.resources = move(resources);
+	qf.local_pts = local_pts;
 
 	unique_lock<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
@@ -438,6 +439,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	qf.id = id;
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
+	qf.local_pts = local_pts;
 
 	check_error();
 
