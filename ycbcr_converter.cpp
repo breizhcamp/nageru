@@ -39,7 +39,6 @@ YCbCrConverter::YCbCrConverter(YCbCrConverter::OutputMode output_mode, ResourceP
 	inout_format.gamma_curve = GAMMA_sRGB;
 
 	ycbcr_format.luma_coefficients = YCBCR_REC_709;
-	ycbcr_format.full_range = false;
 	ycbcr_format.num_levels = 256;
 	ycbcr_format.chroma_subsampling_x = 2;
 	ycbcr_format.chroma_subsampling_y = 1;
@@ -47,6 +46,18 @@ YCbCrConverter::YCbCrConverter(YCbCrConverter::OutputMode output_mode, ResourceP
 	ycbcr_format.cb_y_position = 0.5f;  // Irrelevant.
 	ycbcr_format.cr_x_position = 0.0f;
 	ycbcr_format.cr_y_position = 0.5f;
+
+	// This is a hack. Even though we're sending MJPEG around, which is
+	// full-range, it's mostly transporting signals from limited-range
+	// sources with no conversion, so we ought to have had false here.
+	// However, in the off chance that we're actually getting real MJPEG,
+	// we don't want to crush its blacks (or whites) by clamping. All of
+	// our processing is fades, so if we're in limited-range input, we'll
+	// stay in limited-range output. (Fading between limited-range and
+	// full-range sources will be broken, of course.) There will be some
+	// slight confusion in the parts of the algorithms dealing with RGB,
+	// but they're small and we'll manage.
+	ycbcr_format.full_range = true;
 
 	YCbCrFormat ycbcr_output_format = ycbcr_format;
 	ycbcr_output_format.chroma_subsampling_x = 1;
