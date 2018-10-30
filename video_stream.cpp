@@ -292,6 +292,19 @@ void VideoStream::clear_queue()
 		q = move(frame_queue);
 	}
 
+	// These are not RAII-ed, unfortunately, so we'll need to clean them ourselves.
+	// Note that release_texture() is thread-safe.
+	for (const QueuedFrame &qf : q) {
+		if (qf.type == QueuedFrame::INTERPOLATED ||
+		    qf.type == QueuedFrame::FADED_INTERPOLATED) {
+			compute_flow->release_texture(qf.flow_tex);
+		}
+		if (qf.type == QueuedFrame::INTERPOLATED) {
+			interpolate->release_texture(qf.output_tex);
+			interpolate->release_texture(qf.cbcr_tex);
+		}
+	}
+
 	// Destroy q outside the mutex, as that would be a double-lock.
 }
 
