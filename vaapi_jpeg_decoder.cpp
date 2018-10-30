@@ -305,7 +305,8 @@ public:
 		: dpy(dpy), buf(buf) {}
 
 	~VABufferDestroyer() {
-		vaDestroyBuffer(dpy, buf);
+		VAStatus va_status = vaDestroyBuffer(dpy, buf);
+		CHECK_VASTATUS(va_status, "vaDestroyBuffer");
 	}
 
 private:
