@@ -199,6 +199,17 @@ void MainWindow::queue_clicked()
 
 void MainWindow::preview_clicked()
 {
+	if (ui->playlist->hasFocus()) {
+		// Allow the playlist as preview iff it has focus and something is selected.
+		QItemSelectionModel *selected = ui->playlist->selectionModel();
+		if (selected->hasSelection()) {
+			QModelIndex index = selected->currentIndex();
+			const Clip &clip = *playlist_clips->clip(index.row());
+			preview_player->play_clip(clip, index.row(), clip.stream_idx);
+			return;
+		}
+	}
+
 	if (cliplist_clips->empty())
 		return;
 
