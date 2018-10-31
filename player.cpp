@@ -221,6 +221,7 @@ got_clip:
 						video_stream->clear_queue();
 						lock.lock();
 					}
+					got_next_clip = false;
 					goto wait_for_clip;
 				}
 				if (override_stream_idx != -1) {
