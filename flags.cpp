@@ -14,7 +14,8 @@ Flags global_flags;
 // Long options that have no corresponding short option.
 enum LongOption {
 	OPTION_HELP = 1000,
-	OPTION_SLOW_DOWN_INPUT = 1001
+	OPTION_SLOW_DOWN_INPUT = 1001,
+	OPTION_HTTP_PORT = 1002
 };
 
 void usage()
@@ -29,6 +30,7 @@ void usage()
 	fprintf(stderr, "                                  3 = good (realtime 720p on GTX 970 or so)\n");
 	fprintf(stderr, "                                  4 = best (not realtime on any current GPU)\n");
 	fprintf(stderr, "  -d, --working-directory DIR     where to store frames and database\n");
+	fprintf(stderr, "      --http-port PORT            which port to listen on for output\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -38,6 +40,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "slow-down-input", no_argument, 0, OPTION_SLOW_DOWN_INPUT },
 		{ "interpolation-quality", required_argument, 0, 'q' },
 		{ "working-directory", required_argument, 0, 'd' },
+		{ "http-port", required_argument, 0, OPTION_HTTP_PORT },
 		{ 0, 0, 0, 0 }
 	};
 	for ( ;; ) {
@@ -56,6 +59,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 'd':
 			global_flags.working_directory = optarg;
+			break;
+		case OPTION_HTTP_PORT:
+			global_flags.http_port = atoi(optarg);
 			break;
 		case OPTION_HELP:
 			usage();

@@ -128,7 +128,7 @@ int main(int argc, char **argv)
 	main_window.show();
 
 	global_httpd->add_endpoint("/queue_status", bind(&MainWindow::get_queue_status, &main_window), HTTPD::NO_CORS_POLICY);
-	global_httpd->start(DEFAULT_HTTPD_PORT);
+	global_httpd->start(global_flags.http_port);
 
 	init_jpeg_vaapi();
 

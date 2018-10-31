@@ -3,11 +3,14 @@
 
 #include <string>
 
+#include "defs.h"
+
 struct Flags {
 	std::string stream_source;
 	std::string working_directory = ".";
 	bool slow_down_input = false;
 	int interpolation_quality = 2;
+	uint16_t http_port = DEFAULT_HTTPD_PORT;
 };
 extern Flags global_flags;
 
