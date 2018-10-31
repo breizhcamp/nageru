@@ -27,6 +27,8 @@
 using namespace movit;
 using namespace std;
 
+namespace {
+
 // Just an arbitrary order for std::map.
 struct JPEGIDLexicalOrder
 {
@@ -40,6 +42,13 @@ struct JPEGIDLexicalOrder
 	}
 };
 
+inline size_t frame_size(const Frame &frame)
+{
+	size_t y_size = frame.width * frame.height;
+	size_t cbcr_size = y_size / frame.chroma_subsampling_x / frame.chroma_subsampling_y;
+	return y_size + cbcr_size * 2;
+}
+
 struct LRUFrame {
 	shared_ptr<Frame> frame;
 	size_t last_used;
@@ -51,9 +60,12 @@ struct PendingDecode {
 	JPEGFrameView *destination;
 };
 
+}  // namespace
+
 thread JPEGFrameView::jpeg_decoder_thread;
 mutex cache_mu;
 map<JPEGID, LRUFrame, JPEGIDLexicalOrder> cache;  // Under cache_mu.
+size_t cache_bytes_used = 0;  // Under cache_mu.
 condition_variable any_pending_decodes;
 deque<PendingDecode> pending_decodes;  // Under cache_mu.
 atomic<size_t> event_counter{0};
@@ -156,16 +168,28 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 void prune_cache()
 {
 	// Assumes cache_mu is held.
-	vector<size_t> lru_timestamps;
+	int64_t bytes_still_to_remove = cache_bytes_used - (size_t(CACHE_SIZE_MB) * 1024 * 1024) * 9 / 10;
+	if (bytes_still_to_remove <= 0) return;
+
+	vector<pair<size_t, size_t>> lru_timestamps_and_size;
 	for (const auto &key_and_value : cache) {
-		lru_timestamps.push_back(key_and_value.second.last_used);
+		lru_timestamps_and_size.emplace_back(
+			key_and_value.second.last_used,
+			frame_size(*key_and_value.second.frame));
+	}
+	sort(lru_timestamps_and_size.begin(), lru_timestamps_and_size.end());
+
+	// Remove the oldest ones until we are below 90% of the cache used.
+	size_t lru_cutoff_point = 0;
+	for (const pair<size_t, size_t> &it : lru_timestamps_and_size) {
+		lru_cutoff_point = it.first;
+		bytes_still_to_remove -= it.second;
+		if (bytes_still_to_remove <= 0) break;
 	}
 
-	size_t cutoff_point = CACHE_SIZE / 10;  // Prune away the 10% oldest ones.
-	nth_element(lru_timestamps.begin(), lru_timestamps.begin() + cutoff_point, lru_timestamps.end());
-	size_t must_be_used_after = lru_timestamps[cutoff_point];
 	for (auto it = cache.begin(); it != cache.end(); ) {
-		if (it->second.last_used < must_be_used_after) {
+		if (it->second.last_used <= lru_cutoff_point) {
+			cache_bytes_used -= frame_size(*it->second.frame);
 			it = cache.erase(it);
 		} else {
 			++it;
@@ -194,9 +218,10 @@ shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss
 	shared_ptr<Frame> frame = decode_jpeg(filename_for_frame(id.stream_idx, id.pts));
 
 	unique_lock<mutex> lock(cache_mu);
+	cache_bytes_used += frame_size(*frame);
 	cache[id] = LRUFrame{ frame, event_counter++ };
 
-	if (cache.size() > CACHE_SIZE) {
+	if (cache_bytes_used > size_t(CACHE_SIZE_MB) * 1024 * 1024) {
 		prune_cache();
 	}
 	return frame;
@@ -327,8 +352,11 @@ void JPEGFrameView::insert_interpolated_frame(JPEGID id, shared_ptr<Frame> frame
 	// that thread would hang). With a default cache of 1000 elements,
 	// that would sound like a reasonable assumption.
 	unique_lock<mutex> lock(cache_mu);
+	cache_bytes_used += frame_size(*frame);
 	cache[id] = LRUFrame{ std::move(frame), event_counter++ };
-	prune_cache();
+	if (cache_bytes_used > size_t(CACHE_SIZE_MB) * 1024 * 1024) {
+		prune_cache();
+	}
 }
 
 ResourcePool *resource_pool = nullptr;

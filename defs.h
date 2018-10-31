@@ -2,7 +2,7 @@
 #define _DEFS_H 1
 
 #define MAX_STREAMS 16
-#define CACHE_SIZE 1000  // In number of frames.
+#define CACHE_SIZE_MB 2048
 #define NUM_CAMERAS 4
 #define MUX_BUFFER_SIZE 10485760
 
