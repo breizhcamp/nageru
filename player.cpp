@@ -232,7 +232,7 @@ got_clip:
 
 			if (in_pts_lower == in_pts_upper) {
 				auto display_func = [this, primary_stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha]{
-					destination->setFrame(primary_stream_idx, in_pts_lower, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
+					destination->setFrame(primary_stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha);
 				};
 				if (video_stream == nullptr) {
 					display_func();
@@ -242,6 +242,7 @@ got_clip:
 							next_frame_start, pts, display_func, QueueSpotHolder(this),
 							primary_stream_idx, in_pts_lower);
 					} else {
+						assert(secondary_pts != -1);
 						video_stream->schedule_faded_frame(next_frame_start, pts, display_func,
 							QueueSpotHolder(this), primary_stream_idx, in_pts_lower,
 							secondary_stream_idx, secondary_pts, fade_alpha);
@@ -258,7 +259,7 @@ got_clip:
 				double snap_pts_as_frameno = (snap_pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
 					auto display_func = [this, primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha]{
-						destination->setFrame(primary_stream_idx, snap_pts, /*interpolated=*/false, secondary_stream_idx, secondary_pts, fade_alpha);
+						destination->setFrame(primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
 					};
 					if (video_stream == nullptr) {
 						display_func();
@@ -268,6 +269,7 @@ got_clip:
 								next_frame_start, pts, display_func,
 								QueueSpotHolder(this), primary_stream_idx, snap_pts);
 						} else {
+							assert(secondary_pts != -1);
 							video_stream->schedule_faded_frame(
 								next_frame_start, pts, display_func, QueueSpotHolder(this),
 								primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
@@ -293,10 +295,10 @@ got_clip:
 			if (video_stream == nullptr) {
 				// Previews don't do any interpolation.
 				assert(secondary_stream_idx == -1);
-				destination->setFrame(primary_stream_idx, in_pts_lower, /*interpolated=*/false);
+				destination->setFrame(primary_stream_idx, in_pts_lower);
 			} else {
-				auto display_func = [this, primary_stream_idx, pts, secondary_stream_idx, secondary_pts, fade_alpha]{
-					destination->setFrame(primary_stream_idx, pts, /*interpolated=*/true, secondary_stream_idx, secondary_pts, fade_alpha);
+				auto display_func = [this](shared_ptr<Frame> frame) {
+					destination->setFrame(frame);
 				};
 				video_stream->schedule_interpolated_frame(
 					next_frame_start, pts, display_func, QueueSpotHolder(this),
@@ -429,7 +431,7 @@ void Player::override_angle(unsigned stream_idx)
 	if (it == frames[stream_idx].end()) {
 		return;
 	}
-	destination->setFrame(stream_idx, *it, /*interpolated=*/false);
+	destination->setFrame(stream_idx, *it);
 }
 
 void Player::take_queue_spot()

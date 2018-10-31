@@ -361,13 +361,11 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	JPEGID jpeg_id1;
 	jpeg_id1.stream_idx = stream_idx;
 	jpeg_id1.pts = input_pts;
-	jpeg_id1.interpolated = false;
 	shared_ptr<Frame> frame1 = decode_jpeg_with_cache(jpeg_id1, DECODE_IF_NOT_IN_CACHE, &did_decode);
 
 	JPEGID jpeg_id2;
 	jpeg_id2.stream_idx = secondary_stream_idx;
 	jpeg_id2.pts = secondary_input_pts;
-	jpeg_id2.interpolated = false;
 	shared_ptr<Frame> frame2 = decode_jpeg_with_cache(jpeg_id2, DECODE_IF_NOT_IN_CACHE, &did_decode);
 
 	ycbcr_semiplanar_converter->prepare_chain_for_fade(frame1, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
@@ -413,7 +411,7 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 }
 
 void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts,
-                                              int64_t output_pts, function<void()> &&display_func,
+                                              int64_t output_pts, function<void(shared_ptr<Frame>)> &&display_func,
                                               QueueSpotHolder &&queue_spot_holder,
                                               unsigned stream_idx, int64_t input_first_pts,
                                               int64_t input_second_pts, float alpha,
@@ -424,13 +422,6 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f  secondary_pts=%ld  fade_alpha=%.2f\n", output_pts, input_first_pts, input_second_pts, alpha, secondary_input_pts, fade_alpha);
 	} else {
 		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f\n", output_pts, input_first_pts, input_second_pts, alpha);
-	}
-
-	JPEGID id;
-	if (secondary_stream_idx == -1) {
-		id = JPEGID{ stream_idx, output_pts, /*interpolated=*/true };
-	} else {
-		id = create_jpegid_for_interpolated_fade(stream_idx, output_pts, secondary_stream_idx, secondary_input_pts);
 	}
 
 	// Get the temporary OpenGL resources we need for doing the interpolation.
@@ -449,8 +440,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	qf.type = (secondary_stream_idx == -1) ? QueuedFrame::INTERPOLATED : QueuedFrame::FADED_INTERPOLATED;
 	qf.output_pts = output_pts;
 	qf.stream_idx = stream_idx;
-	qf.id = id;
-	qf.display_func = move(display_func);
+	qf.display_decoded_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
 	qf.local_pts = local_pts;
 
@@ -461,7 +451,6 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 		JPEGID jpeg_id;
 		jpeg_id.stream_idx = stream_idx;
 		jpeg_id.pts = frame_no == 1 ? input_second_pts : input_first_pts;
-		jpeg_id.interpolated = false;
 		bool did_decode;
 		shared_ptr<Frame> frame = decode_jpeg_with_cache(jpeg_id, DECODE_IF_NOT_IN_CACHE, &did_decode);
 		ycbcr_converter->prepare_chain_for_conversion(frame)->render_to_fbo(resources->input_fbos[frame_no], 1280, 720);
@@ -485,7 +474,6 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 		JPEGID jpeg_id;
 		jpeg_id.stream_idx = secondary_stream_idx;
 		jpeg_id.pts = secondary_input_pts;
-		jpeg_id.interpolated = false;
 		bool did_decode;
 		shared_ptr<Frame> frame2 = decode_jpeg_with_cache(jpeg_id, DECODE_IF_NOT_IN_CACHE, &did_decode);
 
@@ -646,9 +634,11 @@ void VideoStream::encode_thread_func()
 		} else if (qf.type == QueuedFrame::INTERPOLATED || qf.type == QueuedFrame::FADED_INTERPOLATED) {
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
-			// Send a copy of the frame on to display.
+			// Send it on to display.
 			shared_ptr<Frame> frame = frame_from_pbo(qf.resources->pbo_contents, 1280, 720);
-			JPEGFrameView::insert_interpolated_frame(qf.id, frame);
+			if (qf.display_decoded_func != nullptr) {
+				qf.display_decoded_func(frame);
+			}
 
 			// Now JPEG encode it, and send it on to the stream.
 			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), 1280, 720);

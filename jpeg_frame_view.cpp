@@ -36,9 +36,7 @@ struct JPEGIDLexicalOrder
 	{
 		if (a.stream_idx != b.stream_idx)
 			return a.stream_idx < b.stream_idx;
-		if (a.pts != b.pts)
-			return a.pts < b.pts;
-		return a.interpolated < b.interpolated;
+		return a.pts < b.pts;
 	}
 };
 
@@ -55,9 +53,16 @@ struct LRUFrame {
 };
 
 struct PendingDecode {
+	JPEGFrameView *destination;
+
+	// For actual decodes (only if frame below is nullptr).
 	JPEGID primary, secondary;
 	float fade_alpha;  // Irrelevant if secondary.stream_idx == -1.
-	JPEGFrameView *destination;
+
+	// Already-decoded frames are also sent through PendingDecode,
+	// so that they get drawn in the right order. If frame is nullptr,
+	// it's a real decode.
+	shared_ptr<Frame> frame;
 };
 
 }  // namespace
@@ -213,7 +218,6 @@ shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss
 		return nullptr;
 	}
 
-	assert(!id.interpolated);
 	*did_decode = true;
 	shared_ptr<Frame> frame = decode_jpeg(filename_for_frame(id.stream_idx, id.pts));
 
@@ -256,6 +260,12 @@ void jpeg_decoder_thread_func()
 			}
 		}
 
+		if (decode.frame != nullptr) {
+			// Already decoded, so just show it.
+			decode.destination->setDecodedFrame(decode.frame, nullptr, 1.0f);
+			continue;
+		}
+
 		shared_ptr<Frame> primary_frame, secondary_frame;
 		bool drop = false;
 		for (int subframe_idx = 0; subframe_idx < 2; ++subframe_idx) {
@@ -266,27 +276,10 @@ void jpeg_decoder_thread_func()
 			}
 
 			bool found_in_cache;
-			shared_ptr<Frame> frame;
-			if (id.interpolated) {
-				// Interpolated frames are never decoded by us,
-				// put directly into the cache from VideoStream.
-				unique_lock<mutex> lock(cache_mu);
-				auto it = cache.find(id);
-				if (it != cache.end()) {
-					it->second.last_used = event_counter++;
-					frame = it->second.frame;
-				} else {
-					// This can only really happen if it disappeared out of the
-					// LRU really, really fast. Which shouldn't happen.
-					fprintf(stderr, "WARNING: Interpolated JPEG was supposed to be in the cache, but was not\n");
-				}
-				found_in_cache = true;  // Don't count it as a decode.
-			} else {
-				frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
-			}
+			shared_ptr<Frame> frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
 
 			if (frame == nullptr) {
-				assert(id.interpolated || cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
+				assert(cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
 				drop = true;
 				break;
 			}
@@ -325,38 +318,29 @@ JPEGFrameView::JPEGFrameView(QWidget *parent)
 {
 }
 
-void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts, bool interpolated, int secondary_stream_idx, int64_t secondary_pts, float fade_alpha)
+void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts, int secondary_stream_idx, int64_t secondary_pts, float fade_alpha)
 {
+	if (secondary_stream_idx != -1) assert(secondary_pts != -1);
 	current_stream_idx = stream_idx;  // TODO: Does this interact with fades?
 
 	unique_lock<mutex> lock(cache_mu);
 	PendingDecode decode;
-	if (interpolated && secondary_stream_idx != -1) {
-		// The frame will already be faded for us, so ask for only one; we shouldn't fade it against anything.
-		decode.primary = create_jpegid_for_interpolated_fade(stream_idx, pts, secondary_stream_idx, secondary_pts);
-		decode.secondary = JPEGID{ (unsigned)-1, -1, /*interpolated=*/false };
-	} else {
-		decode.primary = JPEGID{ stream_idx, pts, interpolated };
-		decode.secondary = JPEGID{ (unsigned)secondary_stream_idx, secondary_pts, /*interpolated=*/false };
-	}
+	decode.primary = JPEGID{ stream_idx, pts };
+	decode.secondary = JPEGID{ (unsigned)secondary_stream_idx, secondary_pts };
 	decode.fade_alpha = fade_alpha;
 	decode.destination = this;
 	pending_decodes.push_back(decode);
 	any_pending_decodes.notify_all();
 }
 
-void JPEGFrameView::insert_interpolated_frame(JPEGID id, shared_ptr<Frame> frame)
+void JPEGFrameView::setFrame(shared_ptr<Frame> frame)
 {
-	// We rely on the frame not being evicted from the cache before
-	// jpeg_decoder_thread() sees it and can display it (otherwise,
-	// that thread would hang). With a default cache of 1000 elements,
-	// that would sound like a reasonable assumption.
 	unique_lock<mutex> lock(cache_mu);
-	cache_bytes_used += frame_size(*frame);
-	cache[id] = LRUFrame{ std::move(frame), event_counter++ };
-	if (cache_bytes_used > size_t(CACHE_SIZE_MB) * 1024 * 1024) {
-		prune_cache();
-	}
+	PendingDecode decode;
+	decode.frame = std::move(frame);
+	decode.destination = this;
+	pending_decodes.push_back(decode);
+	any_pending_decodes.notify_all();
 }
 
 ResourcePool *resource_pool = nullptr;
