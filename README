@@ -71,6 +71,8 @@ Nageru currently needs:
 
  - LuaJIT, for driving the theme engine.
 
+ - Meson, for building.
+
  - Optional: CEF (Chromium Embedded Framework), for HTML graphics.
    If you build without CEF, the HTMLInput class will not be available from
    the theme. You can get binary downloads of CEF from
@@ -78,8 +80,8 @@ Nageru currently needs:
      http://opensource.spotify.com/cefbuilds/index.html
 
    Simply download the right build for your platform (the “minimal” build
-   is fine) and add CEF_DIR=<path>/cef_binary_X.XXXX.XXXX.XXXXXXXX_linux64
-   on the make command line (substituting X with the real version as required).
+   is fine) and add -Dcef_dir=<path>/cef_binary_X.XXXX.XXXX.XXXXXXXX_linux64
+   on the meson command line (substituting X with the real version as required).
 
 
 If on Debian stretch or something similar, you can install everything you need
@@ -92,24 +94,31 @@ with:
     libasound2-dev libx264-dev libbmusb-dev protobuf-compiler \
     libprotobuf-dev
 
-Exceptions as of April 2018:
+Exceptions as of November 2018:
 
   - You will need Movit from testing or unstable; stretch only has 1.4.0.
 
   - You will need bmusb from testing or unstable; stretch only has 0.5.4.
 
+  - You will need a Meson backport; the version in stretch is too old.
+
   - Debian does not carry CEF (but it is optional). You can get experimental
     (and not security-supported) CEF Debian packages built for unstable at
-    http://storage.sesse.net/cef/, and then build Nageru with
+    http://storage.sesse.net/cef/, and then configure Nageru with
 
-     make CEF_DIR=/usr/lib/x86_64-linux-gnu/cef CEF_BUILD_TYPE=system CEF_NO_ICUDTL=yes
+     meson obj -Dcef_dir=/usr/lib/x86_64-linux-gnu/cef -Dcef_build_type=system -Dcef_no_icudtl=true
 
 The patches/ directory contains a patch that helps zita-resampler performance.
 It is meant for upstream, but was not in at the time Nageru was released.
 It is taken to be by Steinar H. Gunderson <sesse@google.com> (ie., my ex-work
 email), and under the same license as zita-resampler itself.
 
-To start it, just hook up your equipment, type “make” and then “./nageru”.
+Nageru uses Meson to build. For a default build, type
+
+  meson obj && cd obj && ninja
+
+To start it, just hook up your equipment, and then type “./nageru”.
+
 It is strongly recommended to have the rights to run at real-time priority;
 it will make the USB3 threads do so, which will make them a lot more stable.
 (A reasonable hack for testing is probably just to run it as root using sudo,
