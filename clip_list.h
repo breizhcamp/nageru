@@ -19,6 +19,7 @@ struct Clip {
 
 class DataChangedReceiver {
 public:
+	virtual ~DataChangedReceiver() {}
 	virtual void emit_data_changed(size_t row) = 0;
 };
 
