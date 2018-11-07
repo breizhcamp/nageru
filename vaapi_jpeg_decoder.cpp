@@ -49,6 +49,18 @@ static mutex va_resources_mutex;
         return nullptr;                                                 \
     }
 
+// From libjpeg (although it's of course identical between implementations).
+static const int jpeg_natural_order[DCTSIZE2] = {
+	 0,  1,  8, 16,  9,  2,  3, 10,
+	17, 24, 32, 25, 18, 11,  4,  5,
+	12, 19, 26, 33, 40, 48, 41, 34,
+	27, 20, 13,  6,  7, 14, 21, 28,
+	35, 42, 49, 56, 57, 50, 43, 36,
+	29, 22, 15, 23, 30, 37, 44, 51,
+	58, 59, 52, 45, 38, 31, 39, 46,
+	53, 60, 61, 54, 47, 55, 62, 63,
+};
+
 VAResources get_va_resources(unsigned width, unsigned height)
 {
 	{
@@ -396,7 +408,7 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 					fprintf(stderr, "Baseline JPEG only!\n");
 					return nullptr;
 				}
-				iq.quantiser_table[quant_tbl_idx][i] = qtbl->quantval[i];
+				iq.quantiser_table[quant_tbl_idx][i] = qtbl->quantval[jpeg_natural_order[i]];
 			}
 		}
 	}
