@@ -1,3 +1,6 @@
+#ifndef _X264_SPEED_CONTROL_H
+#define _X264_SPEED_CONTROL_H 1
+
 // The x264 speed control tries to encode video at maximum possible quality
 // without skipping frames (at the expense of higher encoding latency and
 // less even output rates, although VBV is still respected). It does this
@@ -137,3 +140,5 @@ private:
 	std::atomic<int64_t> metric_x264_speedcontrol_idle_frames{0};
 	std::atomic<int64_t> metric_x264_speedcontrol_late_frames{0};
 };
+
+#endif  // !defined(_X264_SPEED_CONTROL_H)
