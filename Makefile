@@ -90,7 +90,7 @@ BM_OBJS = benchmark_audio_mixer.o $(AUDIO_MIXER_OBJS) flags.o metrics.o
 %.pb.cc %.pb.h : %.proto
 	$(PROTOC) --cpp_out=. $<
 
-%.h: %.ui
+ui_%.h: %.ui
 	uic $< -o $@
 
 %.moc.cpp: %.h
