@@ -27,6 +27,8 @@ typedef struct _snd_seq snd_seq_t;
 // Interface for receiving interpreted controller messages.
 class ControllerReceiver {
 public:
+	virtual ~ControllerReceiver() {}
+
 	// All values are [0.0, 1.0].
 	virtual void set_locut(float value) = 0;
 	virtual void set_limiter_threshold(float value) = 0;

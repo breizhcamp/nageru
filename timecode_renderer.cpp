@@ -122,7 +122,7 @@ string TimecodeRenderer::get_timecode_text(double pts, unsigned frame_num)
 	unsigned stream_time_min = stream_time % 60;
 	unsigned stream_time_hour = stream_time / 60;
 
-	char timecode_text[256];
+	char timecode_text[512];
 	snprintf(timecode_text, sizeof(timecode_text), "Nageru - %s.%03u UTC - Stream time %02u:%02u:%02u.%03u (frame %u)",
 		clock_text, msecs, stream_time_hour, stream_time_min, stream_time_sec, stream_time_ms, frame_num);
 	return timecode_text;

@@ -34,7 +34,7 @@ string generate_local_dump_filename(int frame)
 	tm now_tm;
 	localtime_r(&now, &now_tm);
 
-	char timestamp[256];
+	char timestamp[64];
 	strftime(timestamp, sizeof(timestamp), "%F-%T%z", &now_tm);
 
 	// Use the frame number to disambiguate between two cuts starting
