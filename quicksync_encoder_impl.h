@@ -19,6 +19,7 @@
 #include "defs.h"
 #include "timebase.h"
 #include "print_latency.h"
+#include "ref_counted_gl_sync.h"
 
 #define SURFACE_NUM 16 /* 16 surfaces for source YUV */
 #define MAX_NUM_REF1 16 // Seemingly a hardware-fixed value, not related to SURFACE_NUM
@@ -30,6 +31,13 @@ struct __bitstream {
     int max_size_in_dword;
 };
 typedef struct __bitstream bitstream;
+
+namespace movit {
+class ResourcePool;
+}
+class DiskSpaceEstimator;
+class QSurface;
+class X264Encoder;
 
 struct VADisplayWithCleanup {
 	~VADisplayWithCleanup();
