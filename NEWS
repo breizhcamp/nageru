@@ -1,3 +1,15 @@
+Nageru 1.7.5, November 11th, 2018
+
+  - Fix a bug where --record-x264-video would not work when VA-API was
+    not present, making the option rather useless (broken in 1.7.2).
+    Bug reported by Peter De Schrijver.
+
+  - The build system has been switched to Meson; see the README for new
+    build instructions.
+
+  - Various smaller fixes.
+
+
 Nageru 1.7.4, August 31st, 2018
 
   - Rework the x264 speedcontrol presets, again. (They earlier assumed
