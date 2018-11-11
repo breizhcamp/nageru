@@ -1071,12 +1071,16 @@ void Mixer::thread_func()
 				new_frame->upload_func = nullptr;
 			}
 
-			// There are situations where we could possibly want to
-			// include FFmpeg inputs (CEF inputs are unlikely),
-			// but they're not necessarily in 4:2:2 Y'CbCr, so it would
-			// require more functionality the the JPEG encoder.
-			if (card_index < num_cards) {
-				mjpeg_encoder->upload_frame(pts_int, card_index, new_frame->frame, new_frame->video_format, new_frame->y_offset, new_frame->cbcr_offset);
+			// Only bother doing MJPEG encoding if there are any connected clients
+			// that want the stream.
+			if (httpd.get_num_connected_multicam_clients() > 0) {
+				// There are situations where we could possibly want to
+				// include FFmpeg inputs (CEF inputs are unlikely),
+				// but they're not necessarily in 4:2:2 Y'CbCr, so it would
+				// require more functionality the the JPEG encoder.
+				if (card_index < num_cards) {
+					mjpeg_encoder->upload_frame(pts_int, card_index, new_frame->frame, new_frame->video_format, new_frame->y_offset, new_frame->cbcr_offset);
+				}
 			}
 		}
 

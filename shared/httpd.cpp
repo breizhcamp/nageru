@@ -26,6 +26,7 @@ using namespace std;
 HTTPD::HTTPD()
 {
 	global_metrics.add("num_connected_clients", &metric_num_connected_clients, Metrics::TYPE_GAUGE);
+	global_metrics.add("num_connected_multicam_clients", &metric_num_connected_multicam_clients, Metrics::TYPE_GAUGE);
 }
 
 HTTPD::~HTTPD()
@@ -136,6 +137,9 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		streams.insert(stream);
 	}
 	++metric_num_connected_clients;
+	if (stream_type == HTTPD::StreamType::MULTICAM_STREAM) {
+		++metric_num_connected_multicam_clients;
+	}
 	*con_cls = stream;
 
 	// Does not strictly have to be equal to MUX_BUFFER_SIZE.
@@ -156,6 +160,9 @@ void HTTPD::free_stream(void *cls)
 {
 	HTTPD::Stream *stream = (HTTPD::Stream *)cls;
 	HTTPD *httpd = stream->get_parent();
+	if (stream->get_stream_type() == HTTPD::StreamType::MULTICAM_STREAM) {
+		--httpd->metric_num_connected_multicam_clients;
+	}
 	{
 		unique_lock<mutex> lock(httpd->streams_mutex);
 		delete stream;
