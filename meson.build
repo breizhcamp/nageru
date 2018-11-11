@@ -3,6 +3,15 @@ qt5 = import('qt5')
 protoc = find_program('protoc')
 cxx = meson.get_compiler('cpp')
 
+# Use lld if we can; it links a lot faster than ld.bfd or gold.
+nageru_link_args = []
+code = '''#include <stdio.h>
+int main() { printf("Hello, world!\n"); return 0; }
+'''
+if cxx.links(code, args: '-fuse-ld=lld', name: 'check for LLD')
+	nageru_link_args += '-fuse-ld=lld'
+endif
+
 embedded_bmusb = get_option('embedded_bmusb')
 
 alsadep = dependency('alsa')
@@ -36,7 +45,6 @@ nageru_deps = [qt5deps, libjpegdep, movitdep, libmicrohttpddep, protobufdep,
 	qcustomplotdep, threaddep]
 nageru_include_dirs = []
 nageru_link_with = []
-nageru_link_args = []
 nageru_build_rpath = ''
 nageru_install_rpath = ''
 
@@ -230,10 +238,11 @@ executable('kaeru', 'kaeru.cpp',
 	dependencies: [nageru_deps, kaeru_extra_deps],
 	include_directories: nageru_include_dirs,
 	link_with: [stream, aux, kaeru_link_with],
+	link_args: nageru_link_args,
 	install: true)
 
 # Audio mixer microbenchmark.
-executable('benchmark_audio_mixer', 'benchmark_audio_mixer.cpp', dependencies: nageru_deps, include_directories: nageru_include_dirs, link_with: [audio, aux])
+executable('benchmark_audio_mixer', 'benchmark_audio_mixer.cpp', dependencies: nageru_deps, include_directories: nageru_include_dirs, link_args: nageru_link_args, link_with: [audio, aux])
 
 # These are needed for a default run.
 data_files = ['theme.lua', 'simple.lua', 'bg.jpeg', 'akai_midimix.midimapping']
