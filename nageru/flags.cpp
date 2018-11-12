@@ -63,7 +63,56 @@ enum LongOption {
 	OPTION_10_BIT_INPUT,
 	OPTION_10_BIT_OUTPUT,
 	OPTION_INPUT_YCBCR_INTERPRETATION,
+	OPTION_MJPEG_EXPORT_CARDS,
 };
+
+map<unsigned, unsigned> parse_mjpeg_export_cards(char *optarg)
+{
+	map<unsigned, unsigned> ret;
+	if (optarg[0] == '\0') {
+		return ret;
+	}
+
+	unsigned stream_idx = 0;
+	char *start = optarg;
+	for ( ;; ) {
+		char *end = strchr(start, ',');
+		if (end != nullptr) {
+			*end = '\0';
+		}
+
+		unsigned range_begin, range_end;
+		if (sscanf(start, "%u-%u", &range_begin, &range_end) != 2) {
+			range_begin = range_end = atoi(start);
+		}
+		if (range_end < range_begin) {
+			fprintf(stderr, "ERROR: Invalid range %u-%u in --mjpeg-export-cards=\n", range_begin, range_end);
+			exit(1);
+		}
+		if (range_end >= unsigned(global_flags.num_cards)) {
+			// There are situations where we could possibly want to
+			// include FFmpeg inputs (CEF inputs are unlikely),
+			// but they're not necessarily in 4:2:2 Y'CbCr, so it would
+			// require more functionality the the JPEG encoder.
+			fprintf(stderr, "ERROR: Asked for (zero-indexed) card %u in --mjpeg-export-cards=, but there are only %u cards\n",
+				range_end, global_flags.num_cards);
+			exit(1);
+		}
+		for (unsigned card_idx = range_begin; card_idx <= range_end; ++card_idx) {
+			if (ret.count(card_idx)) {
+				fprintf(stderr, "ERROR: Card %u was given twice in --mjpeg-export-cards=\n", card_idx);
+				exit(1);
+			}
+			ret[card_idx] = stream_idx++;
+		}
+		if (end == nullptr) {
+			break;
+		} else {
+			start = end + 1;
+		}
+	}
+	return ret;
+}
 
 void usage(Program program)
 {
@@ -160,6 +209,10 @@ void usage(Program program)
 		fprintf(stderr, "                                  Y'CbCr coefficient standard of card CARD (default auto)\n");
 		fprintf(stderr, "                                    auto is rec601 for SD, rec709 for HD, always limited\n");
 		fprintf(stderr, "                                    limited means standard 0-240/0-235 input range (for 8-bit)\n");
+		fprintf(stderr, "      --mjpeg-export-cards=RANGE[,RANGE...]\n");
+		fprintf(stderr, "                                  export the given cards in MJPEG format to /multicam.mp4,\n");
+		fprintf(stderr, "                                    in the given order (ranges can be either single card indexes\n");
+		fprintf(stderr, "                                    or pairs like 1-3 for camera 1,2,3; default is all cards)\n");
 	}
 }
 
@@ -225,10 +278,12 @@ void parse_flags(Program program, int argc, char * const argv[])
 		{ "10-bit-input", no_argument, 0, OPTION_10_BIT_INPUT },
 		{ "10-bit-output", no_argument, 0, OPTION_10_BIT_OUTPUT },
 		{ "input-ycbcr-interpretation", required_argument, 0, OPTION_INPUT_YCBCR_INTERPRETATION },
+		{ "mjpeg-export-cards", required_argument, 0, OPTION_MJPEG_EXPORT_CARDS },
 		{ 0, 0, 0, 0 }
 	};
 	vector<string> theme_dirs;
 	string output_ycbcr_coefficients = "auto";
+	bool card_to_mjpeg_stream_export_set = false;
 	for ( ;; ) {
 		int option_index = 0;
 		int c = getopt_long(argc, argv, "c:t:I:r:v:m:M:w:h:", long_options, &option_index);
@@ -481,6 +536,15 @@ void parse_flags(Program program, int argc, char * const argv[])
 		case OPTION_FULLSCREEN:
 			global_flags.fullscreen = true;
 			break;
+		case OPTION_MJPEG_EXPORT_CARDS: {
+			if (card_to_mjpeg_stream_export_set) {
+				fprintf(stderr, "ERROR: --mjpeg-export-cards given twice\n");
+				exit(1);
+			}
+			global_flags.card_to_mjpeg_stream_export = parse_mjpeg_export_cards(optarg);	
+			card_to_mjpeg_stream_export_set = true;
+			break;
+		}
 		case OPTION_HELP:
 			usage(program);
 			exit(0);
@@ -600,5 +664,12 @@ void parse_flags(Program program, int argc, char * const argv[])
 		}
 	} else if (global_flags.x264_bitrate == -1) {
 		global_flags.x264_bitrate = DEFAULT_X264_OUTPUT_BIT_RATE;
+	}
+
+	if (!card_to_mjpeg_stream_export_set) {
+		// Fill in the default mapping (export all cards, in order).
+		for (unsigned card_idx = 0; card_idx < unsigned(global_flags.num_cards); ++card_idx) {
+			global_flags.card_to_mjpeg_stream_export[card_idx] = card_idx;
+		}
 	}
 }

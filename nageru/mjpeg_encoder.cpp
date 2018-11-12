@@ -132,7 +132,7 @@ MJPEGEncoder::MJPEGEncoder(HTTPD *httpd, const string &va_display)
 	avctx->pb->write_data_type = &MJPEGEncoder::write_packet2_thunk;
 	avctx->flags = AVFMT_FLAG_CUSTOM_IO;
 
-	for (int card_idx = 0; card_idx < global_flags.num_cards; ++card_idx) {
+	for (unsigned card_idx = 0; card_idx < global_flags.card_to_mjpeg_stream_export.size(); ++card_idx) {
 		AVStream *stream = avformat_new_stream(avctx.get(), nullptr);
 		if (stream == nullptr) {
 			fprintf(stderr, "avformat_new_stream() failed\n");

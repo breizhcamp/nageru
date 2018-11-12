@@ -67,6 +67,7 @@ struct Flags {
 	bool use_zerocopy = false;  // Not user-settable.
 	bool can_disable_srgb_decoder = false;  // Not user-settable.
 	bool fullscreen = false;
+	std::map<unsigned, unsigned> card_to_mjpeg_stream_export;  // If a card is not in the map, it is not exported.
 };
 extern Flags global_flags;
 

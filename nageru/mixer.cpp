@@ -358,7 +358,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 	display_chain->finalize();
 
 	video_encoder.reset(new VideoEncoder(resource_pool.get(), h264_encoder_surface, global_flags.va_display, global_flags.width, global_flags.height, &httpd, global_disk_space_estimator));
-	mjpeg_encoder.reset(new MJPEGEncoder(&httpd, global_flags.va_display));
+	if (!global_flags.card_to_mjpeg_stream_export.empty()) {
+		mjpeg_encoder.reset(new MJPEGEncoder(&httpd, global_flags.va_display));
+	}
 
 	// Must be instantiated after VideoEncoder has initialized global_flags.use_zerocopy.
 	theme.reset(new Theme(global_flags.theme_filename, global_flags.theme_dirs, resource_pool.get(), num_cards));
@@ -502,7 +504,9 @@ Mixer::Mixer(const QSurfaceFormat &format, unsigned num_cards)
 
 Mixer::~Mixer()
 {
-	mjpeg_encoder->stop();
+	if (mjpeg_encoder != nullptr) {
+		mjpeg_encoder->stop();
+	}
 	httpd.stop();
 	BMUSBCapture::stop_bm_thread();
 
@@ -1074,12 +1078,9 @@ void Mixer::thread_func()
 			// Only bother doing MJPEG encoding if there are any connected clients
 			// that want the stream.
 			if (httpd.get_num_connected_multicam_clients() > 0) {
-				// There are situations where we could possibly want to
-				// include FFmpeg inputs (CEF inputs are unlikely),
-				// but they're not necessarily in 4:2:2 Y'CbCr, so it would
-				// require more functionality the the JPEG encoder.
-				if (card_index < num_cards) {
-					mjpeg_encoder->upload_frame(pts_int, card_index, new_frame->frame, new_frame->video_format, new_frame->y_offset, new_frame->cbcr_offset);
+				auto stream_it = global_flags.card_to_mjpeg_stream_export.find(card_index);
+				if (stream_it != global_flags.card_to_mjpeg_stream_export.end()) {
+					mjpeg_encoder->upload_frame(pts_int, stream_it->second, new_frame->frame, new_frame->video_format, new_frame->y_offset, new_frame->cbcr_offset);
 				}
 			}
 		}
