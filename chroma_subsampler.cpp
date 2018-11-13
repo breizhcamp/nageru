@@ -3,11 +3,13 @@
 #include <movit/util.h>
 #include <string>
 
+#include "embedded_files.h"
+
 #define BUFFER_OFFSET(i) ((char *)nullptr + (i))
 
 using namespace std;
 
-string read_file(const string &filename);
+string read_file(const string &filename, const unsigned char *start = nullptr, const size_t size = 0);
 GLuint compile_shader(const string &shader_src, GLenum type);
 GLuint link_program(GLuint vs_obj, GLuint fs_obj);
 void bind_sampler(GLuint program, GLint location, GLuint texture_unit, GLuint tex, GLuint sampler);
@@ -69,8 +71,8 @@ ChromaSubsampler::ChromaSubsampler()
 	//
 	// See also http://www.poynton.com/PDFs/Merging_RGB_and_422.pdf, pages 6–7.
 
-	cbcr_vs_obj = compile_shader(read_file("chroma_subsample.vert"), GL_VERTEX_SHADER);
-	cbcr_fs_obj = compile_shader(read_file("chroma_subsample.frag"), GL_FRAGMENT_SHADER);
+	cbcr_vs_obj = compile_shader(read_file("chroma_subsample.vert", _binary_chroma_subsample_vert_data, _binary_chroma_subsample_vert_size), GL_VERTEX_SHADER);
+	cbcr_fs_obj = compile_shader(read_file("chroma_subsample.frag", _binary_chroma_subsample_frag_data, _binary_chroma_subsample_frag_size), GL_FRAGMENT_SHADER);
 	cbcr_program = link_program(cbcr_vs_obj, cbcr_fs_obj);
 
 	// Set up the VAO containing all the required position data.

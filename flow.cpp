@@ -2,12 +2,14 @@
 
 #include "flow.h"
 
+#include "embedded_files.h"
 #include "gpu_timers.h"
 #include "util.h"
 
 #include <algorithm>
 #include <assert.h>
 #include <deque>
+#include <dlfcn.h>
 #include <epoxy/gl.h>
 #include <map>
 #include <memory>
@@ -48,10 +50,18 @@ int find_num_levels(int width, int height)
 	return levels;
 }
 
-string read_file(const string &filename)
+string read_file(const string &filename, const unsigned char *start = nullptr, const size_t size = 0)
 {
 	FILE *fp = fopen(filename.c_str(), "r");
 	if (fp == nullptr) {
+		// Fall back to the version we compiled in. (We prefer disk if we can,
+		// since that makes it possible to work on shaders without recompiling
+		// all the time.)
+		if (start != nullptr) {
+			return string(reinterpret_cast<const char *>(start),
+				reinterpret_cast<const char *>(start) + size);
+		}
+
 		perror(filename.c_str());
 		exit(1);
 	}
@@ -62,7 +72,7 @@ string read_file(const string &filename)
 		exit(1);
 	}
 
-	int size = ftell(fp);
+	int disk_size = ftell(fp);
 
 	ret = fseek(fp, 0, SEEK_SET);
 	if (ret == -1) {
@@ -71,15 +81,15 @@ string read_file(const string &filename)
 	}
 
 	string str;
-	str.resize(size);
-	ret = fread(&str[0], size, 1, fp);
+	str.resize(disk_size);
+	ret = fread(&str[0], disk_size, 1, fp);
 	if (ret == -1) {
 		perror("fread");
 		exit(1);
 	}
 	if (ret == 0) {
 		fprintf(stderr, "Short read when trying to read %d bytes from %s\n",
-		        size, filename.c_str());
+		        disk_size, filename.c_str());
 		exit(1);
 	}
 	fclose(fp);
@@ -202,8 +212,8 @@ void PersistentFBOSetWithDepth<num_elements>::render_to(GLuint depth_rb, const a
 
 GrayscaleConversion::GrayscaleConversion()
 {
-	gray_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	gray_fs_obj = compile_shader(read_file("gray.frag"), GL_FRAGMENT_SHADER);
+	gray_vs_obj = compile_shader(read_file("vs.vert", _binary_vs_vert_data, _binary_vs_vert_size), GL_VERTEX_SHADER);
+	gray_fs_obj = compile_shader(read_file("gray.frag", _binary_gray_frag_data, _binary_gray_frag_size), GL_FRAGMENT_SHADER);
 	gray_program = link_program(gray_vs_obj, gray_fs_obj);
 
 	// Set up the VAO containing all the required position/texcoord data.
@@ -231,8 +241,8 @@ void GrayscaleConversion::exec(GLint tex, GLint gray_tex, int width, int height,
 
 Sobel::Sobel()
 {
-	sobel_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	sobel_fs_obj = compile_shader(read_file("sobel.frag"), GL_FRAGMENT_SHADER);
+	sobel_vs_obj = compile_shader(read_file("vs.vert", _binary_vs_vert_data, _binary_vs_vert_size), GL_VERTEX_SHADER);
+	sobel_fs_obj = compile_shader(read_file("sobel.frag", _binary_sobel_frag_data, _binary_sobel_frag_size), GL_FRAGMENT_SHADER);
 	sobel_program = link_program(sobel_vs_obj, sobel_fs_obj);
 
 	uniform_tex = glGetUniformLocation(sobel_program, "tex");
@@ -252,8 +262,8 @@ void Sobel::exec(GLint tex_view, GLint grad_tex, int level_width, int level_heig
 MotionSearch::MotionSearch(const OperatingPoint &op)
 	: op(op)
 {
-	motion_vs_obj = compile_shader(read_file("motion_search.vert"), GL_VERTEX_SHADER);
-	motion_fs_obj = compile_shader(read_file("motion_search.frag"), GL_FRAGMENT_SHADER);
+	motion_vs_obj = compile_shader(read_file("motion_search.vert", _binary_motion_search_vert_data, _binary_motion_search_vert_size), GL_VERTEX_SHADER);
+	motion_fs_obj = compile_shader(read_file("motion_search.frag", _binary_motion_search_frag_data, _binary_motion_search_frag_size), GL_FRAGMENT_SHADER);
 	motion_search_program = link_program(motion_vs_obj, motion_fs_obj);
 
 	uniform_inv_image_size = glGetUniformLocation(motion_search_program, "inv_image_size");
@@ -288,8 +298,8 @@ void MotionSearch::exec(GLuint tex_view, GLuint grad_tex, GLuint flow_tex, GLuin
 Densify::Densify(const OperatingPoint &op)
 	: op(op)
 {
-	densify_vs_obj = compile_shader(read_file("densify.vert"), GL_VERTEX_SHADER);
-	densify_fs_obj = compile_shader(read_file("densify.frag"), GL_FRAGMENT_SHADER);
+	densify_vs_obj = compile_shader(read_file("densify.vert", _binary_densify_vert_data, _binary_densify_vert_size), GL_VERTEX_SHADER);
+	densify_fs_obj = compile_shader(read_file("densify.frag", _binary_densify_frag_data, _binary_densify_frag_size), GL_FRAGMENT_SHADER);
 	densify_program = link_program(densify_vs_obj, densify_fs_obj);
 
 	uniform_patch_size = glGetUniformLocation(densify_program, "patch_size");
@@ -319,8 +329,8 @@ void Densify::exec(GLuint tex_view, GLuint flow_tex, GLuint dense_flow_tex, int 
 
 Prewarp::Prewarp()
 {
-	prewarp_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	prewarp_fs_obj = compile_shader(read_file("prewarp.frag"), GL_FRAGMENT_SHADER);
+	prewarp_vs_obj = compile_shader(read_file("vs.vert", _binary_vs_vert_data, _binary_vs_vert_size), GL_VERTEX_SHADER);
+	prewarp_fs_obj = compile_shader(read_file("prewarp.frag", _binary_prewarp_frag_data, _binary_prewarp_frag_size), GL_FRAGMENT_SHADER);
 	prewarp_program = link_program(prewarp_vs_obj, prewarp_fs_obj);
 
 	uniform_image_tex = glGetUniformLocation(prewarp_program, "image_tex");
@@ -342,8 +352,8 @@ void Prewarp::exec(GLuint tex_view, GLuint flow_tex, GLuint I_tex, GLuint I_t_te
 
 Derivatives::Derivatives()
 {
-	derivatives_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	derivatives_fs_obj = compile_shader(read_file("derivatives.frag"), GL_FRAGMENT_SHADER);
+	derivatives_vs_obj = compile_shader(read_file("vs.vert", _binary_vs_vert_data, _binary_vs_vert_size), GL_VERTEX_SHADER);
+	derivatives_fs_obj = compile_shader(read_file("derivatives.frag", _binary_derivatives_frag_data, _binary_derivatives_frag_size), GL_FRAGMENT_SHADER);
 	derivatives_program = link_program(derivatives_vs_obj, derivatives_fs_obj);
 
 	uniform_tex = glGetUniformLocation(derivatives_program, "tex");
@@ -363,8 +373,8 @@ void Derivatives::exec(GLuint input_tex, GLuint I_x_y_tex, GLuint beta_0_tex, in
 
 ComputeDiffusivity::ComputeDiffusivity()
 {
-	diffusivity_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	diffusivity_fs_obj = compile_shader(read_file("diffusivity.frag"), GL_FRAGMENT_SHADER);
+	diffusivity_vs_obj = compile_shader(read_file("vs.vert", _binary_vs_vert_data, _binary_vs_vert_size), GL_VERTEX_SHADER);
+	diffusivity_fs_obj = compile_shader(read_file("diffusivity.frag", _binary_diffusivity_frag_data, _binary_diffusivity_frag_size), GL_FRAGMENT_SHADER);
 	diffusivity_program = link_program(diffusivity_vs_obj, diffusivity_fs_obj);
 
 	uniform_flow_tex = glGetUniformLocation(diffusivity_program, "flow_tex");
@@ -391,8 +401,8 @@ void ComputeDiffusivity::exec(GLuint flow_tex, GLuint diff_flow_tex, GLuint diff
 
 SetupEquations::SetupEquations()
 {
-	equations_vs_obj = compile_shader(read_file("equations.vert"), GL_VERTEX_SHADER);
-	equations_fs_obj = compile_shader(read_file("equations.frag"), GL_FRAGMENT_SHADER);
+	equations_vs_obj = compile_shader(read_file("equations.vert", _binary_equations_vert_data, _binary_equations_vert_size), GL_VERTEX_SHADER);
+	equations_fs_obj = compile_shader(read_file("equations.frag", _binary_equations_frag_data, _binary_equations_frag_size), GL_FRAGMENT_SHADER);
 	equations_program = link_program(equations_vs_obj, equations_fs_obj);
 
 	uniform_I_x_y_tex = glGetUniformLocation(equations_program, "I_x_y_tex");
@@ -428,8 +438,8 @@ void SetupEquations::exec(GLuint I_x_y_tex, GLuint I_t_tex, GLuint diff_flow_tex
 
 SOR::SOR()
 {
-	sor_vs_obj = compile_shader(read_file("sor.vert"), GL_VERTEX_SHADER);
-	sor_fs_obj = compile_shader(read_file("sor.frag"), GL_FRAGMENT_SHADER);
+	sor_vs_obj = compile_shader(read_file("sor.vert", _binary_sor_vert_data, _binary_sor_vert_size), GL_VERTEX_SHADER);
+	sor_fs_obj = compile_shader(read_file("sor.frag", _binary_sor_frag_data, _binary_sor_frag_size), GL_FRAGMENT_SHADER);
 	sor_program = link_program(sor_vs_obj, sor_fs_obj);
 
 	uniform_diff_flow_tex = glGetUniformLocation(sor_program, "diff_flow_tex");
@@ -490,8 +500,8 @@ void SOR::exec(GLuint diff_flow_tex, GLuint equation_red_tex, GLuint equation_bl
 
 AddBaseFlow::AddBaseFlow()
 {
-	add_flow_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	add_flow_fs_obj = compile_shader(read_file("add_base_flow.frag"), GL_FRAGMENT_SHADER);
+	add_flow_vs_obj = compile_shader(read_file("vs.vert", _binary_vs_vert_data, _binary_vs_vert_size), GL_VERTEX_SHADER);
+	add_flow_fs_obj = compile_shader(read_file("add_base_flow.frag", _binary_add_base_flow_frag_data, _binary_add_base_flow_frag_size), GL_FRAGMENT_SHADER);
 	add_flow_program = link_program(add_flow_vs_obj, add_flow_fs_obj);
 
 	uniform_diff_flow_tex = glGetUniformLocation(add_flow_program, "diff_flow_tex");
@@ -513,8 +523,8 @@ void AddBaseFlow::exec(GLuint base_flow_tex, GLuint diff_flow_tex, int level_wid
 
 ResizeFlow::ResizeFlow()
 {
-	resize_flow_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
-	resize_flow_fs_obj = compile_shader(read_file("resize_flow.frag"), GL_FRAGMENT_SHADER);
+	resize_flow_vs_obj = compile_shader(read_file("vs.vert", _binary_vs_vert_data, _binary_vs_vert_size), GL_VERTEX_SHADER);
+	resize_flow_fs_obj = compile_shader(read_file("resize_flow.frag", _binary_resize_flow_frag_data, _binary_resize_flow_frag_size), GL_FRAGMENT_SHADER);
 	resize_flow_program = link_program(resize_flow_vs_obj, resize_flow_fs_obj);
 
 	uniform_flow_tex = glGetUniformLocation(resize_flow_program, "flow_tex");
@@ -770,8 +780,8 @@ GLuint DISComputeFlow::exec(GLuint tex, FlowDirection flow_direction, ResizeStra
 Splat::Splat(const OperatingPoint &op)
 	: op(op)
 {
-	splat_vs_obj = compile_shader(read_file("splat.vert"), GL_VERTEX_SHADER);
-	splat_fs_obj = compile_shader(read_file("splat.frag"), GL_FRAGMENT_SHADER);
+	splat_vs_obj = compile_shader(read_file("splat.vert", _binary_splat_vert_data, _binary_splat_vert_size), GL_VERTEX_SHADER);
+	splat_fs_obj = compile_shader(read_file("splat.frag", _binary_splat_frag_data, _binary_splat_frag_size), GL_FRAGMENT_SHADER);
 	splat_program = link_program(splat_vs_obj, splat_fs_obj);
 
 	uniform_splat_size = glGetUniformLocation(splat_program, "splat_size");
@@ -813,8 +823,8 @@ void Splat::exec(GLuint gray_tex, GLuint bidirectional_flow_tex, GLuint flow_tex
 
 HoleFill::HoleFill()
 {
-	fill_vs_obj = compile_shader(read_file("hole_fill.vert"), GL_VERTEX_SHADER);
-	fill_fs_obj = compile_shader(read_file("hole_fill.frag"), GL_FRAGMENT_SHADER);
+	fill_vs_obj = compile_shader(read_file("hole_fill.vert", _binary_hole_fill_vert_data, _binary_hole_fill_vert_size), GL_VERTEX_SHADER);
+	fill_fs_obj = compile_shader(read_file("hole_fill.frag", _binary_hole_fill_frag_data, _binary_hole_fill_frag_size), GL_FRAGMENT_SHADER);
 	fill_program = link_program(fill_vs_obj, fill_fs_obj);
 
 	uniform_tex = glGetUniformLocation(fill_program, "tex");
@@ -877,8 +887,8 @@ void HoleFill::exec(GLuint flow_tex, GLuint depth_rb, GLuint temp_tex[3], int wi
 
 HoleBlend::HoleBlend()
 {
-	blend_vs_obj = compile_shader(read_file("hole_fill.vert"), GL_VERTEX_SHADER);  // Reuse the vertex shader from the fill.
-	blend_fs_obj = compile_shader(read_file("hole_blend.frag"), GL_FRAGMENT_SHADER);
+	blend_vs_obj = compile_shader(read_file("hole_fill.vert", _binary_hole_fill_vert_data, _binary_hole_fill_vert_size), GL_VERTEX_SHADER);  // Reuse the vertex shader from the fill.
+	blend_fs_obj = compile_shader(read_file("hole_blend.frag", _binary_hole_blend_frag_data, _binary_hole_blend_frag_size), GL_FRAGMENT_SHADER);
 	blend_program = link_program(blend_vs_obj, blend_fs_obj);
 
 	uniform_left_tex = glGetUniformLocation(blend_program, "left_tex");
@@ -916,7 +926,7 @@ void HoleBlend::exec(GLuint flow_tex, GLuint depth_rb, GLuint temp_tex[3], int w
 Blend::Blend(bool split_ycbcr_output)
 	: split_ycbcr_output(split_ycbcr_output)
 {
-	string frag_shader = read_file("blend.frag");
+	string frag_shader = read_file("blend.frag", _binary_blend_frag_data, _binary_blend_frag_size);
 	if (split_ycbcr_output) {
 		// Insert after the first #version line.
 		size_t offset = frag_shader.find('\n');
@@ -924,7 +934,7 @@ Blend::Blend(bool split_ycbcr_output)
 		frag_shader = frag_shader.substr(0, offset + 1) + "#define SPLIT_YCBCR_OUTPUT 1\n" + frag_shader.substr(offset + 1);
 	}
 
-	blend_vs_obj = compile_shader(read_file("vs.vert"), GL_VERTEX_SHADER);
+	blend_vs_obj = compile_shader(read_file("vs.vert", _binary_vs_vert_data, _binary_vs_vert_size), GL_VERTEX_SHADER);
 	blend_fs_obj = compile_shader(frag_shader, GL_FRAGMENT_SHADER);
 	blend_program = link_program(blend_vs_obj, blend_fs_obj);
 
