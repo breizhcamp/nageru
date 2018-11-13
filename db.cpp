@@ -15,6 +15,9 @@ DB::DB(const std::string &filename)
 	sqlite3_exec(db, R"(
 		CREATE TABLE IF NOT EXISTS state (state BLOB);
 	)", nullptr, nullptr, nullptr);  // Ignore errors.
+
+	sqlite3_exec(db, "PRAGMA journal_mode=WAL", nullptr, nullptr, nullptr);  // Ignore errors.
+	sqlite3_exec(db, "PRAGMA synchronous=NORMAL", nullptr, nullptr, nullptr);  // Ignore errors.
 }
 
 StateProto DB::get_state()
