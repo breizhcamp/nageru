@@ -26,29 +26,6 @@ using namespace std::chrono;
 
 extern HTTPD *global_httpd;
 
-namespace {
-
-string read_file(const string &filename)
-{
-	FILE *fp = fopen(filename.c_str(), "rb");
-	if (fp == nullptr) {
-		perror(filename.c_str());
-		return "";
-	}
-
-	fseek(fp, 0, SEEK_END);
-	long len = ftell(fp);
-	rewind(fp);
-
-	string ret;
-	ret.resize(len);
-	fread(&ret[0], len, 1, fp);
-	fclose(fp);
-	return ret;
-}
-
-}  // namespace
-
 struct VectorDestinationManager {
 	jpeg_destination_mgr pub;
 	std::vector<uint8_t> dest;
@@ -311,20 +288,19 @@ void VideoStream::clear_queue()
 void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
                                           int64_t output_pts, function<void()> &&display_func,
                                           QueueSpotHolder &&queue_spot_holder,
-                                          unsigned stream_idx, int64_t input_pts)
+                                          FrameOnDisk frame)
 {
-	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, input_pts);
+	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, frame.pts);
 
 	// Preload the file from disk, so that the encoder thread does not get stalled.
 	// TODO: Consider sending it through the queue instead.
-	(void)read_file(filename_for_frame(stream_idx, input_pts));
+	(void)read_frame(frame);
 
 	QueuedFrame qf;
 	qf.local_pts = local_pts;
 	qf.type = QueuedFrame::ORIGINAL;
 	qf.output_pts = output_pts;
-	qf.stream_idx = stream_idx;
-	qf.input_first_pts = input_pts;
+	qf.frame1 = frame;
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
 
@@ -336,10 +312,10 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
 void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64_t output_pts,
                                        function<void()> &&display_func,
                                        QueueSpotHolder &&queue_spot_holder,
-                                       unsigned stream_idx, int64_t input_pts, int secondary_stream_idx,
-                                       int64_t secondary_input_pts, float fade_alpha)
+                                       FrameOnDisk frame1_spec, FrameOnDisk frame2_spec,
+                                       float fade_alpha)
 {
-	fprintf(stderr, "output_pts=%ld  faded         input_pts=%ld,%ld  fade_alpha=%.2f\n", output_pts, input_pts, secondary_input_pts, fade_alpha);
+	fprintf(stderr, "output_pts=%ld  faded         input_pts=%ld,%ld  fade_alpha=%.2f\n", output_pts, frame1_spec.pts, frame2_spec.pts, fade_alpha);
 
 	// Get the temporary OpenGL resources we need for doing the fade.
 	// (We share these with interpolated frames, which is slightly
@@ -358,15 +334,8 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 
 	bool did_decode;
 
-	JPEGID jpeg_id1;
-	jpeg_id1.stream_idx = stream_idx;
-	jpeg_id1.pts = input_pts;
-	shared_ptr<Frame> frame1 = decode_jpeg_with_cache(jpeg_id1, DECODE_IF_NOT_IN_CACHE, &did_decode);
-
-	JPEGID jpeg_id2;
-	jpeg_id2.stream_idx = secondary_stream_idx;
-	jpeg_id2.pts = secondary_input_pts;
-	shared_ptr<Frame> frame2 = decode_jpeg_with_cache(jpeg_id2, DECODE_IF_NOT_IN_CACHE, &did_decode);
+	shared_ptr<Frame> frame1 = decode_jpeg_with_cache(frame1_spec, DECODE_IF_NOT_IN_CACHE, &did_decode);
+	shared_ptr<Frame> frame2 = decode_jpeg_with_cache(frame2_spec, DECODE_IF_NOT_IN_CACHE, &did_decode);
 
 	ycbcr_semiplanar_converter->prepare_chain_for_fade(frame1, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
 
@@ -374,13 +343,11 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	qf.local_pts = local_pts;
 	qf.type = QueuedFrame::FADED;
 	qf.output_pts = output_pts;
-	qf.stream_idx = stream_idx;
-	qf.input_first_pts = input_pts;
+	qf.frame1 = frame1_spec;
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
 
-	qf.secondary_stream_idx = secondary_stream_idx;
-	qf.secondary_input_pts = secondary_input_pts;
+	qf.secondary_frame = frame2_spec;
 
 	// Subsample and split Cb/Cr.
 	chroma_subsampler->subsample_chroma(resources->fade_cbcr_output_tex, 1280, 720, resources->cb_tex, resources->cr_tex);
@@ -413,15 +380,13 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts,
                                               int64_t output_pts, function<void(shared_ptr<Frame>)> &&display_func,
                                               QueueSpotHolder &&queue_spot_holder,
-                                              unsigned stream_idx, int64_t input_first_pts,
-                                              int64_t input_second_pts, float alpha,
-                                              int secondary_stream_idx, int64_t secondary_input_pts,
-                                              float fade_alpha)
+                                              FrameOnDisk frame1, FrameOnDisk frame2,
+                                              float alpha, FrameOnDisk secondary_frame, float fade_alpha)
 {
-	if (secondary_stream_idx != -1) {
-		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f  secondary_pts=%ld  fade_alpha=%.2f\n", output_pts, input_first_pts, input_second_pts, alpha, secondary_input_pts, fade_alpha);
+	if (secondary_frame.pts != -1) {
+		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f  secondary_pts=%ld  fade_alpha=%.2f\n", output_pts, frame1.pts, frame2.pts, alpha, secondary_frame.pts, fade_alpha);
 	} else {
-		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f\n", output_pts, input_first_pts, input_second_pts, alpha);
+		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f\n", output_pts, frame1.pts, frame2.pts, alpha);
 	}
 
 	// Get the temporary OpenGL resources we need for doing the interpolation.
@@ -437,9 +402,8 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	}
 
 	QueuedFrame qf;
-	qf.type = (secondary_stream_idx == -1) ? QueuedFrame::INTERPOLATED : QueuedFrame::FADED_INTERPOLATED;
+	qf.type = (secondary_frame.pts == -1) ? QueuedFrame::INTERPOLATED : QueuedFrame::FADED_INTERPOLATED;
 	qf.output_pts = output_pts;
-	qf.stream_idx = stream_idx;
 	qf.display_decoded_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
 	qf.local_pts = local_pts;
@@ -448,11 +412,9 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 
 	// Convert frame0 and frame1 to OpenGL textures.
 	for (size_t frame_no = 0; frame_no < 2; ++frame_no) {
-		JPEGID jpeg_id;
-		jpeg_id.stream_idx = stream_idx;
-		jpeg_id.pts = frame_no == 1 ? input_second_pts : input_first_pts;
+		FrameOnDisk frame_spec = frame_no == 1 ? frame2 : frame1;
 		bool did_decode;
-		shared_ptr<Frame> frame = decode_jpeg_with_cache(jpeg_id, DECODE_IF_NOT_IN_CACHE, &did_decode);
+		shared_ptr<Frame> frame = decode_jpeg_with_cache(frame_spec, DECODE_IF_NOT_IN_CACHE, &did_decode);
 		ycbcr_converter->prepare_chain_for_conversion(frame)->render_to_fbo(resources->input_fbos[frame_no], 1280, 720);
 	}
 
@@ -465,17 +427,14 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	qf.flow_tex = compute_flow->exec(resources->gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
 	check_error();
 
-	if (secondary_stream_idx != -1) {
+	if (secondary_frame.pts != -1) {
 		// Fade. First kick off the interpolation.
 		tie(qf.output_tex, ignore) = interpolate_no_split->exec(resources->input_tex, resources->gray_tex, qf.flow_tex, 1280, 720, alpha);
 		check_error();
 
 		// Now decode the image we are fading against.
-		JPEGID jpeg_id;
-		jpeg_id.stream_idx = secondary_stream_idx;
-		jpeg_id.pts = secondary_input_pts;
 		bool did_decode;
-		shared_ptr<Frame> frame2 = decode_jpeg_with_cache(jpeg_id, DECODE_IF_NOT_IN_CACHE, &did_decode);
+		shared_ptr<Frame> frame2 = decode_jpeg_with_cache(secondary_frame, DECODE_IF_NOT_IN_CACHE, &did_decode);
 
 		// Then fade against it, putting it into the fade Y' and CbCr textures.
 		ycbcr_semiplanar_converter->prepare_chain_for_fade_from_texture(qf.output_tex, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
@@ -500,7 +459,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, resources->pbo);
 	check_error();
-	if (secondary_stream_idx != -1) {
+	if (secondary_frame.pts != -1) {
 		glGetTextureImage(resources->fade_y_output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
 	} else {
 		glGetTextureImage(qf.output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
@@ -607,7 +566,7 @@ void VideoStream::encode_thread_func()
 
 		if (qf.type == QueuedFrame::ORIGINAL) {
 			// Send the JPEG frame on, unchanged.
-			string jpeg = read_file(filename_for_frame(qf.stream_idx, qf.input_first_pts));
+			string jpeg = read_frame(qf.frame1);
 			AVPacket pkt;
 			av_init_packet(&pkt);
 			pkt.stream_index = 0;

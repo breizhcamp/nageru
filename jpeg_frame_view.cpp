@@ -30,13 +30,18 @@ using namespace std;
 namespace {
 
 // Just an arbitrary order for std::map.
-struct JPEGIDLexicalOrder
+struct FrameOnDiskLexicalOrder
 {
-	bool operator() (const JPEGID &a, const JPEGID &b) const
+	bool operator() (const FrameOnDisk &a, const FrameOnDisk &b) const
 	{
-		if (a.stream_idx != b.stream_idx)
-			return a.stream_idx < b.stream_idx;
-		return a.pts < b.pts;
+		if (a.pts != b.pts)
+			return a.pts < b.pts;
+		if (a.offset != b.offset)
+			return a.offset < b.offset;
+		if (a.filename_idx != b.filename_idx)
+			return a.filename_idx < b.filename_idx;
+		assert(a.size == b.size);
+		return false;
 	}
 };
 
@@ -56,7 +61,7 @@ struct PendingDecode {
 	JPEGFrameView *destination;
 
 	// For actual decodes (only if frame below is nullptr).
-	JPEGID primary, secondary;
+	FrameOnDisk primary, secondary;
 	float fade_alpha;  // Irrelevant if secondary.stream_idx == -1.
 
 	// Already-decoded frames are also sent through PendingDecode,
@@ -69,7 +74,7 @@ struct PendingDecode {
 
 thread JPEGFrameView::jpeg_decoder_thread;
 mutex cache_mu;
-map<JPEGID, LRUFrame, JPEGIDLexicalOrder> cache;  // Under cache_mu.
+map<FrameOnDisk, LRUFrame, FrameOnDiskLexicalOrder> cache;  // Under cache_mu.
 size_t cache_bytes_used = 0;  // Under cache_mu.
 condition_variable any_pending_decodes;
 deque<PendingDecode> pending_decodes;  // Under cache_mu.
@@ -202,12 +207,12 @@ void prune_cache()
 	}
 }
 
-shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss_behavior, bool *did_decode)
+shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk frame_spec, CacheMissBehavior cache_miss_behavior, bool *did_decode)
 {
 	*did_decode = false;
 	{
 		unique_lock<mutex> lock(cache_mu);
-		auto it = cache.find(id);
+		auto it = cache.find(frame_spec);
 		if (it != cache.end()) {
 			it->second.last_used = event_counter++;
 			return it->second.frame;
@@ -219,11 +224,11 @@ shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss
 	}
 
 	*did_decode = true;
-	shared_ptr<Frame> frame = decode_jpeg(filename_for_frame(id.stream_idx, id.pts));
+	shared_ptr<Frame> frame = decode_jpeg(read_frame(frame_spec));
 
 	unique_lock<mutex> lock(cache_mu);
 	cache_bytes_used += frame_size(*frame);
-	cache[id] = LRUFrame{ frame, event_counter++ };
+	cache[frame_spec] = LRUFrame{ frame, event_counter++ };
 
 	if (cache_bytes_used > size_t(CACHE_SIZE_MB) * 1024 * 1024) {
 		prune_cache();
@@ -269,14 +274,14 @@ void jpeg_decoder_thread_func()
 		shared_ptr<Frame> primary_frame, secondary_frame;
 		bool drop = false;
 		for (int subframe_idx = 0; subframe_idx < 2; ++subframe_idx) {
-			const JPEGID &id = (subframe_idx == 0 ? decode.primary : decode.secondary);
-			if (id.stream_idx == (unsigned)-1) {
+			const FrameOnDisk &frame_spec = (subframe_idx == 0 ? decode.primary : decode.secondary);
+			if (frame_spec.pts == -1) {
 				// No secondary frame.
 				continue;
 			}
 
 			bool found_in_cache;
-			shared_ptr<Frame> frame = decode_jpeg_with_cache(id, cache_miss_behavior, &found_in_cache);
+			shared_ptr<Frame> frame = decode_jpeg_with_cache(frame_spec, cache_miss_behavior, &found_in_cache);
 
 			if (frame == nullptr) {
 				assert(cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
@@ -318,15 +323,14 @@ JPEGFrameView::JPEGFrameView(QWidget *parent)
 {
 }
 
-void JPEGFrameView::setFrame(unsigned stream_idx, int64_t pts, int secondary_stream_idx, int64_t secondary_pts, float fade_alpha)
+void JPEGFrameView::setFrame(unsigned stream_idx, FrameOnDisk frame, FrameOnDisk secondary_frame, float fade_alpha)
 {
-	if (secondary_stream_idx != -1) assert(secondary_pts != -1);
 	current_stream_idx = stream_idx;  // TODO: Does this interact with fades?
 
 	unique_lock<mutex> lock(cache_mu);
 	PendingDecode decode;
-	decode.primary = JPEGID{ stream_idx, pts };
-	decode.secondary = JPEGID{ (unsigned)secondary_stream_idx, secondary_pts };
+	decode.primary = frame;
+	decode.secondary = secondary_frame;
 	decode.fade_alpha = fade_alpha;
 	decode.destination = this;
 	pending_decodes.push_back(decode);

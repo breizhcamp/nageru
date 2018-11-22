@@ -326,7 +326,7 @@ private:
 	VABufferID buf;
 };
 
-shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
+shared_ptr<Frame> decode_jpeg_vaapi(const string &jpeg)
 {
 	jpeg_decompress_struct dinfo;
 	jpeg_error_mgr jerr;
@@ -334,23 +334,8 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	jpeg_create_decompress(&dinfo);
 	JPEGDestroyer destroy_dinfo(&dinfo);
 
-	FILE *fp = fopen(filename.c_str(), "rb");
-	if (fp == nullptr) {
-		perror(filename.c_str());
-		exit(1);
-	}
-	jpeg_stdio_src(&dinfo, fp);
-
+	jpeg_mem_src(&dinfo, reinterpret_cast<const unsigned char *>(jpeg.data()), jpeg.size());
 	jpeg_read_header(&dinfo, true);
-
-	// Read the data that comes after the header. VA-API will destuff and all for us.
-	std::string str((const char *)dinfo.src->next_input_byte, dinfo.src->bytes_in_buffer);
-	while (!feof(fp)) {
-		char buf[4096];
-		size_t ret = fread(buf, 1, sizeof(buf), fp);
-		str.append(buf, ret);
-	}
-	fclose(fp);
 
 	if (dinfo.num_components != 3) {
 		fprintf(stderr, "Not a color JPEG. (%d components, Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
@@ -455,7 +440,7 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	// Slice parameters (metadata about the slice).
 	VASliceParameterBufferJPEGBaseline parms;
 	memset(&parms, 0, sizeof(parms));
-	parms.slice_data_size = str.size();
+	parms.slice_data_size = dinfo.src->bytes_in_buffer;
 	parms.slice_data_offset = 0;
 	parms.slice_data_flag = VA_SLICE_DATA_FLAG_ALL;
 	parms.slice_horizontal_position = 0;
@@ -482,9 +467,9 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &filename)
 	CHECK_VASTATUS_RET(va_status, "vaCreateBuffer");
 	VABufferDestroyer destroy_slice_param(va_dpy->va_dpy, slice_param_buffer);
 
-	// The actual data.
+	// The actual data. VA-API will destuff and all for us.
 	VABufferID data_buffer;
-	va_status = vaCreateBuffer(va_dpy->va_dpy, config_id, VASliceDataBufferType, str.size(), 1, &str[0], &data_buffer);
+	va_status = vaCreateBuffer(va_dpy->va_dpy, config_id, VASliceDataBufferType, dinfo.src->bytes_in_buffer, 1, const_cast<unsigned char *>(dinfo.src->next_input_byte), &data_buffer);
 	CHECK_VASTATUS_RET(va_status, "vaCreateBuffer");
 	VABufferDestroyer destroy_data(va_dpy->va_dpy, data_buffer);
 

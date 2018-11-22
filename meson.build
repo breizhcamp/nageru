@@ -30,7 +30,7 @@ add_global_arguments('-DMOVIT_SHADER_DIR="' + r.stdout().strip() + '"', language
 gen = generator(protoc, \
   output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
   arguments : ['--proto_path=@CURRENT_SOURCE_DIR@', '--cpp_out=@BUILD_DIR@', '@INPUT@'])
-proto_generated = gen.process('state.proto')
+proto_generated = gen.process('state.proto', 'frame.proto')
 
 # Preprocess Qt as needed.
 moc_files = qt5.preprocess(

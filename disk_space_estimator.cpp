@@ -12,7 +12,7 @@ DiskSpaceEstimator::DiskSpaceEstimator(DiskSpaceEstimator::callback_t callback)
 {
 }
 
-void DiskSpaceEstimator::report_write(const std::string &filename, uint64_t pts)
+void DiskSpaceEstimator::report_write(const std::string &filename, size_t bytes, uint64_t pts)
 {
 	// Reject points that are out-of-order (happens with B-frames).
 	if (!measure_points.empty() && pts <= measure_points.back().pts) {
@@ -24,13 +24,7 @@ void DiskSpaceEstimator::report_write(const std::string &filename, uint64_t pts)
 		measure_points.pop_front();
 	}
 
-	struct stat st;
-	if (stat(filename.c_str(), &st) == -1) {
-		perror(filename.c_str());
-		return;
-	}
-
-	total_size += st.st_size;
+	total_size += bytes;
 
 	struct statfs fst;
 	if (statfs(filename.c_str(), &fst) == -1) {

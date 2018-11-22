@@ -2,6 +2,7 @@
 #define _PLAYER_H 1
 
 #include "clip_list.h"
+#include "frame_on_disk.h"
 #include "queue_spot_holder.h"
 
 extern "C" {
@@ -52,7 +53,7 @@ private:
 
 	// Find the frame immediately before and after this point.
 	// Returns false if pts is after the last frame.
-	bool find_surrounding_frames(int64_t pts, int stream_idx, int64_t *pts_lower, int64_t *pts_upper);
+	bool find_surrounding_frames(int64_t pts, int stream_idx, FrameOnDisk *frame_lower, FrameOnDisk *frame_upper);
 
 	JPEGFrameView *destination;
 	done_callback_func done_callback;

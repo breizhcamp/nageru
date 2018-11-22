@@ -8,6 +8,7 @@ extern "C" {
 #include <libavformat/avio.h>
 }
 
+#include "frame_on_disk.h"
 #include "jpeg_frame_view.h"
 #include "ref_counted_gl_sync.h"
 #include "queue_spot_holder.h"
@@ -44,18 +45,18 @@ public:
 	void schedule_original_frame(std::chrono::steady_clock::time_point,
 	                             int64_t output_pts, std::function<void()> &&display_func,
 	                             QueueSpotHolder &&queue_spot_holder,
-	                             unsigned stream_idx, int64_t input_pts);
+	                             FrameOnDisk frame);
 	void schedule_faded_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
 	                          std::function<void()> &&display_func,
 	                          QueueSpotHolder &&queue_spot_holder,
-	                          unsigned stream_idx, int64_t input_pts, int secondary_stream_idx,
-	                          int64_t secondary_input_pts, float fade_alpha);
+	                          FrameOnDisk frame1, FrameOnDisk frame2,
+	                          float fade_alpha);
 	void schedule_interpolated_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
 	                          std::function<void(std::shared_ptr<Frame>)> &&display_func,
 	                          QueueSpotHolder &&queue_spot_holder,
-	                          unsigned stream_idx, int64_t input_first_pts, int64_t input_second_pts,
-	                          float alpha, int secondary_stream_idx = -1, int64_t secondary_inputs_pts = -1,
-	                          float fade_alpha = 0.0f);  // -1 = no secondary frame.
+	                          FrameOnDisk frame1, FrameOnDisk frame2,
+	                          float alpha, FrameOnDisk secondary_frame = {},  // Empty = no secondary (fade) frame.
+	                          float fade_alpha = 0.0f);
 	void schedule_refresh_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
 	                            std::function<void()> &&display_func,
 	                            QueueSpotHolder &&queue_spot_holder);
@@ -105,20 +106,18 @@ private:
 
 		int64_t output_pts;
 		enum Type { ORIGINAL, FADED, INTERPOLATED, FADED_INTERPOLATED, REFRESH } type;
-		unsigned stream_idx;
-		int64_t input_first_pts;  // The only pts for original frames.
+		FrameOnDisk frame1;  // The only frame for original frames.
 
 		// For fades only (including fades against interpolated frames).
-		int secondary_stream_idx = -1;
-		int64_t secondary_input_pts;
+		FrameOnDisk secondary_frame;
 
 		// For interpolated frames only.
-		int64_t input_second_pts;
+		FrameOnDisk frame2;
 		float alpha;
 		BorrowedInterpolatedFrameResources resources;
 		RefCountedGLsync fence;  // Set when the interpolated image is read back to the CPU.
 		GLuint flow_tex, output_tex, cbcr_tex;  // Released in the receiving thread; not really used for anything else.
-		JPEGID id;
+		FrameOnDisk id;
 
 		std::function<void()> display_func;  // Called when the image is done decoding.
 		std::function<void(std::shared_ptr<Frame>)> display_decoded_func;  // Same, except for INTERPOLATED and FADED_INTERPOLATED.

@@ -3,6 +3,7 @@
 #include "clip_list.h"
 #include "disk_space_estimator.h"
 #include "flags.h"
+#include "frame_on_disk.h"
 #include "player.h"
 #include "post_to_main_thread.h"
 #include "timebase.h"
@@ -25,8 +26,6 @@ static ClipList *cliplist_clips;
 static PlayList *playlist_clips;
 
 extern int64_t current_pts;
-extern mutex frame_mu;
-extern vector<int64_t> frames[MAX_STREAMS];
 
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow),
@@ -641,18 +640,20 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 		lock_guard<mutex> lock(frame_mu);
 		if (frames[stream_idx].empty())
 			return;
-		auto it = lower_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts);
+		auto it = lower_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts,
+			[](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
 		if (it != frames[stream_idx].end()) {
-			pts = *it;
+			pts = it->pts;
 		}
 	} else {
 		assert(rounding == FIRST_AT_OR_AFTER);
 		lock_guard<mutex> lock(frame_mu);
 		if (frames[stream_idx].empty())
 			return;
-		auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts - 1);
+		auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts - 1,
+			[](int64_t pts, const FrameOnDisk &frame) { return pts < frame.pts; });
 		if (it != frames[stream_idx].end()) {
-			pts = *it;
+			pts = it->pts;
 		}
 	}
 

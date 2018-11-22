@@ -4,6 +4,7 @@
 #include "context.h"
 #include "defs.h"
 #include "ffmpeg_raii.h"
+#include "frame_on_disk.h"
 #include "httpd.h"
 #include "jpeg_frame_view.h"
 #include "mux.h"
@@ -22,8 +23,6 @@
 using namespace std;
 using namespace std::chrono;
 
-extern mutex frame_mu;
-extern vector<int64_t> frames[MAX_STREAMS];
 extern HTTPD *global_httpd;
 
 void Player::thread_func(bool also_output_to_stream)
@@ -102,9 +101,10 @@ got_clip:
 			// Find the first frame such that frame.pts <= in_pts.
 			auto it = lower_bound(frames[stream_idx].begin(),
 				frames[stream_idx].end(),
-				in_pts_origin);
+				in_pts_origin,
+				[](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
 			if (it != frames[stream_idx].end()) {
-				in_pts_origin = *it;
+				in_pts_origin = it->pts;
 			}
 		}
 
@@ -147,13 +147,12 @@ got_clip:
 			int64_t in_pts_for_progress = in_pts, in_pts_secondary_for_progress = -1;
 
 			int primary_stream_idx = stream_idx;
+			FrameOnDisk secondary_frame;
 			int secondary_stream_idx = -1;
-			int64_t secondary_pts = -1;
-			int64_t in_pts_secondary = -1;
 			float fade_alpha = 0.0f;
 			if (got_next_clip && time_left_this_clip <= next_clip_fade_time) {
 				secondary_stream_idx = next_clip.stream_idx;
-				in_pts_secondary = lrint(next_clip.pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * speed);
+				int64_t in_pts_secondary = lrint(next_clip.pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * speed);
 				in_pts_secondary_for_progress = in_pts_secondary;
 				fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
 
@@ -165,12 +164,10 @@ got_clip:
 					fade_alpha = 1.0f - fade_alpha;
 				}
 
-				int64_t in_pts_lower, in_pts_upper;
-				bool ok = find_surrounding_frames(in_pts_secondary, secondary_stream_idx, &in_pts_lower, &in_pts_upper);
+				FrameOnDisk frame_lower, frame_upper;
+				bool ok = find_surrounding_frames(in_pts_secondary, secondary_stream_idx, &frame_lower, &frame_upper);
 				if (ok) {
-					secondary_pts = in_pts_lower;
-				} else {
-					secondary_stream_idx = -1;
+					secondary_frame = frame_lower;
 				}
 			}
 
@@ -188,8 +185,8 @@ got_clip:
 				progress_callback(progress);
 			}
 
-			int64_t in_pts_lower, in_pts_upper;
-			bool ok = find_surrounding_frames(in_pts, primary_stream_idx, &in_pts_lower, &in_pts_upper);
+			FrameOnDisk frame_lower, frame_upper;
+			bool ok = find_surrounding_frames(in_pts, primary_stream_idx, &frame_lower, &frame_upper);
 			if (!ok) {
 				break;
 			}
@@ -231,9 +228,9 @@ got_clip:
 				}
 			}
 
-			if (in_pts_lower == in_pts_upper) {
-				auto display_func = [this, primary_stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha]{
-					destination->setFrame(primary_stream_idx, in_pts_lower, secondary_stream_idx, secondary_pts, fade_alpha);
+			if (frame_lower.pts == frame_upper.pts) {
+				auto display_func = [this, primary_stream_idx, frame_lower, secondary_frame, fade_alpha]{
+					destination->setFrame(primary_stream_idx, frame_lower, secondary_frame, fade_alpha);
 				};
 				if (video_stream == nullptr) {
 					display_func();
@@ -241,12 +238,12 @@ got_clip:
 					if (secondary_stream_idx == -1) {
 						video_stream->schedule_original_frame(
 							next_frame_start, pts, display_func, QueueSpotHolder(this),
-							primary_stream_idx, in_pts_lower);
+							frame_lower);
 					} else {
-						assert(secondary_pts != -1);
+						assert(secondary_frame.pts != -1);
 						video_stream->schedule_faded_frame(next_frame_start, pts, display_func,
-							QueueSpotHolder(this), primary_stream_idx, in_pts_lower,
-							secondary_stream_idx, secondary_pts, fade_alpha);
+							QueueSpotHolder(this), frame_lower,
+							secondary_frame, fade_alpha);
 					}
 				}
 				continue;
@@ -256,11 +253,13 @@ got_clip:
 			// (ie., move less than 1% of an _output_ frame), do so.
 			// TODO: Snap secondary (fade-to) clips in the same fashion.
 			bool snapped = false;
-			for (int64_t snap_pts : { in_pts_lower, in_pts_upper }) {
+			for (int64_t snap_pts : { frame_lower.pts, frame_upper.pts }) {
 				double snap_pts_as_frameno = (snap_pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
-					auto display_func = [this, primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha]{
-						destination->setFrame(primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
+					FrameOnDisk snap_frame = frame_lower;
+					snap_frame.pts = snap_pts;
+					auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
+						destination->setFrame(primary_stream_idx, snap_frame, secondary_frame, fade_alpha);
 					};
 					if (video_stream == nullptr) {
 						display_func();
@@ -268,12 +267,12 @@ got_clip:
 						if (secondary_stream_idx == -1) {
 							video_stream->schedule_original_frame(
 								next_frame_start, pts, display_func,
-								QueueSpotHolder(this), primary_stream_idx, snap_pts);
+								QueueSpotHolder(this), snap_frame);
 						} else {
-							assert(secondary_pts != -1);
+							assert(secondary_frame.pts != -1);
 							video_stream->schedule_faded_frame(
 								next_frame_start, pts, display_func, QueueSpotHolder(this),
-								primary_stream_idx, snap_pts, secondary_stream_idx, secondary_pts, fade_alpha);
+								snap_frame, secondary_frame, fade_alpha);
 						}
 					}
 					in_pts_origin += snap_pts - in_pts;
@@ -291,20 +290,20 @@ got_clip:
 				continue;
 			}
 
-			double alpha = double(in_pts - in_pts_lower) / (in_pts_upper - in_pts_lower);
+			double alpha = double(in_pts - frame_lower.pts) / (frame_upper.pts - frame_lower.pts);
 
 			if (video_stream == nullptr) {
 				// Previews don't do any interpolation.
 				assert(secondary_stream_idx == -1);
-				destination->setFrame(primary_stream_idx, in_pts_lower);
+				destination->setFrame(primary_stream_idx, frame_lower);
 			} else {
 				auto display_func = [this](shared_ptr<Frame> frame) {
 					destination->setFrame(frame);
 				};
 				video_stream->schedule_interpolated_frame(
 					next_frame_start, pts, display_func, QueueSpotHolder(this),
-					primary_stream_idx, in_pts_lower, in_pts_upper, alpha,
-					secondary_stream_idx, secondary_pts, fade_alpha);
+					frame_lower, frame_upper, alpha,
+					secondary_frame, fade_alpha);
 			}
 		}
 
@@ -346,27 +345,28 @@ got_clip:
 }
 
 // Find the frame immediately before and after this point.
-bool Player::find_surrounding_frames(int64_t pts, int stream_idx, int64_t *pts_lower, int64_t *pts_upper)
+bool Player::find_surrounding_frames(int64_t pts, int stream_idx, FrameOnDisk *frame_lower, FrameOnDisk *frame_upper)
 {
 	lock_guard<mutex> lock(frame_mu);
 
 	// Find the first frame such that frame.pts >= pts.
 	auto it = lower_bound(frames[stream_idx].begin(),
 		frames[stream_idx].end(),
-		pts);
+		pts,
+		[](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
 	if (it == frames[stream_idx].end()) {
 		return false;
 	}
-	*pts_upper = *it;
+	*frame_upper = *it;
 
 	// Find the last frame such that in_pts <= frame.pts (if any).
 	if (it == frames[stream_idx].begin()) {
-		*pts_lower = *it;
+		*frame_lower = *it;
 	} else {
-		*pts_lower = *(it - 1);
+		*frame_lower = *(it - 1);
 	}
-	assert(pts >= *pts_lower);
-	assert(pts <= *pts_upper);
+	assert(pts >= frame_lower->pts);
+	assert(pts <= frame_upper->pts);
 	return true;
 }
 
@@ -428,7 +428,8 @@ void Player::override_angle(unsigned stream_idx)
 	}
 
 	lock_guard<mutex> lock(frame_mu);
-	auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts_out);
+	auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts_out,
+		[](int64_t pts, const FrameOnDisk &frame) { return pts < frame.pts; });
 	if (it == frames[stream_idx].end()) {
 		return;
 	}

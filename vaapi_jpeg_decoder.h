@@ -19,7 +19,7 @@ std::unique_ptr<VADisplayWithCleanup> va_open_display(const std::string &va_disp
 std::string get_usable_va_display();
 
 void init_jpeg_vaapi();
-std::shared_ptr<Frame> decode_jpeg_vaapi(const std::string &filename);
+std::shared_ptr<Frame> decode_jpeg_vaapi(const std::string &jpeg);
 
 extern bool vaapi_jpeg_decoding_usable;
 

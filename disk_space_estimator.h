@@ -22,14 +22,11 @@ public:
 	typedef std::function<void(off_t free_bytes, double estimated_seconds_left)> callback_t;
 	DiskSpaceEstimator(callback_t callback);
 
-	// Report that a video frame with the given pts has just been written
-	// to the given file, so the estimator should stat the file and see
-	// by big it is. (The file is assumed to hold only that single frame,
-	// unlike in Nageru, where it is a growing file.)
+	// Report that a video frame with the given pts and size has just been
+	// written (possibly appended) to the given file.
 	//
-	// If the filename changed since last time, the estimation is reset.
 	// <pts> is taken to be in TIMEBASE units (see timebase.h).
-	void report_write(const std::string &filename, uint64_t pts);
+	void report_write(const std::string &filename, size_t bytes, uint64_t pts);
 
 private:
 	static constexpr int64_t window_length = 30 * TIMEBASE;

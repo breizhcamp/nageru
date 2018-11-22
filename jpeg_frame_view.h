@@ -1,6 +1,7 @@
 #ifndef _JPEG_FRAME_VIEW_H
 #define _JPEG_FRAME_VIEW_H 1
 
+#include "frame_on_disk.h"
 #include "jpeg_frame.h"
 #include "ycbcr_converter.h"
 
@@ -14,18 +15,13 @@
 #include <stdint.h>
 #include <thread>
 
-struct JPEGID {
-	unsigned stream_idx;
-	int64_t pts;
-};
 enum CacheMissBehavior {
 	DECODE_IF_NOT_IN_CACHE,
 	RETURN_NULLPTR_IF_NOT_IN_CACHE
 };
 
-std::string filename_for_frame(unsigned stream_idx, int64_t pts);
 std::shared_ptr<Frame> decode_jpeg(const std::string &filename);
-std::shared_ptr<Frame> decode_jpeg_with_cache(JPEGID id, CacheMissBehavior cache_miss_behavior, bool *did_decode);
+std::shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk id, CacheMissBehavior cache_miss_behavior, bool *did_decode);
 
 class JPEGFrameView : public QGLWidget {
 	Q_OBJECT
@@ -33,7 +29,7 @@ class JPEGFrameView : public QGLWidget {
 public:
 	JPEGFrameView(QWidget *parent);
 
-	void setFrame(unsigned stream_idx, int64_t pts, int secondary_stream_idx = -1, int64_t secondary_pts = -1, float fade_alpha = 0.0f);
+	void setFrame(unsigned stream_idx, FrameOnDisk frame, FrameOnDisk secondary_frame = {}, float fade_alpha = 0.0f);
 	void setFrame(std::shared_ptr<Frame> frame);
 
 	void mousePressEvent(QMouseEvent *event) override;
