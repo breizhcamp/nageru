@@ -19,6 +19,19 @@ struct FrameOnDisk {
 extern std::vector<FrameOnDisk> frames[MAX_STREAMS];  // Under frame_mu.
 extern std::vector<std::string> frame_filenames;  // Under frame_mu.
 
-std::string read_frame(FrameOnDisk frame);
+// A helper class to read frames from disk. It caches the file descriptor
+// so that the kernel has a better chance of doing readahead when it sees
+// the sequential reads. (For this reason, each display has a private
+// FrameReader. Thus, we can easily keep multiple open file descriptors around
+// for a single .frames file.)
+class FrameReader {
+public:
+	~FrameReader();
+	std::string read_frame(FrameOnDisk frame);
+
+private:
+	int fd = -1;
+	int last_filename_idx = -1;
+};
 
 #endif  // !defined(_FRAME_ON_DISK_H)

@@ -21,7 +21,7 @@ enum CacheMissBehavior {
 };
 
 std::shared_ptr<Frame> decode_jpeg(const std::string &filename);
-std::shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk id, CacheMissBehavior cache_miss_behavior, bool *did_decode);
+std::shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk id, CacheMissBehavior cache_miss_behavior, FrameReader *frame_reader, bool *did_decode);
 
 class JPEGFrameView : public QGLWidget {
 	Q_OBJECT
@@ -50,6 +50,10 @@ protected:
 	void paintGL() override;
 
 private:
+	static void jpeg_decoder_thread_func();
+
+	FrameReader frame_reader;
+
 	// The stream index of the latest frame we displayed.
 	unsigned current_stream_idx = 0;
 

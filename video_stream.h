@@ -62,6 +62,8 @@ public:
 	                            QueueSpotHolder &&queue_spot_holder);
 
 private:
+	FrameReader frame_reader;
+
 	void encode_thread_func();
 	std::thread encode_thread;
 

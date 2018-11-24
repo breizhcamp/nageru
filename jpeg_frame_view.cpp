@@ -207,7 +207,7 @@ void prune_cache()
 	}
 }
 
-shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk frame_spec, CacheMissBehavior cache_miss_behavior, bool *did_decode)
+shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk frame_spec, CacheMissBehavior cache_miss_behavior, FrameReader *frame_reader, bool *did_decode)
 {
 	*did_decode = false;
 	{
@@ -224,7 +224,7 @@ shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk frame_spec, CacheMissBehavi
 	}
 
 	*did_decode = true;
-	shared_ptr<Frame> frame = decode_jpeg(read_frame(frame_spec));
+	shared_ptr<Frame> frame = decode_jpeg(frame_reader->read_frame(frame_spec));
 
 	unique_lock<mutex> lock(cache_mu);
 	cache_bytes_used += frame_size(*frame);
@@ -236,7 +236,7 @@ shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk frame_spec, CacheMissBehavi
 	return frame;
 }
 
-void jpeg_decoder_thread_func()
+void JPEGFrameView::jpeg_decoder_thread_func()
 {
 	size_t num_decoded = 0, num_dropped = 0;
 
@@ -281,7 +281,7 @@ void jpeg_decoder_thread_func()
 			}
 
 			bool found_in_cache;
-			shared_ptr<Frame> frame = decode_jpeg_with_cache(frame_spec, cache_miss_behavior, &found_in_cache);
+			shared_ptr<Frame> frame = decode_jpeg_with_cache(frame_spec, cache_miss_behavior, &decode.destination->frame_reader, &found_in_cache);
 
 			if (frame == nullptr) {
 				assert(cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE);
@@ -297,9 +297,9 @@ void jpeg_decoder_thread_func()
 				}
 			}
 			if (subframe_idx == 0) {
-				primary_frame = move(frame);
+				primary_frame = std::move(frame);
 			} else {
-				secondary_frame = move(frame);
+				secondary_frame = std::move(frame);
 			}
 		}
 		if (drop) {

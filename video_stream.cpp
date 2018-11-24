@@ -294,7 +294,7 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
 
 	// Preload the file from disk, so that the encoder thread does not get stalled.
 	// TODO: Consider sending it through the queue instead.
-	(void)read_frame(frame);
+	(void)frame_reader.read_frame(frame);
 
 	QueuedFrame qf;
 	qf.local_pts = local_pts;
@@ -334,8 +334,8 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 
 	bool did_decode;
 
-	shared_ptr<Frame> frame1 = decode_jpeg_with_cache(frame1_spec, DECODE_IF_NOT_IN_CACHE, &did_decode);
-	shared_ptr<Frame> frame2 = decode_jpeg_with_cache(frame2_spec, DECODE_IF_NOT_IN_CACHE, &did_decode);
+	shared_ptr<Frame> frame1 = decode_jpeg_with_cache(frame1_spec, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
+	shared_ptr<Frame> frame2 = decode_jpeg_with_cache(frame2_spec, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
 
 	ycbcr_semiplanar_converter->prepare_chain_for_fade(frame1, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
 
@@ -414,7 +414,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	for (size_t frame_no = 0; frame_no < 2; ++frame_no) {
 		FrameOnDisk frame_spec = frame_no == 1 ? frame2 : frame1;
 		bool did_decode;
-		shared_ptr<Frame> frame = decode_jpeg_with_cache(frame_spec, DECODE_IF_NOT_IN_CACHE, &did_decode);
+		shared_ptr<Frame> frame = decode_jpeg_with_cache(frame_spec, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
 		ycbcr_converter->prepare_chain_for_conversion(frame)->render_to_fbo(resources->input_fbos[frame_no], 1280, 720);
 	}
 
@@ -434,7 +434,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 
 		// Now decode the image we are fading against.
 		bool did_decode;
-		shared_ptr<Frame> frame2 = decode_jpeg_with_cache(secondary_frame, DECODE_IF_NOT_IN_CACHE, &did_decode);
+		shared_ptr<Frame> frame2 = decode_jpeg_with_cache(secondary_frame, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
 
 		// Then fade against it, putting it into the fade Y' and CbCr textures.
 		ycbcr_semiplanar_converter->prepare_chain_for_fade_from_texture(qf.output_tex, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
@@ -566,7 +566,7 @@ void VideoStream::encode_thread_func()
 
 		if (qf.type == QueuedFrame::ORIGINAL) {
 			// Send the JPEG frame on, unchanged.
-			string jpeg = read_frame(qf.frame1);
+			string jpeg = frame_reader.read_frame(qf.frame1);
 			AVPacket pkt;
 			av_init_packet(&pkt);
 			pkt.stream_index = 0;

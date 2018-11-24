@@ -421,33 +421,3 @@ int record_thread_func()
 
 	return 0;
 }
-
-string read_frame(FrameOnDisk frame)
-{
-	string filename;
-	{
-		lock_guard<mutex> lock(frame_mu);
-		filename = frame_filenames[frame.filename_idx];
-	}
-
-	// TODO: cache the open file handles
-	FILE *fp = fopen(filename.c_str(), "rb");
-	if (fp == nullptr) {
-		perror(filename.c_str());
-		exit(1);
-	}
-	if (fseek(fp, frame.offset, SEEK_SET) == -1) {
-		perror("fseek");
-		exit(1);
-	}
-
-	string str;
-	str.resize(frame.size);
-	if (fread(&str[0], frame.size, 1, fp) != 1) {
-		perror("fread");
-		exit(1);
-	}
-
-	fclose(fp);
-	return str;
-}

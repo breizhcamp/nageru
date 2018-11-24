@@ -44,7 +44,7 @@ srcs = ['flow.cpp', 'gpu_timers.cpp']
 # All the other files.
 srcs += ['ffmpeg_raii.cpp', 'main.cpp', 'player.cpp', 'httpd.cpp', 'mux.cpp', 'metacube2.cpp', 'video_stream.cpp', 'context.cpp', 'chroma_subsampler.cpp']
 srcs += ['vaapi_jpeg_decoder.cpp', 'memcpy_interleaved.cpp', 'db.cpp', 'disk_space_estimator.cpp', 'ycbcr_converter.cpp', 'flags.cpp']
-srcs += ['mainwindow.cpp', 'jpeg_frame_view.cpp', 'clip_list.cpp']
+srcs += ['mainwindow.cpp', 'jpeg_frame_view.cpp', 'clip_list.cpp', 'frame_on_disk.cpp']
 srcs += moc_files
 srcs += proto_generated
 
