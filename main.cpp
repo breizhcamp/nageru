@@ -58,7 +58,7 @@ int64_t current_pts = 0;
 
 struct FrameFile {
 	FILE *fp = nullptr;
-	int filename_idx;
+	unsigned filename_idx;
 	size_t frames_written_so_far = 0;
 };
 std::map<int, FrameFile> open_frame_files;
@@ -69,7 +69,7 @@ vector<string> frame_filenames;  // Under frame_mu.
 
 namespace {
 
-FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t size)
+FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t size, DB *db)
 {
 	if (open_frame_files.count(stream_idx) == 0) {
 		char filename[256];
@@ -82,16 +82,17 @@ FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t
 		}
 
 		lock_guard<mutex> lock(frame_mu);
-		int filename_idx = frame_filenames.size();
+		unsigned filename_idx = frame_filenames.size();
 		frame_filenames.push_back(filename);
 		open_frame_files[stream_idx] = FrameFile{ fp, filename_idx, 0 };
 	}
 
 	FrameFile &file = open_frame_files[stream_idx];
+	unsigned filename_idx = file.filename_idx;
 	string filename;
 	{
 		lock_guard<mutex> lock(frame_mu);
-		filename = frame_filenames[file.filename_idx];
+		filename = frame_filenames[filename_idx];
 	}
 
 	FrameHeaderProto hdr;
@@ -126,20 +127,9 @@ FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t
 	fflush(file.fp);  // No fsync(), though. We can accept losing a few frames.
 	global_disk_space_estimator->report_write(filename, 8 + sizeof(len) + serialized.size() + size, pts);
 
-	if (++file.frames_written_so_far >= 1000) {
-		// Start a new file next time.
-		if (fclose(file.fp) != 0) {
-			perror("fclose");
-			exit(1);
-		}
-		open_frame_files.erase(stream_idx);
-
-		// TODO: Write to SQLite.
-	}
-
 	FrameOnDisk frame;
 	frame.pts = pts;
-	frame.filename_idx = file.filename_idx;
+	frame.filename_idx = filename_idx;
 	frame.offset = offset;
 	frame.size = size;
 
@@ -147,6 +137,35 @@ FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t
 		lock_guard<mutex> lock(frame_mu);
 		assert(stream_idx < MAX_STREAMS);
 		frames[stream_idx].push_back(frame);
+	}
+
+	if (++file.frames_written_so_far >= 1000) {
+		size_t size = ftell(file.fp);
+
+		// Start a new file next time.
+		if (fclose(file.fp) != 0) {
+			perror("fclose");
+			exit(1);
+		}
+		open_frame_files.erase(stream_idx);
+
+		// Write information about all frames in the finished file to SQLite.
+		// (If we crash before getting to do this, we'll be scanning through
+		// the file on next startup, and adding it to the database then.)
+		// NOTE: Since we don't fsync(), we could in theory get broken data
+		// but with the right size, but it would seem unlikely.
+		vector<DB::FrameOnDiskAndStreamIdx> frames_this_file;
+		{
+			lock_guard<mutex> lock(frame_mu);
+			for (size_t stream_idx = 0; stream_idx < MAX_STREAMS; ++stream_idx) {
+				for (const FrameOnDisk &frame : frames[stream_idx]) {
+					if (frame.filename_idx == filename_idx) {
+						frames_this_file.emplace_back(DB::FrameOnDiskAndStreamIdx{ frame, unsigned(stream_idx) });
+					}
+				}
+			}
+		}
+		db->store_frame_file(filename, size, frames_this_file);
 	}
 
 	return frame;
@@ -240,9 +259,25 @@ int main(int argc, char **argv)
 	return ret;
 }
 
-void load_frame_file(const char *filename, unsigned filename_idx)
+void load_frame_file(const char *filename, unsigned filename_idx, DB *db)
 {
-	// TODO: Look up in the SQLite database.
+	struct stat st;
+	if (stat(filename, &st) == -1) {
+		perror(filename);
+		exit(1);
+	}
+
+	vector<DB::FrameOnDiskAndStreamIdx> all_frames = db->load_frame_file(filename, st.st_size, filename_idx);
+	if (!all_frames.empty()) {
+		// We already had this cached in the database, so no need to look in the file.
+		for (const DB::FrameOnDiskAndStreamIdx &frame : all_frames) {
+			if (frame.stream_idx >= 0 && frame.stream_idx < MAX_STREAMS) {
+				frames[frame.stream_idx].push_back(frame.frame);
+				start_pts = max(start_pts, frame.frame.pts);
+			}
+		}
+		return;
+	}
 
 	FILE *fp = fopen(filename, "rb");
 	if (fp == nullptr) {
@@ -310,16 +345,24 @@ void load_frame_file(const char *filename, unsigned filename_idx)
 			frames[hdr.stream_idx()].push_back(frame);
 			start_pts = max(start_pts, hdr.pts());
 		}
+		all_frames.emplace_back(DB::FrameOnDiskAndStreamIdx{ frame, unsigned(hdr.stream_idx()) });
 	}
 
 	if (skipped_bytes > 0) {
 		fprintf(stderr, "WARNING: %s: Skipped %zu garbage bytes at the end.\n",
 			filename, skipped_bytes);
 	}
+
+	size_t size = ftell(fp);
+	fclose(fp);
+
+	db->store_frame_file(filename, size, all_frames);
 }
 
 void load_existing_frames()
 {
+	DB db(global_flags.working_directory + "/futatabi.db");
+
 	string frame_dir = global_flags.working_directory + "/frames";
 	DIR *dir = opendir(frame_dir.c_str());
 	if (dir == nullptr) {
@@ -341,7 +384,7 @@ void load_existing_frames()
 
 		if (de->d_type == DT_REG) {
 			string filename = frame_dir + "/" + de->d_name;
-			load_frame_file(filename.c_str(), frame_filenames.size());
+			load_frame_file(filename.c_str(), frame_filenames.size(), &db);
 			frame_filenames.push_back(filename);
 		}
 	}
@@ -371,6 +414,7 @@ int record_thread_func()
 
 	int64_t last_pts = -1;
 	int64_t pts_offset;
+	DB db(global_flags.working_directory + "/futatabi.db");
 
 	while (!should_quit.load()) {
 		AVPacket pkt;
@@ -398,7 +442,7 @@ int record_thread_func()
 
 		//fprintf(stderr, "Got a frame from camera %d, pts = %ld, size = %d\n",
 		//	pkt.stream_index, pts, pkt.size);
-		FrameOnDisk frame = write_frame(pkt.stream_index, pts, pkt.data, pkt.size);
+		FrameOnDisk frame = write_frame(pkt.stream_index, pts, pkt.data, pkt.size, &db);
 
 		post_to_main_thread([pkt, frame] {
 			if (pkt.stream_index == 0) {
