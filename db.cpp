@@ -25,7 +25,7 @@ StateProto DB::get_state()
 	StateProto state;
 
 	sqlite3_stmt *stmt;
-	int ret = sqlite3_prepare(db, "SELECT state FROM state", -1, &stmt, 0);
+	int ret = sqlite3_prepare_v2(db, "SELECT state FROM state", -1, &stmt, 0);
 	if (ret != SQLITE_OK) {
 		fprintf(stderr, "SELECT prepare: %s\n", sqlite3_errmsg(db));
 		exit(1);
@@ -70,7 +70,7 @@ void DB::store_state(const StateProto &state)
 	}
 
 	sqlite3_stmt *stmt;
-	ret = sqlite3_prepare(db, "INSERT INTO state VALUES (?)", -1, &stmt, 0);
+	ret = sqlite3_prepare_v2(db, "INSERT INTO state VALUES (?)", -1, &stmt, 0);
 	if (ret != SQLITE_OK) {
 		fprintf(stderr, "INSERT prepare: %s\n", sqlite3_errmsg(db));
 		exit(1);
