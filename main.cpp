@@ -390,7 +390,7 @@ void load_existing_frames()
 			break;
 		}
 
-		if (de->d_type == DT_REG) {
+		if (de->d_type == DT_REG || de->d_type == DT_LNK) {
 			string filename = frame_dir + "/" + de->d_name;
 			frame_filenames.push_back(filename);
 			frame_basenames.push_back(de->d_name);
