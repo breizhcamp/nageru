@@ -39,6 +39,7 @@ extern "C" {
 #include <QApplication>
 #include <QGLFormat>
 #include <QSurfaceFormat>
+#include <QProgressDialog>
 #include <movit/init.h>
 #include <movit/util.h>
 
@@ -239,6 +240,8 @@ int main(int argc, char **argv)
 		// TODO: Delete the surface, too.
 	}
 
+	load_existing_frames();
+
 	MainWindow main_window;
 	main_window.show();
 
@@ -247,7 +250,6 @@ int main(int argc, char **argv)
 
 	init_jpeg_vaapi();
 
-	load_existing_frames();
 	thread record_thread(record_thread_func);
 
 	int ret = app.exec();
@@ -361,7 +363,12 @@ void load_frame_file(const char *filename, unsigned filename_idx, DB *db)
 
 void load_existing_frames()
 {
-	DB db(global_flags.working_directory + "/futatabi.db");
+	QProgressDialog progress("Scanning frame directory...", "Abort", 0, 1);
+	progress.setWindowTitle("Futatabi");
+	progress.setWindowModality(Qt::WindowModal);
+	progress.setMinimumDuration(1000);
+	progress.setMaximum(1);
+	progress.setValue(0);
 
 	string frame_dir = global_flags.working_directory + "/frames";
 	DIR *dir = opendir(frame_dir.c_str());
@@ -384,12 +391,31 @@ void load_existing_frames()
 
 		if (de->d_type == DT_REG) {
 			string filename = frame_dir + "/" + de->d_name;
-			load_frame_file(filename.c_str(), frame_filenames.size(), &db);
 			frame_filenames.push_back(filename);
 		}
-	}
 
+		if (progress.wasCanceled()) {
+			exit(1);
+		}
+	}
 	closedir(dir);
+
+	progress.setMaximum(frame_filenames.size() + 2);
+	progress.setValue(1);
+
+	progress.setLabelText("Opening database...");
+	DB db(global_flags.working_directory + "/futatabi.db");
+
+	progress.setLabelText("Reading frame files...");
+	progress.setValue(2);
+
+	for (size_t i = 0; i < frame_filenames.size(); ++i) {
+		load_frame_file(frame_filenames[i].c_str(), i, &db);
+		progress.setValue(i + 3);
+		if (progress.wasCanceled()) {
+			exit(1);
+		}
+	}
 
 	if (start_pts == -1) {
 		start_pts = 0;
