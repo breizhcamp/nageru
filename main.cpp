@@ -261,7 +261,7 @@ int main(int argc, char **argv)
 	return ret;
 }
 
-void load_frame_file(const char *filename, unsigned filename_idx, DB *db)
+void load_frame_file(const char *filename, const string &basename, unsigned filename_idx, DB *db)
 {
 	struct stat st;
 	if (stat(filename, &st) == -1) {
@@ -269,7 +269,7 @@ void load_frame_file(const char *filename, unsigned filename_idx, DB *db)
 		exit(1);
 	}
 
-	vector<DB::FrameOnDiskAndStreamIdx> all_frames = db->load_frame_file(filename, st.st_size, filename_idx);
+	vector<DB::FrameOnDiskAndStreamIdx> all_frames = db->load_frame_file(basename, st.st_size, filename_idx);
 	if (!all_frames.empty()) {
 		// We already had this cached in the database, so no need to look in the file.
 		for (const DB::FrameOnDiskAndStreamIdx &frame : all_frames) {
@@ -358,7 +358,7 @@ void load_frame_file(const char *filename, unsigned filename_idx, DB *db)
 	size_t size = ftell(fp);
 	fclose(fp);
 
-	db->store_frame_file(filename, size, all_frames);
+	db->store_frame_file(basename, size, all_frames);
 }
 
 void load_existing_frames()
@@ -378,6 +378,7 @@ void load_existing_frames()
 		return;
 	}
 
+	vector<string> frame_basenames;
 	for ( ;; ) {
 		errno = 0;
 		dirent *de = readdir(dir);
@@ -392,6 +393,7 @@ void load_existing_frames()
 		if (de->d_type == DT_REG) {
 			string filename = frame_dir + "/" + de->d_name;
 			frame_filenames.push_back(filename);
+			frame_basenames.push_back(de->d_name);
 		}
 
 		if (progress.wasCanceled()) {
@@ -410,7 +412,7 @@ void load_existing_frames()
 	progress.setValue(2);
 
 	for (size_t i = 0; i < frame_filenames.size(); ++i) {
-		load_frame_file(frame_filenames[i].c_str(), i, &db);
+		load_frame_file(frame_filenames[i].c_str(), frame_basenames[i], i, &db);
 		progress.setValue(i + 3);
 		if (progress.wasCanceled()) {
 			exit(1);
