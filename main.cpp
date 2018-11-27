@@ -166,7 +166,12 @@ FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t
 				}
 			}
 		}
-		db->store_frame_file(filename, size, frames_this_file);
+
+		const char *basename = filename.c_str();
+		while (strchr(basename, '/') != nullptr) {
+			basename = strchr(basename, '/');
+		}
+		db->store_frame_file(basename, size, frames_this_file);
 	}
 
 	return frame;
