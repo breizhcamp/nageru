@@ -435,6 +435,8 @@ void load_existing_frames()
 		sort(frames[stream_idx].begin(), frames[stream_idx].end(),
 			[](const auto &a, const auto &b) { return a.pts < b.pts; });
 	}
+
+	db.clean_unused_frame_files(frame_basenames);
 }
 
 int record_thread_func()

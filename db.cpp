@@ -249,3 +249,76 @@ void DB::store_frame_file(const string &filename, size_t size, const vector<Fram
 		exit(1);
 	}
 }
+
+void DB::clean_unused_frame_files(const vector<string> &used_filenames)
+{
+	int ret = sqlite3_exec(db, "BEGIN", nullptr, nullptr, nullptr);
+	if (ret != SQLITE_OK) {
+		fprintf(stderr, "BEGIN: %s\n", sqlite3_errmsg(db));
+		exit(1);
+	}
+
+	ret = sqlite3_exec(db, R"(
+		CREATE TEMPORARY TABLE used_filenames ( filename VARCHAR NOT NULL PRIMARY KEY )
+	)", nullptr, nullptr, nullptr);
+
+	if (ret != SQLITE_OK) {
+		fprintf(stderr, "CREATE TEMPORARY TABLE: %s\n", sqlite3_errmsg(db));
+		exit(1);
+	}
+
+	// Insert the new rows.
+	sqlite3_stmt *stmt;
+	ret = sqlite3_prepare_v2(db, "INSERT INTO used_filenames (filename) VALUES (?)", -1, &stmt, 0);
+	if (ret != SQLITE_OK) {
+		fprintf(stderr, "INSERT prepare: %s\n", sqlite3_errmsg(db));
+		exit(1);
+	}
+
+	for (const string &filename : used_filenames) {
+		sqlite3_bind_text(stmt, 1, filename.data(), filename.size(), SQLITE_STATIC);
+
+		ret = sqlite3_step(stmt);
+		if (ret == SQLITE_ROW) {
+			fprintf(stderr, "INSERT step: %s\n", sqlite3_errmsg(db));
+			exit(1);
+		}
+
+		ret = sqlite3_reset(stmt);
+		if (ret == SQLITE_ROW) {
+			fprintf(stderr, "INSERT reset: %s\n", sqlite3_errmsg(db));
+			exit(1);
+		}
+	}
+
+	ret = sqlite3_finalize(stmt);
+	if (ret != SQLITE_OK) {
+		fprintf(stderr, "INSERT finalize: %s\n", sqlite3_errmsg(db));
+		exit(1);
+	}
+
+	ret = sqlite3_exec(db, R"(
+		DELETE FROM filev2 WHERE filename NOT IN ( SELECT filename FROM used_filenames )
+	)", nullptr, nullptr, nullptr);
+
+	if (ret != SQLITE_OK) {
+		fprintf(stderr, "DELETE: %s\n", sqlite3_errmsg(db));
+		exit(1);
+	}
+
+	ret = sqlite3_exec(db, R"(
+		DROP TABLE used_filenames
+	)", nullptr, nullptr, nullptr);
+
+	if (ret != SQLITE_OK) {
+		fprintf(stderr, "DROP TABLE: %s\n", sqlite3_errmsg(db));
+		exit(1);
+	}
+
+	// Commit.
+	ret = sqlite3_exec(db, "COMMIT", nullptr, nullptr, nullptr);
+	if (ret != SQLITE_OK) {
+		fprintf(stderr, "COMMIT: %s\n", sqlite3_errmsg(db));
+		exit(1);
+	}
+}
