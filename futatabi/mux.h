@@ -18,7 +18,7 @@ extern "C" {
 #include <thread>
 #include <vector>
 
-#include "timebase.h"
+#include "shared/timebase.h"
 
 struct MuxMetrics {
 	// “written” will usually be equal video + audio + mux overhead,

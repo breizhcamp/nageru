@@ -17,7 +17,7 @@
 #include "metrics.h"
 #include "mux.h"
 #include "print_latency.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "x264_dynamic.h"
 #include "x264_speed_control.h"
 

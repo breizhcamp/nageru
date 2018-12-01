@@ -32,7 +32,7 @@ extern "C" {
 #include "player.h"
 #include "shared/post_to_main_thread.h"
 #include "ref_counted_gl_sync.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "ui_mainwindow.h"
 #include "vaapi_jpeg_decoder.h"
 

@@ -33,7 +33,7 @@ extern "C" {
 #include "flags.h"
 #include "image_input.h"
 #include "ref_counted_frame.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 
 #define FRAME_SIZE (8 << 20)  // 8 MB.
 

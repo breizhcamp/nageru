@@ -8,7 +8,7 @@
 #include "httpd.h"
 #include "jpeg_frame_view.h"
 #include "mux.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "video_stream.h"
 
 #include <algorithm>

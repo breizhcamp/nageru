@@ -54,7 +54,7 @@ extern "C" {
 #include "print_latency.h"
 #include "quicksync_encoder_impl.h"
 #include "ref_counted_frame.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "x264_encoder.h"
 
 using namespace movit;

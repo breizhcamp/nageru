@@ -22,7 +22,7 @@ extern "C" {
 }
 
 #include "defs.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 
 using namespace std;
 

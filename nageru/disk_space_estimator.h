@@ -16,7 +16,7 @@
 #include <functional>
 #include <string>
 
-#include "timebase.h"
+#include "shared/timebase.h"
 
 class DiskSpaceEstimator
 {
@@ -30,7 +30,7 @@ public:
 	// responsible for writing to the stream on disk.
 	//
 	// If the filename changed since last time, the estimation is reset.
-	// <pts> is taken to be in TIMEBASE units (see timebase.h).
+	// <pts> is taken to be in TIMEBASE units (see shared/timebase.h).
 	void report_write(const std::string &filename, uint64_t pts);
 
 private:

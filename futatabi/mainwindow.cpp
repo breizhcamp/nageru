@@ -6,7 +6,7 @@
 #include "frame_on_disk.h"
 #include "player.h"
 #include "shared/post_to_main_thread.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "ui_mainwindow.h"
 
 #include <QMouseEvent>

@@ -18,7 +18,7 @@ extern "C" {
 #include "httpd.h"
 #include "mux.h"
 #include "quicksync_encoder.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "x264_encoder.h"
 
 class RefCountedFrame;

@@ -17,7 +17,7 @@
 #include "defs.h"
 #include "input_mapping.h"
 #include "resampling_queue.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 
 #define NUM_BENCHMARK_CARDS 4
 #define NUM_WARMUP_FRAMES 100

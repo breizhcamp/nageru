@@ -22,7 +22,7 @@
 #include "flags.h"
 #include "metrics.h"
 #include "state.pb.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 
 using namespace bmusb;
 using namespace std;

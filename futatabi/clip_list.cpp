@@ -1,7 +1,7 @@
 #include "clip_list.h"
 
 #include "mainwindow.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "ui_mainwindow.h"
 
 #include <math.h>

@@ -35,7 +35,7 @@
 #include "ref_counted_frame.h"
 #include "ref_counted_gl_sync.h"
 #include "theme.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "video_encoder.h"
 #include "ycbcr_interpretation.h"
 

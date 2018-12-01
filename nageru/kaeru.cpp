@@ -8,7 +8,7 @@
 #include "mixer.h"
 #include "mux.h"
 #include "quittable_sleeper.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 #include "x264_encoder.h"
 
 #include <assert.h>

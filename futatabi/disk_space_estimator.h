@@ -9,7 +9,7 @@
 //
 // The bitrate is measured over a simple 30-second sliding window.
 
-#include "timebase.h"
+#include "shared/timebase.h"
 
 #include <deque>
 #include <functional>
@@ -25,7 +25,7 @@ public:
 	// Report that a video frame with the given pts and size has just been
 	// written (possibly appended) to the given file.
 	//
-	// <pts> is taken to be in TIMEBASE units (see timebase.h).
+	// <pts> is taken to be in TIMEBASE units (see shared/timebase.h).
 	void report_write(const std::string &filename, size_t bytes, uint64_t pts);
 
 private:

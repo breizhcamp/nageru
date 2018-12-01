@@ -9,7 +9,7 @@
 
 #include "alsa_pool.h"
 #include "bmusb/bmusb.h"
-#include "timebase.h"
+#include "shared/timebase.h"
 
 using namespace std;
 using namespace std::chrono;
