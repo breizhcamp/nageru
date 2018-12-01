@@ -61,13 +61,6 @@ if cxx.has_argument('-Wno-deprecated-declarations')
 	add_project_arguments('-Wno-deprecated-declarations', language: 'cpp')
 endif
 
-# Add the right MOVIT_SHADER_DIR definition.
-r = run_command('pkg-config', '--variable=shaderdir', 'movit')
-if r.returncode() != 0
-	error('Movit pkg-config installation is broken.')
-endif
-add_project_arguments('-DMOVIT_SHADER_DIR="' + r.stdout().strip() + '"', language: 'cpp')
-
 # CEF.
 exe_dir = join_paths(get_option('prefix'), 'lib/nageru')
 cef_dir = get_option('cef_dir')
