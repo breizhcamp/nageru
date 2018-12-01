@@ -43,7 +43,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 }
 
-#include "ref_counted_gl_sync.h"
+#include "shared/ref_counted_gl_sync.h"
 
 class DiskSpaceEstimator;
 class Mux;

@@ -10,7 +10,7 @@ extern "C" {
 
 #include "frame_on_disk.h"
 #include "jpeg_frame_view.h"
-#include "ref_counted_gl_sync.h"
+#include "shared/ref_counted_gl_sync.h"
 #include "queue_spot_holder.h"
 
 #include <chrono>

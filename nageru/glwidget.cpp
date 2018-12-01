@@ -25,7 +25,7 @@
 #include "flags.h"
 #include "mainwindow.h"
 #include "mixer.h"
-#include "ref_counted_gl_sync.h"
+#include "shared/ref_counted_gl_sync.h"
 
 class QMouseEvent;
 

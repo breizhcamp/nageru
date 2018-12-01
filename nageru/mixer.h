@@ -33,7 +33,7 @@
 #include "libusb.h"
 #include "pbo_frame_allocator.h"
 #include "ref_counted_frame.h"
-#include "ref_counted_gl_sync.h"
+#include "shared/ref_counted_gl_sync.h"
 #include "theme.h"
 #include "shared/timebase.h"
 #include "video_encoder.h"

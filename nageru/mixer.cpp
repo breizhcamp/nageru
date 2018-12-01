@@ -47,7 +47,7 @@
 #include "input_mapping.h"
 #include "metrics.h"
 #include "pbo_frame_allocator.h"
-#include "ref_counted_gl_sync.h"
+#include "shared/ref_counted_gl_sync.h"
 #include "resampling_queue.h"
 #include "shared/timebase.h"
 #include "timecode_renderer.h"

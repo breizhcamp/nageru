@@ -21,7 +21,7 @@
 #include "print_latency.h"
 #include "quittable_sleeper.h"
 #include "ref_counted_frame.h"
-#include "ref_counted_gl_sync.h"
+#include "shared/ref_counted_gl_sync.h"
 
 namespace movit {
 
