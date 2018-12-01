@@ -20,7 +20,7 @@
 
 #include "midi_mapper.h"
 #include "midi_mapping.pb.h"
-#include "post_to_main_thread.h"
+#include "shared/post_to_main_thread.h"
 #include "ui_midi_mapping.h"
 
 class QObject;

@@ -22,7 +22,7 @@
 
 #include "alsa_pool.h"
 #include "defs.h"
-#include "post_to_main_thread.h"
+#include "shared/post_to_main_thread.h"
 #include "ui_input_mapping.h"
 
 using namespace std;

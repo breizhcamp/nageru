@@ -30,7 +30,7 @@ extern "C" {
 #include <utility>
 #include <vector>
 
-#include "ffmpeg_raii.h"
+#include "shared/ffmpeg_raii.h"
 #include "ffmpeg_util.h"
 #include "flags.h"
 

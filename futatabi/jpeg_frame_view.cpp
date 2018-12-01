@@ -2,7 +2,7 @@
 
 #include "defs.h"
 #include "jpeg_destroyer.h"
-#include "post_to_main_thread.h"
+#include "shared/post_to_main_thread.h"
 #include "video_stream.h"
 #include "ycbcr_converter.h"
 

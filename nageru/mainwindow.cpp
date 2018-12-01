@@ -61,7 +61,7 @@
 #include "midi_mapping_dialog.h"
 #include "mixer.h"
 #include "nonlinear_fader.h"
-#include "post_to_main_thread.h"
+#include "shared/post_to_main_thread.h"
 #include "ui_audio_expanded_view.h"
 #include "ui_audio_miniview.h"
 #include "ui_display.h"

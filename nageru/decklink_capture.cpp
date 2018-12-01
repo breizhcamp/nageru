@@ -21,7 +21,7 @@
 #include "bmusb/bmusb.h"
 #include "decklink_util.h"
 #include "flags.h"
-#include "memcpy_interleaved.h"
+#include "shared/memcpy_interleaved.h"
 #include "v210_converter.h"
 
 #define FRAME_SIZE (8 << 20)  // 8 MB.

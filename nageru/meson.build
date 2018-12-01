@@ -2,15 +2,6 @@ qt5 = import('qt5')
 protoc = find_program('protoc')
 cxx = meson.get_compiler('cpp')
 
-# Use lld if we can; it links a lot faster than ld.bfd or gold.
-nageru_link_args = []
-code = '''#include <stdio.h>
-int main() { printf("Hello, world!\n"); return 0; }
-'''
-if cxx.links(code, args: '-fuse-ld=lld', name: 'check for LLD')
-	nageru_link_args += '-fuse-ld=lld'
-endif
-
 embedded_bmusb = get_option('embedded_bmusb')
 
 alsadep = dependency('alsa')
@@ -38,7 +29,7 @@ x264dep = dependency('x264')
 zitaresamplerdep = cxx.find_library('zita-resampler')
 
 srcs = []
-nageru_deps = [qt5deps, libjpegdep, movitdep, libmicrohttpddep, protobufdep,
+nageru_deps = [shareddep, qt5deps, libjpegdep, movitdep, libmicrohttpddep, protobufdep,
 	vax11dep, vadrmdep, x11dep, libavformatdep, libavresampledep, libavcodecdep, libavutildep,
 	libswscaledep, libusbdep, luajitdep, dldep, x264dep, alsadep, zitaresamplerdep,
 	qcustomplotdep, threaddep]
@@ -49,17 +40,6 @@ nageru_install_rpath = ''
 
 kaeru_link_with = []
 kaeru_extra_deps = []
-
-# DeckLink has these issues, and we include it from various places.
-if cxx.has_argument('-Wno-non-virtual-dtor')
-	add_project_arguments('-Wno-non-virtual-dtor', language: 'cpp')
-endif
-
-# FFmpeg has a lot of deprecated APIs whose replacements are not available
-# in Debian stable, so we suppress these warnings.
-if cxx.has_argument('-Wno-deprecated-declarations')
-	add_project_arguments('-Wno-deprecated-declarations', language: 'cpp')
-endif
 
 # CEF.
 exe_dir = join_paths(get_option('prefix'), 'lib/nageru')
@@ -186,7 +166,7 @@ srcs += ['chroma_subsampler.cpp', 'v210_converter.cpp', 'mixer.cpp', 'pbo_frame_
 
 # Streaming and encoding objects (largely the set that is shared between Nageru and Kaeru).
 stream_srcs = ['quicksync_encoder.cpp', 'x264_encoder.cpp', 'x264_dynamic.cpp', 'x264_speed_control.cpp', 'video_encoder.cpp',
-	'metacube2.cpp', 'mux.cpp', 'audio_encoder.cpp', 'ffmpeg_raii.cpp', 'ffmpeg_util.cpp', 'httpd.cpp', 'ffmpeg_capture.cpp',
+	'mux.cpp', 'audio_encoder.cpp', 'ffmpeg_util.cpp', 'httpd.cpp', 'ffmpeg_capture.cpp',
 	'print_latency.cpp', 'basic_stats.cpp', 'ref_counted_frame.cpp']
 stream = static_library('stream', stream_srcs, dependencies: nageru_deps, include_directories: nageru_include_dirs)
 nageru_link_with += stream
@@ -217,7 +197,6 @@ executable('nageru', 'main.cpp',
 	dependencies: nageru_deps,
 	include_directories: nageru_include_dirs,
 	link_with: nageru_link_with,
-	link_args: nageru_link_args,
 	build_rpath: nageru_build_rpath,
 	install_rpath: nageru_install_rpath,
 	install: true,
@@ -230,11 +209,10 @@ executable('kaeru', 'kaeru.cpp',
 	dependencies: [nageru_deps, kaeru_extra_deps],
 	include_directories: nageru_include_dirs,
 	link_with: [stream, aux, kaeru_link_with],
-	link_args: nageru_link_args,
 	install: true)
 
 # Audio mixer microbenchmark.
-executable('benchmark_audio_mixer', 'benchmark_audio_mixer.cpp', dependencies: nageru_deps, include_directories: nageru_include_dirs, link_args: nageru_link_args, link_with: [audio, aux])
+executable('benchmark_audio_mixer', 'benchmark_audio_mixer.cpp', dependencies: nageru_deps, include_directories: nageru_include_dirs, link_with: [audio, aux])
 
 # These are needed for a default run.
 data_files = ['theme.lua', 'simple.lua', 'bg.jpeg', 'akai_midimix.midimapping']

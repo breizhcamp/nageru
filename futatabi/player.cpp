@@ -3,7 +3,7 @@
 #include "clip_list.h"
 #include "context.h"
 #include "defs.h"
-#include "ffmpeg_raii.h"
+#include "shared/ffmpeg_raii.h"
 #include "frame_on_disk.h"
 #include "httpd.h"
 #include "jpeg_frame_view.h"

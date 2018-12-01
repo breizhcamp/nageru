@@ -2,7 +2,7 @@
 
 #include "jpeg_destroyer.h"
 #include "jpeg_frame.h"
-#include "memcpy_interleaved.h"
+#include "shared/memcpy_interleaved.h"
 
 #include <X11/Xlib.h>
 #include <assert.h>

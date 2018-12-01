@@ -5,7 +5,7 @@
 #include "flags.h"
 #include "frame_on_disk.h"
 #include "player.h"
-#include "post_to_main_thread.h"
+#include "shared/post_to_main_thread.h"
 #include "timebase.h"
 #include "ui_mainwindow.h"
 

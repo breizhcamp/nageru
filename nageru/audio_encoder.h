@@ -15,7 +15,7 @@ extern "C" {
 #include <libavutil/frame.h>
 }
 
-#include "ffmpeg_raii.h"
+#include "shared/ffmpeg_raii.h"
 
 class Mux;
 

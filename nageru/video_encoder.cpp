@@ -13,7 +13,7 @@ extern "C" {
 
 #include "audio_encoder.h"
 #include "defs.h"
-#include "ffmpeg_raii.h"
+#include "shared/ffmpeg_raii.h"
 #include "flags.h"
 #include "httpd.h"
 #include "mux.h"

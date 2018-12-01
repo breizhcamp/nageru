@@ -48,7 +48,7 @@ extern "C" {
 #include "context.h"
 #include "defs.h"
 #include "disk_space_estimator.h"
-#include "ffmpeg_raii.h"
+#include "shared/ffmpeg_raii.h"
 #include "flags.h"
 #include "mux.h"
 #include "print_latency.h"

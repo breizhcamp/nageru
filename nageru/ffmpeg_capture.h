@@ -38,7 +38,7 @@ extern "C" {
 }
 
 #include "bmusb/bmusb.h"
-#include "ffmpeg_raii.h"
+#include "shared/ffmpeg_raii.h"
 #include "ref_counted_frame.h"
 #include "quittable_sleeper.h"
 
