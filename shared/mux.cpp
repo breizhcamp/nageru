@@ -1,4 +1,4 @@
-#include "mux.h"
+#include "shared/mux.h"
 
 #include <algorithm>
 #include <assert.h>
@@ -21,7 +21,8 @@ extern "C" {
 #include <libavutil/rational.h>
 }
 
-#include "defs.h"
+#include "shared/metrics.h"
+#include "shared/mux_opts.h"
 #include "shared/timebase.h"
 
 using namespace std;
@@ -46,7 +47,7 @@ struct PacketBefore {
 	const AVFormatContext * const ctx;
 };
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback, WriteStrategy write_strategy, const vector<MuxMetrics *> &metrics)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, WithAudio with_audio, int time_base, function<void(int64_t)> write_callback, WriteStrategy write_strategy, const vector<MuxMetrics *> &metrics)
 	: write_strategy(write_strategy), avctx(avctx), write_callback(write_callback), metrics(metrics)
 {
 	avstream_video = avformat_new_stream(avctx, nullptr);
@@ -77,7 +78,7 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 	avstream_video->codecpar->color_primaries = AVCOL_PRI_BT709;  // RGB colorspace (inout_format.color_space).
 	avstream_video->codecpar->color_trc = AVCOL_TRC_IEC61966_2_1;  // Gamma curve (inout_format.gamma_curve).
 	// YUV colorspace (output_ycbcr_format.luma_coefficients).
-	avstream_video->codecpar->color_space = AVCOL_SPC_BT709;
+	avstream_video->codecpar->color_space = color_space;
 	avstream_video->codecpar->color_range = AVCOL_RANGE_MPEG;  // Full vs. limited range (output_ycbcr_format.full_range).
 	avstream_video->codecpar->chroma_location = AVCHROMA_LOC_LEFT;  // Chroma sample location. See chroma_offset_0[] in Mixer::subsample_chroma().
 	avstream_video->codecpar->field_order = AV_FIELD_PROGRESSIVE;
@@ -88,19 +89,21 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 		memcpy(avstream_video->codecpar->extradata, video_extradata.data(), video_extradata.size());
 	}
 
-	avstream_audio = nullptr;
-#if 0
-	avstream_audio = avformat_new_stream(avctx, nullptr);
-	if (avstream_audio == nullptr) {
-		fprintf(stderr, "avformat_new_stream() failed\n");
-		exit(1);
+	if (with_audio == WITH_AUDIO) {
+		avstream_audio = avformat_new_stream(avctx, nullptr);
+		if (avstream_audio == nullptr) {
+			fprintf(stderr, "avformat_new_stream() failed\n");
+			exit(1);
+		}
+		avstream_audio->time_base = AVRational{1, time_base};
+		if (avcodec_parameters_copy(avstream_audio->codecpar, audio_codecpar) < 0) {
+			fprintf(stderr, "avcodec_parameters_copy() failed\n");
+			exit(1);
+		}
+	} else {
+		assert(with_audio == WITHOUT_AUDIO);
+		avstream_audio = nullptr;
 	}
-	avstream_audio->time_base = AVRational{1, time_base};
-	if (avcodec_parameters_copy(avstream_audio->codecpar, audio_codecpar) < 0) {
-		fprintf(stderr, "avcodec_parameters_copy() failed\n");
-		exit(1);
-	}
-#endif
 
 	AVDictionary *options = NULL;
 	vector<pair<string, string>> opts = MUX_OPTS;
@@ -265,5 +268,13 @@ void Mux::thread_func()
 
 void MuxMetrics::init(const vector<pair<string, string>> &labels)
 {
-	// TODO: See if we want to reintroduce these.
+	vector<pair<string, string>> labels_video = labels;
+	labels_video.emplace_back("stream", "video");
+	global_metrics.add("mux_stream_bytes", labels_video, &metric_video_bytes);
+
+	vector<pair<string, string>> labels_audio = labels;
+	labels_audio.emplace_back("stream", "audio");
+	global_metrics.add("mux_stream_bytes", labels_audio, &metric_audio_bytes);
+
+	global_metrics.add("mux_written_bytes", labels, &metric_written_bytes);
 }

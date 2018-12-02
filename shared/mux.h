@@ -37,12 +37,25 @@ struct MuxMetrics {
 	}
 };
 
+inline AVColorSpace get_color_space(bool ycbcr_rec709_coefficients)
+{
+	if (ycbcr_rec709_coefficients) {
+		return AVCOL_SPC_BT709;
+	} else {
+		return AVCOL_SPC_SMPTE170M;
+	}
+}
+
 class Mux {
 public:
 	enum Codec {
 		CODEC_H264,
 		CODEC_NV12,  // Uncompressed 4:2:0.
 		CODEC_MJPEG
+	};
+	enum WithAudio {
+		WITH_AUDIO,
+		WITHOUT_AUDIO
 	};
 	enum WriteStrategy {
 		// add_packet() will write the packet immediately, unless plugged.
@@ -61,7 +74,7 @@ public:
 	// the just-written frame. (write_callback can be nullptr.)
 	// Does not take ownership of <metrics>; elements in there, if any,
 	// will be added to.
-	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, int time_base, std::function<void(int64_t)> write_callback, WriteStrategy write_strategy, const std::vector<MuxMetrics *> &metrics);
+	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, WithAudio with_audio, int time_base, std::function<void(int64_t)> write_callback, WriteStrategy write_strategy, const std::vector<MuxMetrics *> &metrics);
 	~Mux();
 	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational timebase = { 1, TIMEBASE }, int stream_index_override = -1);
 

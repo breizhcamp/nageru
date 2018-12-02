@@ -6,7 +6,7 @@
 #include "flags.h"
 #include "ffmpeg_capture.h"
 #include "mixer.h"
-#include "mux.h"
+#include "shared/mux.h"
 #include "quittable_sleeper.h"
 #include "shared/timebase.h"
 #include "x264_encoder.h"
@@ -68,7 +68,8 @@ unique_ptr<Mux> create_mux(HTTPD *httpd, AVOutputFormat *oformat, X264Encoder *x
 	string video_extradata = x264_encoder->get_global_headers();
 
 	unique_ptr<Mux> mux;
-	mux.reset(new Mux(avctx, global_flags.width, global_flags.height, Mux::CODEC_H264, video_extradata, audio_encoder->get_codec_parameters().get(), COARSE_TIMEBASE,
+	mux.reset(new Mux(avctx, global_flags.width, global_flags.height, Mux::CODEC_H264, video_extradata, audio_encoder->get_codec_parameters().get(),
+		get_color_space(global_flags.ycbcr_rec709_coefficients), Mux::WITH_AUDIO, COARSE_TIMEBASE,
 	        /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, { &stream_mux_metrics }));
 	stream_mux_metrics.init({{ "destination", "http" }});
 	return mux;

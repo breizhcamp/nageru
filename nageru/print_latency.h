@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "ref_counted_frame.h"
-#include "metrics.h"
+#include "shared/metrics.h"
 
 // Since every output frame is based on multiple input frames, we need
 // more than one start timestamp; one for each input.

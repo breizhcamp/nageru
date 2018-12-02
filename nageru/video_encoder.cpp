@@ -16,7 +16,7 @@ extern "C" {
 #include "shared/ffmpeg_raii.h"
 #include "flags.h"
 #include "httpd.h"
-#include "mux.h"
+#include "shared/mux.h"
 #include "quicksync_encoder.h"
 #include "shared/timebase.h"
 #include "x264_encoder.h"
@@ -193,7 +193,9 @@ void VideoEncoder::open_output_stream()
 		video_extradata = x264_encoder->get_global_headers();
 	}
 
-	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_codec_parameters().get(), COARSE_TIMEBASE,
+	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_codec_parameters().get(),
+		get_color_space(global_flags.ycbcr_rec709_coefficients),
+		Mux::WITH_AUDIO, COARSE_TIMEBASE,
 		/*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, { &stream_mux_metrics }));
 	stream_mux_metrics.init({{ "destination", "http" }});
 }

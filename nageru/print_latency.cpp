@@ -1,7 +1,7 @@
 #include "print_latency.h"
 
 #include "flags.h"
-#include "metrics.h"
+#include "shared/metrics.h"
 #include "mixer.h"
 
 #include <stdio.h>

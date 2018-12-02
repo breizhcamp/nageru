@@ -149,7 +149,7 @@ srcs += ['glwidget.cpp', 'mainwindow.cpp', 'vumeter.cpp', 'lrameter.cpp', 'compr
 	'nonlinear_fader.cpp', 'context_menus.cpp', 'vu_common.cpp', 'piecewise_interpolator.cpp', 'midi_mapper.cpp']
 
 # Auxiliary objects used for nearly everything.
-aux_srcs = ['metrics.cpp', 'flags.cpp']
+aux_srcs = ['flags.cpp']
 aux = static_library('aux', aux_srcs, dependencies: nageru_deps, include_directories: nageru_include_dirs)
 nageru_link_with += aux
 
@@ -166,7 +166,7 @@ srcs += ['chroma_subsampler.cpp', 'v210_converter.cpp', 'mixer.cpp', 'pbo_frame_
 
 # Streaming and encoding objects (largely the set that is shared between Nageru and Kaeru).
 stream_srcs = ['quicksync_encoder.cpp', 'x264_encoder.cpp', 'x264_dynamic.cpp', 'x264_speed_control.cpp', 'video_encoder.cpp',
-	'mux.cpp', 'audio_encoder.cpp', 'ffmpeg_util.cpp', 'httpd.cpp', 'ffmpeg_capture.cpp',
+	'audio_encoder.cpp', 'ffmpeg_util.cpp', 'httpd.cpp', 'ffmpeg_capture.cpp',
 	'print_latency.cpp', 'basic_stats.cpp', 'ref_counted_frame.cpp']
 stream = static_library('stream', stream_srcs, dependencies: nageru_deps, include_directories: nageru_include_dirs)
 nageru_link_with += stream

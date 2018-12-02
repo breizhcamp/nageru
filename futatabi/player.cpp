@@ -7,7 +7,7 @@
 #include "frame_on_disk.h"
 #include "httpd.h"
 #include "jpeg_frame_view.h"
-#include "mux.h"
+#include "shared/mux.h"
 #include "shared/timebase.h"
 #include "video_stream.h"
 

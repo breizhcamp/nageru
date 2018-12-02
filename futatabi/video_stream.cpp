@@ -12,7 +12,7 @@ extern "C" {
 #include "httpd.h"
 #include "jpeg_frame_view.h"
 #include "movit/util.h"
-#include "mux.h"
+#include "shared/mux.h"
 #include "player.h"
 #include "util.h"
 #include "ycbcr_converter.h"
@@ -248,8 +248,9 @@ void VideoStream::start()
 	string video_extradata;
 
 	constexpr int width = 1280, height = 720;  // Doesn't matter for MJPEG.
-	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, /*audio_codec_parameters=*/nullptr, COARSE_TIMEBASE,
-		/*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
+	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, /*audio_codec_parameters=*/nullptr,
+		AVCOL_SPC_BT709, Mux::WITHOUT_AUDIO,
+		COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
 
 
 	encode_thread = thread(&VideoStream::encode_thread_func, this);

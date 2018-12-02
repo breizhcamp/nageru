@@ -14,8 +14,8 @@
 
 #include "defs.h"
 #include "flags.h"
-#include "metrics.h"
-#include "mux.h"
+#include "shared/metrics.h"
+#include "shared/mux.h"
 #include "print_latency.h"
 #include "shared/timebase.h"
 #include "x264_dynamic.h"

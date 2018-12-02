@@ -12,7 +12,7 @@
 #include "decklink_output.h"
 #include "decklink_util.h"
 #include "flags.h"
-#include "metrics.h"
+#include "shared/metrics.h"
 #include "print_latency.h"
 #include "shared/timebase.h"
 #include "v210_converter.h"

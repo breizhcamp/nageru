@@ -11,7 +11,7 @@
 #include <type_traits>
 
 #include "flags.h"
-#include "metrics.h"
+#include "shared/metrics.h"
 
 using namespace std;
 using namespace std::chrono;

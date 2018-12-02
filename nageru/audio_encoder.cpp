@@ -22,7 +22,7 @@ extern "C" {
 #include <vector>
 
 #include "defs.h"
-#include "mux.h"
+#include "shared/mux.h"
 #include "shared/timebase.h"
 
 using namespace std;

@@ -1,5 +1,5 @@
 #include "basic_stats.h"
-#include "metrics.h"
+#include "shared/metrics.h"
 
 #include <assert.h>
 #include <sys/resource.h>

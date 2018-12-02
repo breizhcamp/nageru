@@ -20,7 +20,7 @@
 
 #include "db.h"
 #include "flags.h"
-#include "metrics.h"
+#include "shared/metrics.h"
 #include "state.pb.h"
 #include "shared/timebase.h"
 

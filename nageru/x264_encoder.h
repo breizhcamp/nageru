@@ -33,7 +33,7 @@ extern "C" {
 #include <movit/image_format.h>
 
 #include "defs.h"
-#include "metrics.h"
+#include "shared/metrics.h"
 #include "print_latency.h"
 #include "x264_dynamic.h"
 

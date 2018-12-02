@@ -20,7 +20,7 @@ extern "C" {
 #include <libavformat/avio.h>
 }
 
-#include "mux.h"
+#include "shared/mux.h"
 #include "shared/ref_counted_gl_sync.h"
 
 class AudioEncoder;

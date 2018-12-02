@@ -16,7 +16,7 @@ extern "C" {
 
 #include "defs.h"
 #include "shared/metacube2.h"
-#include "metrics.h"
+#include "shared/metrics.h"
 
 struct MHD_Connection;
 struct MHD_Response;

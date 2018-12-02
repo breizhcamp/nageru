@@ -5,7 +5,7 @@
 #include <sys/statfs.h>
 #include <memory>
 
-#include "metrics.h"
+#include "shared/metrics.h"
 #include "shared/timebase.h"
 
 DiskSpaceEstimator::DiskSpaceEstimator(DiskSpaceEstimator::callback_t callback)

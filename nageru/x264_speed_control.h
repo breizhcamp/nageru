@@ -55,7 +55,7 @@ extern "C" {
 #include <x264.h>
 }
 
-#include "metrics.h"
+#include "shared/metrics.h"
 #include "x264_dynamic.h"
 
 class X264SpeedControl {
