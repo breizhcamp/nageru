@@ -172,7 +172,7 @@ stream = static_library('stream', stream_srcs, dependencies: nageru_deps, includ
 nageru_link_with += stream
 
 # DeckLink.
-srcs += ['decklink_capture.cpp', 'decklink_util.cpp', 'decklink_output.cpp', 'memcpy_interleaved.cpp',
+srcs += ['decklink_capture.cpp', 'decklink_util.cpp', 'decklink_output.cpp',
 	'decklink/DeckLinkAPIDispatch.cpp']
 decklink_dir = include_directories('decklink')
 nageru_include_dirs += decklink_dir
