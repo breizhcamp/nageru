@@ -1,7 +1,7 @@
 #include "player.h"
 
 #include "clip_list.h"
-#include "context.h"
+#include "shared/context.h"
 #include "defs.h"
 #include "shared/ffmpeg_raii.h"
 #include "frame_on_disk.h"

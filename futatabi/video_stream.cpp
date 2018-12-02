@@ -6,7 +6,7 @@ extern "C" {
 }
 
 #include "chroma_subsampler.h"
-#include "context.h"
+#include "shared/context.h"
 #include "flags.h"
 #include "flow.h"
 #include "httpd.h"

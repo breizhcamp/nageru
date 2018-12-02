@@ -20,7 +20,7 @@
 #include <utility>
 
 #include "audio_mixer.h"
-#include "context.h"
+#include "shared/context.h"
 #include "context_menus.h"
 #include "flags.h"
 #include "mainwindow.h"

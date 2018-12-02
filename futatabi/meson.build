@@ -34,7 +34,7 @@ moc_files = qt5.preprocess(
 srcs = ['flow.cpp', 'gpu_timers.cpp']
 
 # All the other files.
-srcs += ['main.cpp', 'player.cpp', 'httpd.cpp', 'video_stream.cpp', 'context.cpp', 'chroma_subsampler.cpp']
+srcs += ['main.cpp', 'player.cpp', 'httpd.cpp', 'video_stream.cpp', 'chroma_subsampler.cpp']
 srcs += ['vaapi_jpeg_decoder.cpp', 'db.cpp', 'disk_space_estimator.cpp', 'ycbcr_converter.cpp', 'flags.cpp']
 srcs += ['mainwindow.cpp', 'jpeg_frame_view.cpp', 'clip_list.cpp', 'frame_on_disk.cpp']
 srcs += moc_files

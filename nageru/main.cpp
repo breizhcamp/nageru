@@ -24,7 +24,7 @@ extern "C" {
 #ifdef HAVE_CEF
 #include "nageru_cef_app.h"
 #endif
-#include "context.h"
+#include "shared/context.h"
 #include "flags.h"
 #include "image_input.h"
 #include "mainwindow.h"
@@ -68,7 +68,6 @@ int main(int argc, char *argv[])
 		// We normally use EGL for zerocopy, but if we use VA against DRM
 		// instead of against X11, we turn it off, and then don't need EGL.
 		setenv("QT_XCB_GL_INTEGRATION", "xcb_egl", 0);
-		using_egl = true;
 	}
 	setlinebuf(stdout);
 #if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 9, 100)

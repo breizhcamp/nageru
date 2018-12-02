@@ -37,7 +37,7 @@
 #include "cef_capture.h"
 #endif
 #include "chroma_subsampler.h"
-#include "context.h"
+#include "shared/context.h"
 #include "decklink_capture.h"
 #include "decklink_output.h"
 #include "defs.h"

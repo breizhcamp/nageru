@@ -17,7 +17,7 @@
 #include "DeckLinkAPITypes.h"
 #include "LinuxCOM.h"
 
-#include "context.h"
+#include "shared/context.h"
 #include "print_latency.h"
 #include "quittable_sleeper.h"
 #include "ref_counted_frame.h"

@@ -9,7 +9,7 @@
 #include <movit/resource_pool.h>
 #include <movit/util.h>
 
-#include "context.h"
+#include "shared/context.h"
 #include "flags.h"
 #include "mixer.h"
 #include "ui_analyzer.h"

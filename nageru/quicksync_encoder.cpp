@@ -45,7 +45,7 @@ extern "C" {
 }  // namespace
 
 #include "audio_encoder.h"
-#include "context.h"
+#include "shared/context.h"
 #include "defs.h"
 #include "disk_space_estimator.h"
 #include "shared/ffmpeg_raii.h"
