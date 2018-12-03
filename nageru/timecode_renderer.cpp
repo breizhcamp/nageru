@@ -14,6 +14,8 @@
 #include <sys/time.h>
 
 #include "flags.h"
+#include "embedded_files.h"
+#include "shared/read_file.h"
 
 using namespace std;
 using namespace movit;
@@ -21,44 +23,13 @@ using namespace movit;
 TimecodeRenderer::TimecodeRenderer(movit::ResourcePool *resource_pool, unsigned display_width, unsigned display_height)
 	: resource_pool(resource_pool), display_width(display_width), display_height(display_height), height(28)
 {
-	string vert_shader =
-		"#version 130 \n"
-		" \n"
-		"in vec2 position; \n"
-		"in vec2 texcoord; \n"
-		"out vec2 tc0; \n"
-		" \n"
-		"void main() \n"
-		"{ \n"
-		"    // The result of glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0) is: \n"
-		"    // \n"
-		"    //   2.000  0.000  0.000 -1.000 \n"
-		"    //   0.000  2.000  0.000 -1.000 \n"
-		"    //   0.000  0.000 -2.000 -1.000 \n"
-		"    //   0.000  0.000  0.000  1.000 \n"
-		"    gl_Position = vec4(2.0 * position.x - 1.0, 2.0 * position.y - 1.0, -1.0, 1.0); \n"
-		"    tc0 = texcoord; \n"
-		"} \n";
-	string frag_shader =
-		"#version 130 \n"
-		"in vec2 tc0; \n"
-		"uniform sampler2D tex; \n"
-		"out vec4 Y, CbCr, YCbCr; \n"
-		"void main() { \n"
-		"    vec4 gray = texture(tex, tc0); \n";
+	string vert_shader = read_file("timecode.vert", _binary_timecode_vert_data, _binary_timecode_vert_size);
+	string frag_shader;
 	if (global_flags.ten_bit_output) {
-		frag_shader +=
-			"    gray.r = gray.r * ((940.0-16.0)/65535.0) + 16.0/65535.0; \n"  // Limited-range Y'CbCr.
-			"    CbCr = vec4(512.0/65535.0, 512.0/65535.0, 0.0, 1.0); \n";
+		frag_shader = read_file("timecode_10bit.frag", _binary_timecode_10bit_frag_data, _binary_timecode_10bit_frag_size);
 	} else {
-		frag_shader +=
-			"    gray.r = gray.r * ((235.0-16.0)/255.0) + 16.0/255.0; \n"  // Limited-range Y'CbCr.
-			"    CbCr = vec4(128.0/255.0, 128.0/255.0, 0.0, 1.0); \n";
+		frag_shader = read_file("timecode.frag", _binary_timecode_frag_data, _binary_timecode_frag_size);
 	}
-	frag_shader +=
-		"    Y = gray.rrra; \n"
-		"    YCbCr = vec4(Y.r, CbCr.r, CbCr.g, CbCr.a); \n"
-		"} \n";
 
 	vector<string> frag_shader_outputs;
 	program_num = resource_pool->compile_glsl_program(vert_shader, frag_shader, frag_shader_outputs);

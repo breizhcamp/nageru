@@ -7,6 +7,9 @@
 #include <movit/resource_pool.h>
 #include <movit/util.h>
 
+#include "embedded_files.h"
+#include "shared/read_file.h"
+
 using namespace movit;
 using namespace std;
 
@@ -69,37 +72,8 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 	// See also http://www.poynton.com/PDFs/Merging_RGB_and_422.pdf, pages 6–7.
 
 	// Cb/Cr shader.
-	string cbcr_vert_shader =
-		"#version 130 \n"
-		" \n"
-		"in vec2 position; \n"
-		"in vec2 texcoord; \n"
-		"out vec2 tc0, tc1; \n"
-		"uniform vec2 foo_chroma_offset_0; \n"
-		"uniform vec2 foo_chroma_offset_1; \n"
-		" \n"
-		"void main() \n"
-		"{ \n"
-		"    // The result of glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0) is: \n"
-		"    // \n"
-		"    //   2.000  0.000  0.000 -1.000 \n"
-		"    //   0.000  2.000  0.000 -1.000 \n"
-		"    //   0.000  0.000 -2.000 -1.000 \n"
-		"    //   0.000  0.000  0.000  1.000 \n"
-		"    gl_Position = vec4(2.0 * position.x - 1.0, 2.0 * position.y - 1.0, -1.0, 1.0); \n"
-		"    vec2 flipped_tc = texcoord; \n"
-		"    tc0 = flipped_tc + foo_chroma_offset_0; \n"
-		"    tc1 = flipped_tc + foo_chroma_offset_1; \n"
-		"} \n";
-	string cbcr_frag_shader =
-		"#version 130 \n"
-		"in vec2 tc0, tc1; \n"
-		"uniform sampler2D cbcr_tex; \n"
-		"out vec4 FragColor, FragColor2; \n"
-		"void main() { \n"
-		"    FragColor = 0.5 * (texture(cbcr_tex, tc0) + texture(cbcr_tex, tc1)); \n"
-		"    FragColor2 = FragColor; \n"
-		"} \n";
+	string cbcr_vert_shader = read_file("cbcr_subsample.vert", _binary_cbcr_subsample_vert_data, _binary_cbcr_subsample_vert_size);
+	string cbcr_frag_shader = read_file("cbcr_subsample.frag", _binary_cbcr_subsample_frag_data, _binary_cbcr_subsample_frag_size);
 	cbcr_program_num = resource_pool->compile_glsl_program(cbcr_vert_shader, cbcr_frag_shader, frag_shader_outputs);
 	check_error();
 	cbcr_chroma_offset_0_location = get_uniform_location(cbcr_program_num, "foo", "chroma_offset_0");
@@ -115,45 +89,8 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 	check_error();
 
 	// Same, for UYVY conversion.
-	string uyvy_vert_shader =
-		"#version 130 \n"
-		" \n"
-		"in vec2 position; \n"
-		"in vec2 texcoord; \n"
-		"out vec2 y_tc0, y_tc1, cbcr_tc0, cbcr_tc1; \n"
-		"uniform vec2 foo_luma_offset_0; \n"
-		"uniform vec2 foo_luma_offset_1; \n"
-		"uniform vec2 foo_chroma_offset_0; \n"
-		"uniform vec2 foo_chroma_offset_1; \n"
-		" \n"
-		"void main() \n"
-		"{ \n"
-		"    // The result of glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0) is: \n"
-		"    // \n"
-		"    //   2.000  0.000  0.000 -1.000 \n"
-		"    //   0.000  2.000  0.000 -1.000 \n"
-		"    //   0.000  0.000 -2.000 -1.000 \n"
-		"    //   0.000  0.000  0.000  1.000 \n"
-		"    gl_Position = vec4(2.0 * position.x - 1.0, 2.0 * position.y - 1.0, -1.0, 1.0); \n"
-		"    vec2 flipped_tc = texcoord; \n"
-		"    y_tc0 = flipped_tc + foo_luma_offset_0; \n"
-		"    y_tc1 = flipped_tc + foo_luma_offset_1; \n"
-		"    cbcr_tc0 = flipped_tc + foo_chroma_offset_0; \n"
-		"    cbcr_tc1 = flipped_tc + foo_chroma_offset_1; \n"
-		"} \n";
-	string uyvy_frag_shader =
-		"#version 130 \n"
-		"in vec2 y_tc0, y_tc1, cbcr_tc0, cbcr_tc1; \n"
-		"uniform sampler2D y_tex, cbcr_tex; \n"
-		"out vec4 FragColor; \n"
-		"void main() { \n"
-		"    float y0 = texture(y_tex, y_tc0).r; \n"
-		"    float y1 = texture(y_tex, y_tc1).r; \n"
-		"    vec2 cbcr0 = texture(cbcr_tex, cbcr_tc0).rg; \n"
-		"    vec2 cbcr1 = texture(cbcr_tex, cbcr_tc1).rg; \n"
-		"    vec2 cbcr = 0.5 * (cbcr0 + cbcr1); \n"
-		"    FragColor = vec4(cbcr.g, y0, cbcr.r, y1); \n"
-		"} \n";
+	string uyvy_vert_shader = read_file("uyvy_subsample.vert", _binary_uyvy_subsample_vert_data, _binary_uyvy_subsample_vert_size);
+	string uyvy_frag_shader = read_file("uyvy_subsample.frag", _binary_uyvy_subsample_frag_data, _binary_uyvy_subsample_frag_size);
 
 	uyvy_program_num = resource_pool->compile_glsl_program(uyvy_vert_shader, uyvy_frag_shader, frag_shader_outputs);
 	check_error();
@@ -186,43 +123,7 @@ ChromaSubsampler::ChromaSubsampler(ResourcePool *resource_pool)
 
 	// v210 compute shader.
 	if (v210Converter::has_hardware_support()) {
-		string v210_shader_src = R"(#version 150
-#extension GL_ARB_compute_shader : enable
-#extension GL_ARB_shader_image_load_store : enable
-layout(local_size_x=2, local_size_y=16) in;
-layout(r16) uniform restrict readonly image2D in_y;
-uniform sampler2D in_cbcr;  // Of type RG16.
-layout(rgb10_a2) uniform restrict writeonly image2D outbuf;
-uniform float inv_width, inv_height;
-
-void main()
-{
-	int xb = int(gl_GlobalInvocationID.x);  // X block number.
-	int y = int(gl_GlobalInvocationID.y);  // Y (actual line).
-	float yf = (gl_GlobalInvocationID.y + 0.5f) * inv_height;  // Y float coordinate.
-
-	// Load and scale CbCr values, sampling in-between the texels to get
-	// to (left/4 + center/2 + right/4).
-	vec2 pix_cbcr[3];
-	for (int i = 0; i < 3; ++i) {
-		vec2 a = texture(in_cbcr, vec2((xb * 6 + i * 2) * inv_width, yf)).xy;
-		vec2 b = texture(in_cbcr, vec2((xb * 6 + i * 2 + 1) * inv_width, yf)).xy;
-		pix_cbcr[i] = (a + b) * (0.5 * 65535.0 / 1023.0);
-	}
-
-	// Load and scale the Y values. Note that we use integer coordinates here,
-	// so we don't need to offset by 0.5.
-	float pix_y[6];
-	for (int i = 0; i < 6; ++i) {
-		pix_y[i] = imageLoad(in_y, ivec2(xb * 6 + i, y)).x * (65535.0 / 1023.0);
-	}
-
-	imageStore(outbuf, ivec2(xb * 4 + 0, y), vec4(pix_cbcr[0].x, pix_y[0],      pix_cbcr[0].y, 1.0));
-	imageStore(outbuf, ivec2(xb * 4 + 1, y), vec4(pix_y[1],      pix_cbcr[1].x, pix_y[2],      1.0));
-	imageStore(outbuf, ivec2(xb * 4 + 2, y), vec4(pix_cbcr[1].y, pix_y[3],      pix_cbcr[2].x, 1.0));
-	imageStore(outbuf, ivec2(xb * 4 + 3, y), vec4(pix_y[4],      pix_cbcr[2].y, pix_y[5],      1.0));
-}
-)";
+		string v210_shader_src = read_file("v210_subsample.comp", _binary_v210_subsample_comp_data, _binary_v210_subsample_comp_size);
 		GLuint shader_num = movit::compile_shader(v210_shader_src, GL_COMPUTE_SHADER);
 		check_error();
 		v210_program_num = glCreateProgram();

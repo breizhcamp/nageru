@@ -184,6 +184,15 @@ endif
 srcs += qt_files
 srcs += proto_generated
 
+# Shaders needed at runtime.
+shaders = ['cbcr_subsample.vert', 'cbcr_subsample.frag', 'uyvy_subsample.vert', 'uyvy_subsample.frag', 'v210_subsample.comp', 'timecode.vert', 'timecode.frag', 'timecode_10bit.frag']
+foreach shader : shaders
+  run_command('ln', '-s', join_paths(meson.current_source_dir(), shader), meson.current_build_dir())
+endforeach
+
+shader_srcs = bin2h_gen.process(shaders)
+srcs += shader_srcs
+
 # Everything except main.cpp. (We do this because if you specify a .cpp file in
 # both Nageru and Kaeru, it gets compiled twice. In the older Makefiles, Kaeru
 # depended on a smaller set of objects.)
