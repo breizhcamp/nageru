@@ -15,7 +15,7 @@ extern "C" {
 #include "defs.h"
 #include "shared/ffmpeg_raii.h"
 #include "flags.h"
-#include "httpd.h"
+#include "shared/httpd.h"
 #include "shared/mux.h"
 #include "quicksync_encoder.h"
 #include "shared/timebase.h"

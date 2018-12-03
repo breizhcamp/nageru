@@ -27,7 +27,7 @@ extern "C" {
 #include "flags.h"
 #include "frame_on_disk.h"
 #include "frame.pb.h"
-#include "httpd.h"
+#include "shared/httpd.h"
 #include "mainwindow.h"
 #include "player.h"
 #include "shared/post_to_main_thread.h"

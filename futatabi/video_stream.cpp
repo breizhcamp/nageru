@@ -9,7 +9,7 @@ extern "C" {
 #include "shared/context.h"
 #include "flags.h"
 #include "flow.h"
-#include "httpd.h"
+#include "shared/httpd.h"
 #include "jpeg_frame_view.h"
 #include "movit/util.h"
 #include "shared/mux.h"

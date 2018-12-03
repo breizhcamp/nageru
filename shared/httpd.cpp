@@ -1,4 +1,4 @@
-#include "httpd.h"
+#include "shared/httpd.h"
 
 #include <assert.h>
 #include <byteswap.h>
@@ -14,8 +14,9 @@ extern "C" {
 #include <libavutil/avutil.h>
 }
 
-#include "defs.h"
+#include "shared/shared_defs.h"
 #include "shared/metacube2.h"
+#include "shared/metrics.h"
 
 struct MHD_Connection;
 struct MHD_Response;
@@ -24,6 +25,7 @@ using namespace std;
 
 HTTPD::HTTPD()
 {
+	global_metrics.add("num_connected_clients", &metric_num_connected_clients, Metrics::TYPE_GAUGE);
 }
 
 HTTPD::~HTTPD()
@@ -86,6 +88,15 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 		framing = HTTPD::Stream::FRAMING_RAW;
 	}
 
+	if (strcmp(url, "/metrics") == 0) {
+		string contents = global_metrics.serialize();
+		MHD_Response *response = MHD_create_response_from_buffer(
+			contents.size(), &contents[0], MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(response, "Content-type", "text/plain");
+		int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+		MHD_destroy_response(response);  // Only decreases the refcount; actual free is after the request is done.
+		return ret;
+	}
 	if (endpoints.count(url)) {
 		pair<string, string> contents_and_type = endpoints[url].callback();
 		MHD_Response *response = MHD_create_response_from_buffer(

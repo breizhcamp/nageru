@@ -28,7 +28,7 @@
 #include "audio_mixer.h"
 #include "bmusb/bmusb.h"
 #include "defs.h"
-#include "httpd.h"
+#include "shared/httpd.h"
 #include "input_state.h"
 #include "libusb.h"
 #include "pbo_frame_allocator.h"

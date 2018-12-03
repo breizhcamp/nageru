@@ -13,7 +13,6 @@ libavformatdep = dependency('libavformat')
 libavresampledep = dependency('libavresample')
 libavutildep = dependency('libavutil')
 libjpegdep = dependency('libjpeg')
-libmicrohttpddep = dependency('libmicrohttpd')
 libswscaledep = dependency('libswscale')
 libusbdep = dependency('libusb-1.0')
 luajitdep = dependency('luajit')
@@ -29,7 +28,7 @@ x264dep = dependency('x264')
 zitaresamplerdep = cxx.find_library('zita-resampler')
 
 srcs = []
-nageru_deps = [shareddep, qt5deps, libjpegdep, movitdep, libmicrohttpddep, protobufdep,
+nageru_deps = [shareddep, qt5deps, libjpegdep, movitdep, protobufdep,
 	vax11dep, vadrmdep, x11dep, libavformatdep, libavresampledep, libavcodecdep, libavutildep,
 	libswscaledep, libusbdep, luajitdep, dldep, x264dep, alsadep, zitaresamplerdep,
 	qcustomplotdep, threaddep]
@@ -166,7 +165,7 @@ srcs += ['chroma_subsampler.cpp', 'v210_converter.cpp', 'mixer.cpp', 'pbo_frame_
 
 # Streaming and encoding objects (largely the set that is shared between Nageru and Kaeru).
 stream_srcs = ['quicksync_encoder.cpp', 'x264_encoder.cpp', 'x264_dynamic.cpp', 'x264_speed_control.cpp', 'video_encoder.cpp',
-	'audio_encoder.cpp', 'ffmpeg_util.cpp', 'httpd.cpp', 'ffmpeg_capture.cpp',
+	'audio_encoder.cpp', 'ffmpeg_util.cpp', 'ffmpeg_capture.cpp',
 	'print_latency.cpp', 'basic_stats.cpp', 'ref_counted_frame.cpp']
 stream = static_library('stream', stream_srcs, dependencies: nageru_deps, include_directories: nageru_include_dirs)
 nageru_link_with += stream

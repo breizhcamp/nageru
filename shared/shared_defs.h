@@ -1,5 +1,5 @@
-#ifndef _MUX_OPTS_H
-#define _MUX_OPTS_H 1
+#ifndef _SHARED_DEFS_H
+#define _SHARED_DEFS_H 1
 
 // This flag is only supported in FFmpeg 3.3 and up, and we only require 3.1.
 #if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(57, 71, 100)
@@ -19,4 +19,10 @@
 	{ "write_index", "0" } \
 }
 
-#endif  // !defined(_MUX_OPTS_H)
+// In bytes. Beware, if too small, stream clients will start dropping data.
+// For mov, you want this at 10MB or so (for the reason mentioned above),
+// but for nut, there's no flushing, so such a large mux buffer would cause
+// the output to be very uneven.
+#define MUX_BUFFER_SIZE 10485760
+
+#endif  // !defined(_SHARED_DEFS_H)

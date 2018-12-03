@@ -3,16 +3,16 @@
 
 // A class dealing with stream output to HTTP.
 
-#include <stddef.h>
-#include <stdint.h>
-#include <sys/types.h>
 #include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <functional>
 #include <mutex>
 #include <set>
+#include <stddef.h>
+#include <stdint.h>
 #include <string>
+#include <sys/types.h>
 #include <unordered_map>
 #include <utility>
 
@@ -32,7 +32,8 @@ public:
 	~HTTPD();
 
 	// Should be called before start().
-	void set_header(const std::string &data) {
+	void set_header(const std::string &data)
+	{
 		header = data;
 	}
 
@@ -41,14 +42,16 @@ public:
 		NO_CORS_POLICY,
 		ALLOW_ALL_ORIGINS
 	};
-	void add_endpoint(const std::string &url, const EndpointCallback &callback, CORSPolicy cors_policy) {
+	void add_endpoint(const std::string &url, const EndpointCallback &callback, CORSPolicy cors_policy)
+	{
 		endpoints[url] = Endpoint{ callback, cors_policy };
 	}
 
 	void start(int port);
 	void stop();
 	void add_data(const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase);
-	int64_t get_num_connected_clients() const {
+	int64_t get_num_connected_clients() const
+	{
 		return metric_num_connected_clients.load();
 	}
 
@@ -65,14 +68,14 @@ private:
 
 	static void free_stream(void *cls);
 
-
 	class Stream {
 	public:
 		enum Framing {
 			FRAMING_RAW,
 			FRAMING_METACUBE
 		};
-		Stream(HTTPD *parent, Framing framing) : parent(parent), framing(framing) {}
+		Stream(HTTPD *parent, Framing framing)
+			: parent(parent), framing(framing) {}
 
 		static ssize_t reader_callback_thunk(void *cls, uint64_t pos, char *buf, size_t max);
 		ssize_t reader_callback(uint64_t pos, char *buf, size_t max);
@@ -109,7 +112,7 @@ private:
 	std::string header;
 
 	// Metrics.
-	std::atomic<int64_t> metric_num_connected_clients{0};
+	std::atomic<int64_t> metric_num_connected_clients{ 0 };
 };
 
 #endif  // !defined(_HTTPD_H)

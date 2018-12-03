@@ -5,7 +5,7 @@
 #include "defs.h"
 #include "shared/ffmpeg_raii.h"
 #include "frame_on_disk.h"
-#include "httpd.h"
+#include "shared/httpd.h"
 #include "jpeg_frame_view.h"
 #include "shared/mux.h"
 #include "shared/timebase.h"

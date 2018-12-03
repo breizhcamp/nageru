@@ -22,13 +22,7 @@
 #define DEFAULT_STREAM_MUX_NAME "nut"  // Only for HTTP. Local dump guesses from LOCAL_DUMP_SUFFIX.
 #define DEFAULT_HTTPD_PORT 9095
 
-#include "shared/mux_opts.h"
-
-// In bytes. Beware, if too small, stream clients will start dropping data.
-// For mov, you want this at 10MB or so (for the reason mentioned above),
-// but for nut, there's no flushing, so such a large mux buffer would cause
-// the output to be very uneven.
-#define MUX_BUFFER_SIZE 10485760
+#include "shared/shared_defs.h"
 
 // In number of frames. Comes in addition to any internal queues in x264
 // (frame threading, lookahead, etc.).

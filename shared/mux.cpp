@@ -22,7 +22,7 @@ extern "C" {
 }
 
 #include "shared/metrics.h"
-#include "shared/mux_opts.h"
+#include "shared/shared_defs.h"
 #include "shared/timebase.h"
 
 using namespace std;
