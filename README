@@ -117,7 +117,7 @@ Nageru uses Meson to build. For a default build, type
 
   meson obj && cd obj && ninja
 
-To start it, just hook up your equipment, and then type “./nageru”.
+To start it, just hook up your equipment, and then type “cd nageru && ./nageru”.
 
 It is strongly recommended to have the rights to run at real-time priority;
 it will make the USB3 threads do so, which will make them a lot more stable.
