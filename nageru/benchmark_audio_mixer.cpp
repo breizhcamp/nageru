@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "audio_mixer.h"
-#include "db.h"
+#include "decibel.h"
 #include "defs.h"
 #include "input_mapping.h"
 #include "resampling_queue.h"

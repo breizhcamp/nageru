@@ -23,7 +23,7 @@
 
 #include "alsa_pool.h"
 #include "correlation_measurer.h"
-#include "db.h"
+#include "decibel.h"
 #include "defs.h"
 #include "ebu_r128_proc.h"
 #include "filter.h"

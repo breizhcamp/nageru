@@ -18,7 +18,7 @@
 #include <limits>
 #include <utility>
 
-#include "db.h"
+#include "decibel.h"
 #include "flags.h"
 #include "shared/metrics.h"
 #include "state.pb.h"
