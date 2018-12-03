@@ -46,7 +46,8 @@ cef_dir = get_option('cef_dir')
 cef_build_type = get_option('cef_build_type')
 have_cef = (cef_dir != '')
 if have_cef
-	add_project_arguments('-DHAVE_CEF=1', language: 'cpp')
+	# This is done in the top-level file; just kept here for reference.
+	# add_project_arguments('-DHAVE_CEF=1', language: 'cpp')
 
 	system_cef = (cef_build_type == 'system')
 	if system_cef

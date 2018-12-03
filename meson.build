@@ -28,6 +28,11 @@ if cxx.has_argument('-Wno-deprecated-declarations')
 	add_project_arguments('-Wno-deprecated-declarations', language: 'cpp')
 endif
 
+# This needs to be done before declaring any build targets.
+if get_option('cef_dir') != ''
+	add_project_arguments('-DHAVE_CEF=1', language: 'cpp')
+endif
+
 top_include = include_directories('.')
 
 subdir('shared')
