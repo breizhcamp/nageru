@@ -22,7 +22,7 @@ extern "C" {
 #include "clip_list.h"
 #include "shared/context.h"
 #include "defs.h"
-#include "disk_space_estimator.h"
+#include "shared/disk_space_estimator.h"
 #include "shared/ffmpeg_raii.h"
 #include "flags.h"
 #include "frame_on_disk.h"

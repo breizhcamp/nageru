@@ -50,7 +50,7 @@
 #include "clickable_label.h"
 #include "context_menus.h"
 #include "correlation_meter.h"
-#include "disk_space_estimator.h"
+#include "shared/disk_space_estimator.h"
 #include "ellipsis_label.h"
 #include "flags.h"
 #include "glwidget.h"

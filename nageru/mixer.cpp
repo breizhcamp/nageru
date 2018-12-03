@@ -41,7 +41,7 @@
 #include "decklink_capture.h"
 #include "decklink_output.h"
 #include "defs.h"
-#include "disk_space_estimator.h"
+#include "shared/disk_space_estimator.h"
 #include "ffmpeg_capture.h"
 #include "flags.h"
 #include "input_mapping.h"

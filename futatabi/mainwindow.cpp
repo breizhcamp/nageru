@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 
 #include "clip_list.h"
-#include "disk_space_estimator.h"
+#include "shared/disk_space_estimator.h"
 #include "flags.h"
 #include "frame_on_disk.h"
 #include "player.h"
