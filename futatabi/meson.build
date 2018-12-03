@@ -49,14 +49,10 @@ foreach shader : shaders
   run_command('ln', '-s', join_paths(meson.current_source_dir(), shader), meson.current_build_dir())
 endforeach
 
-bin2h = executable('bin2h', 'bin2h.cpp')
-bin2h_gen = generator(bin2h, \
-  output    : ['@PLAINNAME@.cpp'],
-  arguments : ['@INPUT@', '@PLAINNAME@', '@OUTPUT@'])
 shader_srcs = bin2h_gen.process(shaders)
 srcs += shader_srcs
 
 executable('futatabi', srcs, dependencies: [shareddep, qt5deps, libjpegdep, movitdep, libmicrohttpddep, protobufdep, sqlite3dep, vax11dep, vadrmdep, x11dep, libavformatdep, libavcodecdep, libavutildep, libswscaledep], link_with: shared)
-executable('flow', 'flow_main.cpp', 'flow.cpp', 'gpu_timers.cpp', shader_srcs, dependencies: [epoxydep, sdl2dep, sdl2_imagedep])
+executable('flow', 'flow_main.cpp', 'flow.cpp', 'gpu_timers.cpp', shader_srcs, dependencies: [shareddep, epoxydep, sdl2dep, sdl2_imagedep])
 executable('eval', 'eval.cpp', 'util.cpp')
 executable('vis', 'vis.cpp', 'util.cpp')
