@@ -82,11 +82,11 @@ atomic<size_t> event_counter{0};
 extern QGLWidget *global_share_widget;
 extern atomic<bool> should_quit;
 
-shared_ptr<Frame> decode_jpeg(const string &filename)
+shared_ptr<Frame> decode_jpeg(const string &jpeg)
 {
 	shared_ptr<Frame> frame;
 	if (vaapi_jpeg_decoding_usable) {
-		frame = decode_jpeg_vaapi(filename);
+		frame = decode_jpeg_vaapi(jpeg);
 		if (frame != nullptr) {
 			return frame;
 		}
@@ -101,13 +101,7 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 	jpeg_create_decompress(&dinfo);
 	JPEGDestroyer destroy_dinfo(&dinfo);
 
-	FILE *fp = fopen(filename.c_str(), "rb");
-	if (fp == nullptr) {
-		perror(filename.c_str());
-		exit(1);
-	}
-	jpeg_stdio_src(&dinfo, fp);
-
+	jpeg_mem_src(&dinfo, reinterpret_cast<const unsigned char *>(jpeg.data()), jpeg.size());
 	jpeg_read_header(&dinfo, true);
 
 	if (dinfo.num_components != 3) {
@@ -170,7 +164,6 @@ shared_ptr<Frame> decode_jpeg(const string &filename)
 	}
 
 	(void)jpeg_finish_decompress(&dinfo);
-	fclose(fp);
 
 	return frame;
 }

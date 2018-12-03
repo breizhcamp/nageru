@@ -20,7 +20,7 @@ enum CacheMissBehavior {
 	RETURN_NULLPTR_IF_NOT_IN_CACHE
 };
 
-std::shared_ptr<Frame> decode_jpeg(const std::string &filename);
+std::shared_ptr<Frame> decode_jpeg(const std::string &jpeg);
 std::shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk id, CacheMissBehavior cache_miss_behavior, FrameReader *frame_reader, bool *did_decode);
 
 class JPEGFrameView : public QGLWidget {
