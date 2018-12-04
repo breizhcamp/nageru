@@ -52,6 +52,7 @@ void PBOFrameAllocator::init_frame(size_t frame_idx, size_t frame_size, GLuint w
 	Frame frame;
 	frame.data = (uint8_t *)glMapBufferRange(buffer, 0, frame_size, permissions | map_bits | GL_MAP_PERSISTENT_BIT);
 	frame.data2 = frame.data + frame_size / 2;
+	frame.data_copy = new uint8_t[frame_size];
 	check_error();
 	frame.size = frame_size;
 	frame.userdata = &userdata[frame_idx];
@@ -214,6 +215,8 @@ PBOFrameAllocator::~PBOFrameAllocator()
 
 void PBOFrameAllocator::destroy_frame(Frame *frame)
 {
+	delete[] frame->data_copy;
+
 	GLuint pbo = ((Userdata *)frame->userdata)->pbo;
 	glBindBuffer(buffer, pbo);
 	check_error();
