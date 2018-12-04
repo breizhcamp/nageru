@@ -7,7 +7,7 @@ code = '''#include <stdio.h>
 int main() { printf("Hello, world!\n"); return 0; }
 '''
 if cxx.links(code, args: '-fuse-ld=lld', name: 'check for LLD')
-	add_project_link_arguments('-fuse-ld=lld')
+	add_project_link_arguments('-fuse-ld=lld', language: 'cpp')
 endif
 
 # Add the right MOVIT_SHADER_DIR definition.
