@@ -389,6 +389,10 @@ void MJPEGEncoder::init_jpeg_422(unsigned width, unsigned height, VectorDestinat
 	cinfo->comp_info[2].v_samp_factor = 1;
 	cinfo->CCIR601_sampling = true;  // Seems to be mostly ignored by libjpeg, though.
 	jpeg_start_compress(cinfo, true);
+
+	// This comment marker is private to FFmpeg. It signals limited Y'CbCr range
+	// (and nothing else).
+	jpeg_write_marker(cinfo, JPEG_COM, (const JOCTET *)"CS=ITU601", strlen("CS=ITU601"));
 }
 
 vector<uint8_t> MJPEGEncoder::get_jpeg_header(unsigned width, unsigned height, jpeg_compress_struct *cinfo)

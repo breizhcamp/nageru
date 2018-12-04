@@ -107,6 +107,10 @@ vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cb_data, const
 	cinfo.CCIR601_sampling = true;  // Seems to be mostly ignored by libjpeg, though.
 	jpeg_start_compress(&cinfo, true);
 
+	// This comment marker is private to FFmpeg. It signals limited Y'CbCr range
+	// (and nothing else).
+	jpeg_write_marker(&cinfo, JPEG_COM, (const JOCTET *)"CS=ITU601", strlen("CS=ITU601"));
+
 	JSAMPROW yptr[8], cbptr[8], crptr[8];
 	JSAMPARRAY data[3] = { yptr, cbptr, crptr };
 	for (unsigned y = 0; y < height; y += 8) {
