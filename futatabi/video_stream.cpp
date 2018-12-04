@@ -238,7 +238,12 @@ VideoStream::~VideoStream() {}
 void VideoStream::start()
 {
 	AVFormatContext *avctx = avformat_alloc_context();
-	avctx->oformat = av_guess_format("nut", nullptr, nullptr);
+
+	// We use Matroska, because it's pretty much the only mux where FFmpeg
+	// allows writing chroma location to override JFIF's default center placement.
+	// (Note that at the time of writing, however, FFmpeg does not correctly
+	// _read_ this information!)
+	avctx->oformat = av_guess_format("matroska", nullptr, nullptr);
 
 	uint8_t *buf = (uint8_t *)av_malloc(MUX_BUFFER_SIZE);
 	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, nullptr, nullptr);
