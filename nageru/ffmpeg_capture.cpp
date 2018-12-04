@@ -365,10 +365,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 		last_modified = buf.st_mtim;
 	}
 
-	AVDictionary *opts = nullptr;
-	av_dict_set(&opts, "fflags", "nobuffer", 0);
-
-	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, &opts, AVIOInterruptCB{ &FFmpegCapture::interrupt_cb_thunk, this });
+	auto format_ctx = avformat_open_input_unique(pathname.c_str(), nullptr, nullptr, AVIOInterruptCB{ &FFmpegCapture::interrupt_cb_thunk, this });
 	if (format_ctx == nullptr) {
 		fprintf(stderr, "%s: Error opening file\n", pathname.c_str());
 		return false;
