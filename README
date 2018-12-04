@@ -45,7 +45,7 @@ Nageru currently needs:
    are driven through the “bmusb” driver, using libusb-1.0. If you want
    zerocopy USB, you need libusb 1.0.21 or newer, as well as a recent
    kernel (4.6.0 or newer). Zerocopy USB helps not only for performance,
-   but also for stability. You need at least version 0.7.0.
+   but also for stability. You need at least version 0.7.3.
 
  - Movit, my GPU-based video filter library (https://movit.sesse.net).
    You will need at least version 1.5.2.
