@@ -255,6 +255,7 @@ private:
 	int sws_last_width = -1, sws_last_height = -1, sws_last_src_format = -1;
 	AVPixelFormat sws_dst_format = AVPixelFormat(-1);  // In practice, always initialized.
 	AVRational video_timebase, audio_timebase;
+	bool is_mjpeg = false;
 
 	QuittableSleeper producer_thread_should_quit;
 	std::thread producer_thread;
