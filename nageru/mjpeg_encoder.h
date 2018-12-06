@@ -30,6 +30,7 @@ struct VectorDestinationManager;
 class MJPEGEncoder {
 public:
 	MJPEGEncoder(HTTPD *httpd, const std::string &va_display);
+	~MJPEGEncoder();
 	void stop();
 	void upload_frame(int64_t pts, unsigned card_index, RefCountedFrame frame, const bmusb::VideoFormat &video_format, size_t y_offset, size_t cbcr_offset);
 

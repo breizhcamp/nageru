@@ -177,6 +177,11 @@ MJPEGEncoder::MJPEGEncoder(HTTPD *httpd, const string &va_display)
 	running = true;
 }
 
+MJPEGEncoder::~MJPEGEncoder()
+{
+	av_free(avctx->pb->buffer);
+}
+
 void MJPEGEncoder::stop()
 {
 	if (!running) {
@@ -268,7 +273,7 @@ void MJPEGEncoder::encoder_thread_func()
 	unique_lock<mutex> lock(mu);
 	for (;;) {
 		any_frames_to_be_encoded.wait(lock, [this] { return !frames_to_be_encoded.empty() || should_quit; });
-		if (should_quit) return;
+		if (should_quit) break;
 		QueuedFrame qf = move(frames_to_be_encoded.front());
 		frames_to_be_encoded.pop();
 
@@ -288,6 +293,11 @@ void MJPEGEncoder::encoder_thread_func()
 			exit(1);
 		}
 	}
+
+	free(tmp_y);
+	free(tmp_cbcr);
+	free(tmp_cb);
+	free(tmp_cr);
 }
 
 class VABufferDestroyer {
