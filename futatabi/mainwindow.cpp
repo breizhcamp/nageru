@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 
+#include "shared/aboutdialog.h"
 #include "clip_list.h"
 #include "shared/disk_space_estimator.h"
 #include "flags.h"
@@ -9,6 +10,8 @@
 #include "shared/timebase.h"
 #include "ui_mainwindow.h"
 
+#include <QDesktopServices>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QShortcut>
 #include <QTimer>
@@ -36,6 +39,8 @@ MainWindow::MainWindow()
 
 	// The menus.
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
+	connect(ui->manual_action, &QAction::triggered, this, &MainWindow::manual_triggered);
+	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
 
 	global_disk_space_estimator = new DiskSpaceEstimator(bind(&MainWindow::report_disk_space, this, _1, _2));
 	disk_free_label = new QLabel(this);
@@ -733,6 +738,20 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
 void MainWindow::exit_triggered()
 {
 	close();
+}
+
+void MainWindow::manual_triggered()
+{
+	if (!QDesktopServices::openUrl(QUrl("https://nageru.sesse.net/doc/"))) {
+		QMessageBox msgbox;
+		msgbox.setText("Could not launch manual in web browser.\nPlease see https://nageru.sesse.net/doc/ manually.");
+		msgbox.exec();
+	}
+}
+
+void MainWindow::about_triggered()
+{
+	AboutDialog("Futatabi", "Multicamera slow motion video server").exec();
 }
 
 void MainWindow::highlight_camera_input(int stream_idx)

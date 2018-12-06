@@ -136,16 +136,16 @@ nageru_link_with += protobuf_lib
 
 # Preprocess Qt as needed.
 qt_files = qt5.preprocess(
-	moc_headers: ['aboutdialog.h', 'analyzer.h', 'clickable_label.h', 'compression_reduction_meter.h', 'correlation_meter.h',
+	moc_headers: ['analyzer.h', 'clickable_label.h', 'compression_reduction_meter.h', 'correlation_meter.h',
 		'ellipsis_label.h', 'glwidget.h', 'input_mapping_dialog.h', 'lrameter.h', 'mainwindow.h', 'midi_mapping_dialog.h',
 		'nonlinear_fader.h', 'vumeter.h'],
-	ui_files: ['aboutdialog.ui', 'analyzer.ui', 'audio_expanded_view.ui', 'audio_miniview.ui', 'display.ui',
+	ui_files: ['analyzer.ui', 'audio_expanded_view.ui', 'audio_miniview.ui', 'display.ui',
 		'input_mapping.ui', 'mainwindow.ui', 'midi_mapping.ui'],
 	dependencies: qt5deps)
 
 # Qt objects.
 srcs += ['glwidget.cpp', 'mainwindow.cpp', 'vumeter.cpp', 'lrameter.cpp', 'compression_reduction_meter.cpp',
-	'correlation_meter.cpp', 'aboutdialog.cpp', 'analyzer.cpp', 'input_mapping_dialog.cpp', 'midi_mapping_dialog.cpp',
+	'correlation_meter.cpp', 'analyzer.cpp', 'input_mapping_dialog.cpp', 'midi_mapping_dialog.cpp',
 	'nonlinear_fader.cpp', 'context_menus.cpp', 'vu_common.cpp', 'piecewise_interpolator.cpp', 'midi_mapper.cpp']
 
 # Auxiliary objects used for nearly everything.

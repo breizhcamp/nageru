@@ -44,7 +44,7 @@
 #include <string>
 #include <vector>
 
-#include "aboutdialog.h"
+#include "shared/aboutdialog.h"
 #include "alsa_pool.h"
 #include "analyzer.h"
 #include "clickable_label.h"
@@ -663,7 +663,7 @@ void MainWindow::manual_triggered()
 
 void MainWindow::about_triggered()
 {
-	AboutDialog().exec();
+	AboutDialog("Nageru", "Realtime video mixer").exec();
 }
 
 void MainWindow::open_analyzer_triggered()

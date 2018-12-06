@@ -100,6 +100,8 @@ private:
 
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
 	void exit_triggered();
+	void manual_triggered();
+	void about_triggered();
 
 	void highlight_camera_input(int stream_idx);
 
