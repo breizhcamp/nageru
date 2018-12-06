@@ -1548,6 +1548,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	}
 
 	analyzer->hide();
+	global_mixer->quit();
+	mixer_shutting_down();
 	event->accept();
 }
 
