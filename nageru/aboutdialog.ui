@@ -15,9 +15,9 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QLabel" name="label">
+    <widget class="QLabel" name="header">
      <property name="text">
-      <string>&lt;p&gt;&lt;b&gt;Nageru 1.7.5&lt;/b&gt;&lt;/p&gt;
+      <string>&lt;p&gt;&lt;b&gt;Nageru @NAGERU_VERSION@&lt;/b&gt;&lt;/p&gt;
 
 &lt;p&gt;Realtime video mixer&lt;/p&gt;</string>
      </property>

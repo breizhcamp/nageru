@@ -1,4 +1,4 @@
-project('nageru', 'cpp', default_options: ['buildtype=debugoptimized'])
+project('nageru', 'cpp', default_options: ['buildtype=debugoptimized'], version: '1.8.0-pre')
 
 cxx = meson.get_compiler('cpp')
 
@@ -16,6 +16,9 @@ if r.returncode() != 0
 	error('Movit pkg-config installation is broken.')
 endif
 add_project_arguments('-DMOVIT_SHADER_DIR="' + r.stdout().strip() + '"', language: 'cpp')
+
+# Make the Nageru version available as a #define.
+add_project_arguments('-DNAGERU_VERSION="' + meson.project_version() + '"', language: 'cpp')
 
 # DeckLink has these issues, and we include it from various places.
 if cxx.has_argument('-Wno-non-virtual-dtor')
