@@ -22,6 +22,7 @@ enum CacheMissBehavior {
 
 std::shared_ptr<Frame> decode_jpeg(const std::string &jpeg);
 std::shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk id, CacheMissBehavior cache_miss_behavior, FrameReader *frame_reader, bool *did_decode);
+std::shared_ptr<Frame> get_black_frame();
 
 class JPEGFrameView : public QGLWidget {
 	Q_OBJECT

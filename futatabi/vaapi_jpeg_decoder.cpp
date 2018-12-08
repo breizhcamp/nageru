@@ -2,6 +2,7 @@
 
 #include "jpeg_destroyer.h"
 #include "jpeg_frame.h"
+#include "jpeglib_error_wrapper.h"
 #include "shared/memcpy_interleaved.h"
 
 #include <X11/Xlib.h>
@@ -329,13 +330,16 @@ private:
 shared_ptr<Frame> decode_jpeg_vaapi(const string &jpeg)
 {
 	jpeg_decompress_struct dinfo;
-	jpeg_error_mgr jerr;
-	dinfo.err = jpeg_std_error(&jerr);
-	jpeg_create_decompress(&dinfo);
+	JPEGWrapErrorManager error_mgr(&dinfo);
+	if (!error_mgr.run([&dinfo] { jpeg_create_decompress(&dinfo); })) {
+		return nullptr;
+	}
 	JPEGDestroyer destroy_dinfo(&dinfo);
 
 	jpeg_mem_src(&dinfo, reinterpret_cast<const unsigned char *>(jpeg.data()), jpeg.size());
-	jpeg_read_header(&dinfo, true);
+	if (!error_mgr.run([&dinfo] { jpeg_read_header(&dinfo, true); })) {
+		return nullptr;
+	}
 
 	if (dinfo.num_components != 3) {
 		fprintf(stderr, "Not a color JPEG. (%d components, Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",

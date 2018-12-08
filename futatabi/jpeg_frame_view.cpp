@@ -2,6 +2,7 @@
 
 #include "defs.h"
 #include "jpeg_destroyer.h"
+#include "jpeglib_error_wrapper.h"
 #include "shared/post_to_main_thread.h"
 #include "video_stream.h"
 #include "ycbcr_converter.h"
@@ -96,13 +97,18 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 	frame.reset(new Frame);
 
 	jpeg_decompress_struct dinfo;
-	jpeg_error_mgr jerr;
-	dinfo.err = jpeg_std_error(&jerr);
-	jpeg_create_decompress(&dinfo);
+	JPEGWrapErrorManager error_mgr(&dinfo);
+	if (!error_mgr.run([&dinfo]{ jpeg_create_decompress(&dinfo); })) {
+		return get_black_frame();
+	}
 	JPEGDestroyer destroy_dinfo(&dinfo);
 
-	jpeg_mem_src(&dinfo, reinterpret_cast<const unsigned char *>(jpeg.data()), jpeg.size());
-	jpeg_read_header(&dinfo, true);
+	if (!error_mgr.run([&dinfo, &jpeg]{
+		jpeg_mem_src(&dinfo, reinterpret_cast<const unsigned char *>(jpeg.data()), jpeg.size());
+		jpeg_read_header(&dinfo, true);
+	})) {
+		return get_black_frame();
+	}
 
 	if (dinfo.num_components != 3) {
 		fprintf(stderr, "Not a color JPEG. (%d components, Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
@@ -110,7 +116,7 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
 			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
 			dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
-		exit(1);
+		return get_black_frame();
 	}
 	if (dinfo.comp_info[0].h_samp_factor != dinfo.max_h_samp_factor ||
 	    dinfo.comp_info[0].v_samp_factor != dinfo.max_v_samp_factor ||  // Y' must not be subsampled.
@@ -126,7 +132,11 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 	}
 	dinfo.raw_data_out = true;
 
-	jpeg_start_decompress(&dinfo);
+	if (!error_mgr.run([&dinfo]{
+		jpeg_start_decompress(&dinfo);
+	})) {
+		return get_black_frame();
+	}
 
 	frame->width = dinfo.output_width;
 	frame->height = dinfo.output_height;
@@ -150,20 +160,24 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 	frame->pitch_y = luma_width_blocks * DCTSIZE;
 	frame->pitch_chroma = chroma_width_blocks * DCTSIZE;
 
-	JSAMPROW yptr[v_mcu_size], cbptr[v_mcu_size], crptr[v_mcu_size];
-	JSAMPARRAY data[3] = { yptr, cbptr, crptr };
-	for (unsigned y = 0; y < mcu_height_blocks; ++y) {
-		// NOTE: The last elements of cbptr/crptr will be unused for vertically subsampled chroma.
-		for (unsigned yy = 0; yy < v_mcu_size; ++yy) {
-			yptr[yy] = frame->y.get() + (y * DCTSIZE * dinfo.max_v_samp_factor + yy) * frame->pitch_y;
-			cbptr[yy] = frame->cb.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
-			crptr[yy] = frame->cr.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
+	if (!error_mgr.run([&dinfo, &frame, v_mcu_size, mcu_height_blocks] {
+		JSAMPROW yptr[v_mcu_size], cbptr[v_mcu_size], crptr[v_mcu_size];
+		JSAMPARRAY data[3] = { yptr, cbptr, crptr };
+		for (unsigned y = 0; y < mcu_height_blocks; ++y) {
+			// NOTE: The last elements of cbptr/crptr will be unused for vertically subsampled chroma.
+			for (unsigned yy = 0; yy < v_mcu_size; ++yy) {
+				yptr[yy] = frame->y.get() + (y * DCTSIZE * dinfo.max_v_samp_factor + yy) * frame->pitch_y;
+				cbptr[yy] = frame->cb.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
+				crptr[yy] = frame->cr.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
+			}
+
+			jpeg_read_raw_data(&dinfo, data, v_mcu_size);
 		}
 
-		jpeg_read_raw_data(&dinfo, data, v_mcu_size);
+		(void)jpeg_finish_decompress(&dinfo);
+	})) {
+		return get_black_frame();
 	}
-
-	(void)jpeg_finish_decompress(&dinfo);
 
 	return frame;
 }
@@ -452,4 +466,23 @@ void JPEGFrameView::set_overlay(const string &text)
 
 	// Don't refresh immediately; we might not have an OpenGL context here.
 	overlay_input_needs_refresh = true;
+}
+
+shared_ptr<Frame> get_black_frame()
+{
+	static shared_ptr<Frame> black_frame;
+	static once_flag flag;
+	call_once(flag, [] {
+		black_frame.reset(new Frame);
+		black_frame->y.reset(new uint8_t[1280 * 720]);
+		black_frame->cb.reset(new uint8_t[(1280 / 2) * (720 / 2)]);
+		black_frame->cr.reset(new uint8_t[(1280 / 2) * (720 / 2)]);
+		black_frame->width = 1280;
+		black_frame->height = 720;
+		black_frame->chroma_subsampling_x = 2;
+		black_frame->chroma_subsampling_y = 2;
+		black_frame->pitch_y = 1280;
+		black_frame->pitch_chroma = 1280 / 2;
+	});
+	return black_frame;
 }
