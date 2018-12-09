@@ -92,7 +92,7 @@ with:
     libzita-resampler-dev libva-dev libavcodec-dev libavformat-dev \
     libswscale-dev libavresample-dev libmovit-dev libegl1-mesa-dev \
     libasound2-dev libx264-dev libbmusb-dev protobuf-compiler \
-    libprotobuf-dev
+    libprotobuf-dev meson
 
 Exceptions as of November 2018:
 
