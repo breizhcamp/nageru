@@ -169,7 +169,7 @@ FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t
 
 		const char *basename = filename.c_str();
 		while (strchr(basename, '/') != nullptr) {
-			basename = strchr(basename, '/');
+			basename = strchr(basename, '/') + 1;
 		}
 		db->store_frame_file(basename, size, frames_this_file);
 	}
