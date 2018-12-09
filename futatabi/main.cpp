@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 extern "C" {
@@ -441,62 +442,72 @@ void load_existing_frames()
 
 int record_thread_func()
 {
-	auto format_ctx = avformat_open_input_unique(global_flags.stream_source.c_str(), nullptr, nullptr);
-	if (format_ctx == nullptr) {
-		fprintf(stderr, "%s: Error opening file\n", global_flags.stream_source.c_str());
-		return 1;
-	}
+	pthread_setname_np(pthread_self(), "ReceiveFrames");
 
-	int64_t last_pts = -1;
 	int64_t pts_offset;
 	DB db(global_flags.working_directory + "/futatabi.db");
 
 	while (!should_quit.load()) {
-		AVPacket pkt;
-		unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
-			&pkt, av_packet_unref);
-		av_init_packet(&pkt);
-		pkt.data = nullptr;
-		pkt.size = 0;
-
-		// TODO: Make it possible to abort av_read_frame() (use an interrupt callback);
-		// right now, should_quit will be ignored if it's hung on I/O.
-		if (av_read_frame(format_ctx.get(), &pkt) != 0) {
-			break;
+		auto format_ctx = avformat_open_input_unique(global_flags.stream_source.c_str(), nullptr, nullptr);
+		if (format_ctx == nullptr) {
+			fprintf(stderr, "%s: Error opening file. Waiting one second and trying again...\n", global_flags.stream_source.c_str());
+			sleep(1);
+			continue;
 		}
 
-		// Convert pts to our own timebase.
-		AVRational stream_timebase = format_ctx->streams[pkt.stream_index]->time_base;
-		int64_t pts = av_rescale_q(pkt.pts, stream_timebase, AVRational{ 1, TIMEBASE });
+		int64_t last_pts = -1;
 
-		// Translate offset into our stream.
-		if (last_pts == -1) {
-			pts_offset = start_pts - pts;
-		}
-		pts = std::max(pts + pts_offset, start_pts);
+		while (!should_quit.load()) {
+			AVPacket pkt;
+			unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
+				&pkt, av_packet_unref);
+			av_init_packet(&pkt);
+			pkt.data = nullptr;
+			pkt.size = 0;
 
-		//fprintf(stderr, "Got a frame from camera %d, pts = %ld, size = %d\n",
-		//	pkt.stream_index, pts, pkt.size);
-		FrameOnDisk frame = write_frame(pkt.stream_index, pts, pkt.data, pkt.size, &db);
-
-		post_to_main_thread([pkt, frame] {
-			if (pkt.stream_index == 0) {
-				global_mainwindow->ui->input1_display->setFrame(pkt.stream_index, frame);
-			} else if (pkt.stream_index == 1) {
-				global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, frame);
-			} else if (pkt.stream_index == 2) {
-				global_mainwindow->ui->input3_display->setFrame(pkt.stream_index, frame);
-			} else if (pkt.stream_index == 3) {
-				global_mainwindow->ui->input4_display->setFrame(pkt.stream_index, frame);
+			// TODO: Make it possible to abort av_read_frame() (use an interrupt callback);
+			// right now, should_quit will be ignored if it's hung on I/O.
+			if (av_read_frame(format_ctx.get(), &pkt) != 0) {
+				break;
 			}
-		});
 
-		if (last_pts != -1 && global_flags.slow_down_input) {
-			this_thread::sleep_for(microseconds((pts - last_pts) * 1000000 / TIMEBASE));
+			// Convert pts to our own timebase.
+			AVRational stream_timebase = format_ctx->streams[pkt.stream_index]->time_base;
+			int64_t pts = av_rescale_q(pkt.pts, stream_timebase, AVRational{ 1, TIMEBASE });
+
+			// Translate offset into our stream.
+			if (last_pts == -1) {
+				pts_offset = start_pts - pts;
+			}
+			pts = std::max(pts + pts_offset, start_pts);
+
+			//fprintf(stderr, "Got a frame from camera %d, pts = %ld, size = %d\n",
+			//      pkt.stream_index, pts, pkt.size);
+			FrameOnDisk frame = write_frame(pkt.stream_index, pts, pkt.data, pkt.size, &db);
+
+			post_to_main_thread([pkt, frame] {
+				if (pkt.stream_index == 0) {
+					global_mainwindow->ui->input1_display->setFrame(pkt.stream_index, frame);
+				} else if (pkt.stream_index == 1) {
+					global_mainwindow->ui->input2_display->setFrame(pkt.stream_index, frame);
+				} else if (pkt.stream_index == 2) {
+					global_mainwindow->ui->input3_display->setFrame(pkt.stream_index, frame);
+				} else if (pkt.stream_index == 3) {
+					global_mainwindow->ui->input4_display->setFrame(pkt.stream_index, frame);
+				}
+			});
+
+			if (last_pts != -1 && global_flags.slow_down_input) {
+				this_thread::sleep_for(microseconds((pts - last_pts) * 1000000 / TIMEBASE));
+			}
+			last_pts = pts;
+			current_pts = pts;
 		}
-		last_pts = pts;
-		current_pts = pts;
-	}
 
+		fprintf(stderr, "%s: Hit EOF. Waiting one second and trying again...\n", global_flags.stream_source.c_str());
+		sleep(1);
+
+		start_pts = last_pts + TIMEBASE;
+	}
 	return 0;
 }
