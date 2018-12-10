@@ -254,11 +254,9 @@ got_clip:
 			// (ie., move less than 1% of an _output_ frame), do so.
 			// TODO: Snap secondary (fade-to) clips in the same fashion.
 			bool snapped = false;
-			for (int64_t snap_pts : { frame_lower.pts, frame_upper.pts }) {
-				double snap_pts_as_frameno = (snap_pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
+			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
+				double snap_pts_as_frameno = (snap_frame.pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
-					FrameOnDisk snap_frame = frame_lower;
-					snap_frame.pts = snap_pts;
 					auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
 						destination->setFrame(primary_stream_idx, snap_frame, secondary_frame, fade_alpha);
 					};
@@ -276,7 +274,7 @@ got_clip:
 								snap_frame, secondary_frame, fade_alpha);
 						}
 					}
-					in_pts_origin += snap_pts - in_pts;
+					in_pts_origin += snap_frame.pts - in_pts;
 					snapped = true;
 					break;
 				}
