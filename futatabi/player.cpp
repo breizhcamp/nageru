@@ -112,9 +112,10 @@ got_clip:
 		double speed = 0.5;
 
 		int64_t in_pts_start_next_clip = -1;
+		steady_clock::time_point next_frame_start;
 		for (int frameno = 0; ; ++frameno) {  // Ends when the clip ends.
 			double out_pts = out_pts_origin + TIMEBASE * frameno / output_framerate;
-			steady_clock::time_point next_frame_start =
+			next_frame_start =
 				origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
 			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * speed / output_framerate);
 			pts = lrint(out_pts);
@@ -329,7 +330,7 @@ got_clip:
 			got_next_clip = false;
 
 			// Start the next clip from the point where the fade went out.
-			origin = steady_clock::now();
+			origin = next_frame_start;
 			in_pts_origin = in_pts_start_next_clip;
 			goto got_clip;
 		}
