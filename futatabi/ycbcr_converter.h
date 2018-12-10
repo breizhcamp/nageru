@@ -30,7 +30,7 @@ public:
 	movit::EffectChain *prepare_chain_for_fade(std::shared_ptr<Frame> frame, std::shared_ptr<Frame> secondary_frame, float fade_alpha);
 
 	// <tex> must be interleaved Y'CbCr.
-	movit::EffectChain *prepare_chain_for_fade_from_texture(GLuint tex, std::shared_ptr<Frame> secondary_frame, float fade_alpha);
+	movit::EffectChain *prepare_chain_for_fade_from_texture(GLuint tex, unsigned width, unsigned height, std::shared_ptr<Frame> secondary_frame, float fade_alpha);
 
 private:
 	movit::YCbCrFormat ycbcr_format;

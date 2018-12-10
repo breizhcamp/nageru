@@ -447,7 +447,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 		shared_ptr<Frame> frame2 = decode_jpeg_with_cache(secondary_frame, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
 
 		// Then fade against it, putting it into the fade Y' and CbCr textures.
-		ycbcr_semiplanar_converter->prepare_chain_for_fade_from_texture(qf.output_tex, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
+		ycbcr_semiplanar_converter->prepare_chain_for_fade_from_texture(qf.output_tex, 1280, 720, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
 
 		// Subsample and split Cb/Cr.
 		chroma_subsampler->subsample_chroma(resources->fade_cbcr_output_tex, 1280, 720, resources->cb_tex, resources->cr_tex);

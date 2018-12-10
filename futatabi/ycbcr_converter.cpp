@@ -141,7 +141,7 @@ EffectChain *YCbCrConverter::prepare_chain_for_fade(shared_ptr<Frame> frame, sha
 	return fade_chain.chain.get();
 }
 
-EffectChain *YCbCrConverter::prepare_chain_for_fade_from_texture(GLuint tex, std::shared_ptr<Frame> secondary_frame, float fade_alpha)
+EffectChain *YCbCrConverter::prepare_chain_for_fade_from_texture(GLuint tex, unsigned width, unsigned height, std::shared_ptr<Frame> secondary_frame, float fade_alpha)
 {
 	const FadeChain &fade_chain = interleaved_fade_chains[secondary_frame->is_semiplanar];
 	{
@@ -150,8 +150,8 @@ EffectChain *YCbCrConverter::prepare_chain_for_fade_from_texture(GLuint tex, std
 		format_copy.chroma_subsampling_y = 1;
 		fade_chain.input[0]->change_ycbcr_format(format_copy);
 
-		fade_chain.input[0]->set_width(1280);  // FIXME
-		fade_chain.input[0]->set_height(720);
+		fade_chain.input[0]->set_width(width);  // Doesn't really matter.
+		fade_chain.input[0]->set_height(height);
 		fade_chain.input[0]->set_texture_num(0, tex);
 
 		glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
