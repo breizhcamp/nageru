@@ -159,6 +159,7 @@ void MainWindow::cue_in_clicked()
 	clip.pts_in = current_pts;
 	cliplist_clips->add_clip(clip);
 	playlist_selection_changed();
+	ui->clip_list->scrollToBottom();
 }
 
 void MainWindow::cue_out_clicked()
@@ -182,6 +183,7 @@ void MainWindow::queue_clicked()
 		if (clip.pts_out != -1) {
 			playlist_clips->add_clip(clip);
 			playlist_selection_changed();
+			ui->playlist->scrollToBottom();
 		}
 		return;
 	}
@@ -198,6 +200,12 @@ void MainWindow::queue_clicked()
 	if (clip.pts_out != -1) {
 		playlist_clips->add_clip(clip);
 		playlist_selection_changed();
+		ui->playlist->scrollToBottom();
+		if (!ui->playlist->selectionModel()->hasSelection()) {
+			// TODO: Figure out why this doesn't always seem to actually select the row.
+			QModelIndex bottom = playlist_clips->index(playlist_clips->size() - 1, 0);
+			ui->playlist->setCurrentIndex(bottom);
+		}
 	}
 }
 
