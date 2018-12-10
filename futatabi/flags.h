@@ -6,6 +6,7 @@
 #include "defs.h"
 
 struct Flags {
+	int width = 1280, height = 720;
 	std::string stream_source;
 	std::string working_directory = ".";
 	bool slow_down_input = false;

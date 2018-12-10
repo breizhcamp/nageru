@@ -23,6 +23,8 @@ void usage()
 	fprintf(stderr, "Usage: futatabi [OPTION]... SOURCE_URL\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "      --help                      print usage information\n");
+	fprintf(stderr, "  -w, --width                     output width in pixels (default 1280)\n");
+	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
 	fprintf(stderr, "      --slow-down-input           slow down input to realtime (default on if no\n");
 	fprintf(stderr, "                                    source URL given)\n");
 	fprintf(stderr, "  -q, --interpolation-quality N   1 = fastest\n");
@@ -37,6 +39,8 @@ void parse_flags(int argc, char * const argv[])
 {
 	static const option long_options[] = {
 		{ "help", no_argument, 0, OPTION_HELP },
+		{ "width", required_argument, 0, 'w' },
+		{ "height", required_argument, 0, 'h' },
 		{ "slow-down-input", no_argument, 0, OPTION_SLOW_DOWN_INPUT },
 		{ "interpolation-quality", required_argument, 0, 'q' },
 		{ "working-directory", required_argument, 0, 'd' },
@@ -45,12 +49,18 @@ void parse_flags(int argc, char * const argv[])
 	};
 	for ( ;; ) {
 		int option_index = 0;
-		int c = getopt_long(argc, argv, "q:d:", long_options, &option_index);
+		int c = getopt_long(argc, argv, "w:h:q:d:", long_options, &option_index);
 
 		if (c == -1) {
 			break;
 		}
 		switch (c) {
+		case 'w':
+			global_flags.width = atoi(optarg);
+			break;
+		case 'h':
+			global_flags.height = atoi(optarg);
+			break;
 		case OPTION_SLOW_DOWN_INPUT:
 			global_flags.slow_down_input = true;
 			break;

@@ -1,6 +1,7 @@
 #include "jpeg_frame_view.h"
 
 #include "defs.h"
+#include "flags.h"
 #include "jpeg_destroyer.h"
 #include "jpeglib_error_wrapper.h"
 #include "shared/post_to_main_thread.h"
@@ -474,15 +475,15 @@ shared_ptr<Frame> get_black_frame()
 	static once_flag flag;
 	call_once(flag, [] {
 		black_frame.reset(new Frame);
-		black_frame->y.reset(new uint8_t[1280 * 720]);
-		black_frame->cb.reset(new uint8_t[(1280 / 2) * (720 / 2)]);
-		black_frame->cr.reset(new uint8_t[(1280 / 2) * (720 / 2)]);
-		black_frame->width = 1280;
-		black_frame->height = 720;
+		black_frame->y.reset(new uint8_t[global_flags.width * global_flags.height]);
+		black_frame->cb.reset(new uint8_t[(global_flags.width / 2) * (global_flags.height / 2)]);
+		black_frame->cr.reset(new uint8_t[(global_flags.width / 2) * (global_flags.height / 2)]);
+		black_frame->width = global_flags.width;
+		black_frame->height = global_flags.height;
 		black_frame->chroma_subsampling_x = 2;
 		black_frame->chroma_subsampling_y = 2;
-		black_frame->pitch_y = 1280;
-		black_frame->pitch_chroma = 1280 / 2;
+		black_frame->pitch_y = global_flags.width;
+		black_frame->pitch_chroma = global_flags.width / 2;
 	});
 	return black_frame;
 }

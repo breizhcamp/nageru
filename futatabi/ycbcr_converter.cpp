@@ -1,5 +1,6 @@
 #include "ycbcr_converter.h"
 
+#include "flags.h"
 #include "jpeg_frame.h"
 
 #include <movit/mix_effect.h>
@@ -63,15 +64,15 @@ YCbCrConverter::YCbCrConverter(YCbCrConverter::OutputMode output_mode, ResourceP
 	ycbcr_output_format.chroma_subsampling_x = 1;
 
 	// Planar Y'CbCr decoding chain.
-	planar_chain.reset(new EffectChain(1280, 720, resource_pool));
-	ycbcr_planar_input = (YCbCrInput *)planar_chain->add_input(new YCbCrInput(inout_format, ycbcr_format, 1280, 720, YCBCR_INPUT_PLANAR));
+	planar_chain.reset(new EffectChain(global_flags.width, global_flags.height, resource_pool));
+	ycbcr_planar_input = (YCbCrInput *)planar_chain->add_input(new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_PLANAR));
 	setup_outputs(output_mode, inout_format, ycbcr_output_format, planar_chain.get());
 	planar_chain->set_dither_bits(8);
 	planar_chain->finalize();
 
 	// Semiplanar Y'CbCr decoding chain (for images coming from VA-API).
-	semiplanar_chain.reset(new EffectChain(1280, 720, resource_pool));
-	ycbcr_semiplanar_input = (YCbCrInput *)semiplanar_chain->add_input(new YCbCrInput(inout_format, ycbcr_format, 1280, 720, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
+	semiplanar_chain.reset(new EffectChain(global_flags.width, global_flags.height, resource_pool));
+	ycbcr_semiplanar_input = (YCbCrInput *)semiplanar_chain->add_input(new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height, YCBCR_INPUT_SPLIT_Y_AND_CBCR));
 	setup_outputs(output_mode, inout_format, ycbcr_output_format, semiplanar_chain.get());
 	semiplanar_chain->set_dither_bits(8);
 	semiplanar_chain->finalize();
@@ -80,12 +81,12 @@ YCbCrConverter::YCbCrConverter(YCbCrConverter::OutputMode output_mode, ResourceP
 	for (bool first_input_is_semiplanar : { false, true }) {
 		for (bool second_input_is_semiplanar : { false, true }) {
 			FadeChain &fade_chain = fade_chains[first_input_is_semiplanar][second_input_is_semiplanar];
-			fade_chain.chain.reset(new EffectChain(1280, 720, resource_pool));
+			fade_chain.chain.reset(new EffectChain(global_flags.width, global_flags.height, resource_pool));
 			fade_chain.input[0] = (movit::YCbCrInput *)fade_chain.chain->add_input(
-				new YCbCrInput(inout_format, ycbcr_format, 1280, 720,
+				new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height,
 					first_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
 			fade_chain.input[1] = (movit::YCbCrInput *)fade_chain.chain->add_input(
-				new YCbCrInput(inout_format, ycbcr_format, 1280, 720,
+				new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height,
 					second_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
 			fade_chain.mix_effect = (movit::MixEffect *)fade_chain.chain->add_effect(
 				new MixEffect, fade_chain.input[0], fade_chain.input[1]);
@@ -99,16 +100,16 @@ YCbCrConverter::YCbCrConverter(YCbCrConverter::OutputMode output_mode, ResourceP
 	// directly from the GPU anyway).
 	for (bool second_input_is_semiplanar : { false, true }) {
 		FadeChain &fade_chain = interleaved_fade_chains[second_input_is_semiplanar];
-		fade_chain.chain.reset(new EffectChain(1280, 720, resource_pool));
+		fade_chain.chain.reset(new EffectChain(global_flags.width, global_flags.height, resource_pool));
 
 		ycbcr_format.chroma_subsampling_x = 1;
 		fade_chain.input[0] = (movit::YCbCrInput *)fade_chain.chain->add_input(
-			new YCbCrInput(inout_format, ycbcr_format, 1280, 720,
+			new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height,
 				YCBCR_INPUT_INTERLEAVED));
 
 		ycbcr_format.chroma_subsampling_x = 2;
 		fade_chain.input[1] = (movit::YCbCrInput *)fade_chain.chain->add_input(
-			new YCbCrInput(inout_format, ycbcr_format, 1280, 720,
+			new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height,
 				second_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
 
 		fade_chain.mix_effect = (movit::MixEffect *)fade_chain.chain->add_effect(

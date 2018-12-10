@@ -146,7 +146,7 @@ VideoStream::VideoStream()
 	glCreateTextures(GL_TEXTURE_2D, num_interpolate_slots, cr_tex);
 	check_error();
 
-	constexpr size_t width = 1280, height = 720;  // FIXME: adjustable width, height
+	size_t width = global_flags.width, height = global_flags.height;
 	int levels = find_num_levels(width, height);
 	for (size_t i = 0; i < num_interpolate_slots; ++i) {
 		glTextureStorage3D(input_tex[i], levels, GL_RGBA8, width, height, 2);
@@ -226,11 +226,11 @@ VideoStream::VideoStream()
 	check_error();
 
 	// The “last frame” is initially black.
-	unique_ptr<uint8_t[]> y(new uint8_t[1280 * 720]);
-	unique_ptr<uint8_t[]> cb_or_cr(new uint8_t[640 * 720]);
-	memset(y.get(), 16, 1280 * 720);
-	memset(cb_or_cr.get(), 128, 640 * 720);
-	last_frame = encode_jpeg(y.get(), cb_or_cr.get(), cb_or_cr.get(), 1280, 720);
+	unique_ptr<uint8_t[]> y(new uint8_t[global_flags.width * global_flags.height]);
+	unique_ptr<uint8_t[]> cb_or_cr(new uint8_t[(global_flags.width / 2) * global_flags.height]);
+	memset(y.get(), 16, global_flags.width * global_flags.height);
+	memset(cb_or_cr.get(), 128, (global_flags.width / 2) * global_flags.height);
+	last_frame = encode_jpeg(y.get(), cb_or_cr.get(), cb_or_cr.get(), global_flags.width, global_flags.height);
 }
 
 VideoStream::~VideoStream() {}
@@ -256,11 +256,10 @@ void VideoStream::start()
 
 	string video_extradata;
 
-	constexpr int width = 1280, height = 720;  // Doesn't matter for MJPEG.
+	size_t width = global_flags.width, height = global_flags.height;  // Doesn't matter for MJPEG.
 	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, /*audio_codec_parameters=*/nullptr,
 		AVCOL_SPC_BT709, Mux::WITHOUT_AUDIO,
 		COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
-
 
 	encode_thread = thread(&VideoStream::encode_thread_func, this);
 }
@@ -347,7 +346,7 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	shared_ptr<Frame> frame1 = decode_jpeg_with_cache(frame1_spec, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
 	shared_ptr<Frame> frame2 = decode_jpeg_with_cache(frame2_spec, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
 
-	ycbcr_semiplanar_converter->prepare_chain_for_fade(frame1, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
+	ycbcr_semiplanar_converter->prepare_chain_for_fade(frame1, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, global_flags.width, global_flags.height);
 
 	QueuedFrame qf;
 	qf.local_pts = local_pts;
@@ -360,17 +359,17 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	qf.secondary_frame = frame2_spec;
 
 	// Subsample and split Cb/Cr.
-	chroma_subsampler->subsample_chroma(resources->fade_cbcr_output_tex, 1280, 720, resources->cb_tex, resources->cr_tex);
+	chroma_subsampler->subsample_chroma(resources->fade_cbcr_output_tex, global_flags.width, global_flags.height, resources->cb_tex, resources->cr_tex);
 
 	// Read it down (asynchronously) to the CPU.
 	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, resources->pbo);
 	check_error();
-	glGetTextureImage(resources->fade_y_output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
+	glGetTextureImage(resources->fade_y_output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, global_flags.width * global_flags.height * 4, BUFFER_OFFSET(0));
 	check_error();
-	glGetTextureImage(resources->cb_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3, BUFFER_OFFSET(1280 * 720));
+	glGetTextureImage(resources->cb_tex, 0, GL_RED, GL_UNSIGNED_BYTE, global_flags.width * global_flags.height * 3, BUFFER_OFFSET(global_flags.width * global_flags.height));
 	check_error();
-	glGetTextureImage(resources->cr_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3 - 640 * 720, BUFFER_OFFSET(1280 * 720 + 640 * 720));
+	glGetTextureImage(resources->cr_tex, 0, GL_RED, GL_UNSIGNED_BYTE, global_flags.width * global_flags.height * 3 - (global_flags.width / 2) * global_flags.height, BUFFER_OFFSET(global_flags.width * global_flags.height + (global_flags.width / 2) * global_flags.height));
 	check_error();
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
@@ -425,7 +424,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 		FrameOnDisk frame_spec = frame_no == 1 ? frame2 : frame1;
 		bool did_decode;
 		shared_ptr<Frame> frame = decode_jpeg_with_cache(frame_spec, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
-		ycbcr_converter->prepare_chain_for_conversion(frame)->render_to_fbo(resources->input_fbos[frame_no], 1280, 720);
+		ycbcr_converter->prepare_chain_for_conversion(frame)->render_to_fbo(resources->input_fbos[frame_no], global_flags.width, global_flags.height);
 	}
 
 	glGenerateTextureMipmap(resources->input_tex);
@@ -439,7 +438,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 
 	if (secondary_frame.pts != -1) {
 		// Fade. First kick off the interpolation.
-		tie(qf.output_tex, ignore) = interpolate_no_split->exec(resources->input_tex, resources->gray_tex, qf.flow_tex, 1280, 720, alpha);
+		tie(qf.output_tex, ignore) = interpolate_no_split->exec(resources->input_tex, resources->gray_tex, qf.flow_tex, global_flags.width, global_flags.height, alpha);
 		check_error();
 
 		// Now decode the image we are fading against.
@@ -447,18 +446,18 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 		shared_ptr<Frame> frame2 = decode_jpeg_with_cache(secondary_frame, DECODE_IF_NOT_IN_CACHE, &frame_reader, &did_decode);
 
 		// Then fade against it, putting it into the fade Y' and CbCr textures.
-		ycbcr_semiplanar_converter->prepare_chain_for_fade_from_texture(qf.output_tex, 1280, 720, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, 1280, 720);
+		ycbcr_semiplanar_converter->prepare_chain_for_fade_from_texture(qf.output_tex, global_flags.width, global_flags.height, frame2, fade_alpha)->render_to_fbo(resources->fade_fbo, global_flags.width, global_flags.height);
 
 		// Subsample and split Cb/Cr.
-		chroma_subsampler->subsample_chroma(resources->fade_cbcr_output_tex, 1280, 720, resources->cb_tex, resources->cr_tex);
+		chroma_subsampler->subsample_chroma(resources->fade_cbcr_output_tex, global_flags.width, global_flags.height, resources->cb_tex, resources->cr_tex);
 
 		interpolate_no_split->release_texture(qf.output_tex);
 	} else {
-		tie(qf.output_tex, qf.cbcr_tex) = interpolate->exec(resources->input_tex, resources->gray_tex, qf.flow_tex, 1280, 720, alpha);
+		tie(qf.output_tex, qf.cbcr_tex) = interpolate->exec(resources->input_tex, resources->gray_tex, qf.flow_tex, global_flags.width, global_flags.height, alpha);
 		check_error();
 
 		// Subsample and split Cb/Cr.
-		chroma_subsampler->subsample_chroma(qf.cbcr_tex, 1280, 720, resources->cb_tex, resources->cr_tex);
+		chroma_subsampler->subsample_chroma(qf.cbcr_tex, global_flags.width, global_flags.height, resources->cb_tex, resources->cr_tex);
 	}
 
 	// We could have released qf.flow_tex here, but to make sure we don't cause a stall
@@ -470,14 +469,14 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, resources->pbo);
 	check_error();
 	if (secondary_frame.pts != -1) {
-		glGetTextureImage(resources->fade_y_output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
+		glGetTextureImage(resources->fade_y_output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, global_flags.width * global_flags.height * 4, BUFFER_OFFSET(0));
 	} else {
-		glGetTextureImage(qf.output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 4, BUFFER_OFFSET(0));
+		glGetTextureImage(qf.output_tex, 0, GL_RED, GL_UNSIGNED_BYTE, global_flags.width * global_flags.height * 4, BUFFER_OFFSET(0));
 	}
 	check_error();
-	glGetTextureImage(resources->cb_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3, BUFFER_OFFSET(1280 * 720));
+	glGetTextureImage(resources->cb_tex, 0, GL_RED, GL_UNSIGNED_BYTE, global_flags.width * global_flags.height * 3, BUFFER_OFFSET(global_flags.width * global_flags.height));
 	check_error();
-	glGetTextureImage(resources->cr_tex, 0, GL_RED, GL_UNSIGNED_BYTE, 1280 * 720 * 3 - 640 * 720, BUFFER_OFFSET(1280 * 720 + 640 * 720));
+	glGetTextureImage(resources->cr_tex, 0, GL_RED, GL_UNSIGNED_BYTE, global_flags.width * global_flags.height * 3 - (global_flags.width / 2) * global_flags.height, BUFFER_OFFSET(global_flags.width * global_flags.height + (global_flags.width / 2) * global_flags.height));
 	check_error();
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
@@ -588,10 +587,10 @@ void VideoStream::encode_thread_func()
 		} else if (qf.type == QueuedFrame::FADED) {
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
-			shared_ptr<Frame> frame = frame_from_pbo(qf.resources->pbo_contents, 1280, 720);
+			shared_ptr<Frame> frame = frame_from_pbo(qf.resources->pbo_contents, global_flags.width, global_flags.height);
 
 			// Now JPEG encode it, and send it on to the stream.
-			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), 1280, 720);
+			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), global_flags.width, global_flags.height);
 
 			AVPacket pkt;
 			av_init_packet(&pkt);
@@ -604,13 +603,13 @@ void VideoStream::encode_thread_func()
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
 
 			// Send it on to display.
-			shared_ptr<Frame> frame = frame_from_pbo(qf.resources->pbo_contents, 1280, 720);
+			shared_ptr<Frame> frame = frame_from_pbo(qf.resources->pbo_contents, global_flags.width, global_flags.height);
 			if (qf.display_decoded_func != nullptr) {
 				qf.display_decoded_func(frame);
 			}
 
 			// Now JPEG encode it, and send it on to the stream.
-			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), 1280, 720);
+			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), global_flags.width, global_flags.height);
 			compute_flow->release_texture(qf.flow_tex);
 			if (qf.type != QueuedFrame::FADED_INTERPOLATED) {
 				interpolate->release_texture(qf.output_tex);
