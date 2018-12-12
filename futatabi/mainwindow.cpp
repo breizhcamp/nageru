@@ -126,8 +126,8 @@ MainWindow::MainWindow()
 		this, &MainWindow::playlist_selection_changed);
 	playlist_selection_changed();  // First time set-up.
 
-	preview_player = new Player(ui->preview_display, /*also_output_to_stream=*/false);
-	live_player = new Player(ui->live_display, /*also_output_to_stream=*/true);
+	preview_player.reset(new Player(ui->preview_display, /*also_output_to_stream=*/false));
+	live_player.reset(new Player(ui->live_display, /*also_output_to_stream=*/true));
 	live_player->set_done_callback([this]{
 		post_to_main_thread([this]{
 			live_player_clip_done();
@@ -147,6 +147,11 @@ MainWindow::MainWindow()
 
 	connect(ui->clip_list->selectionModel(), &QItemSelectionModel::currentChanged,
 		this, &MainWindow::clip_list_selection_changed);
+}
+
+MainWindow::~MainWindow()
+{
+	// Empty so that we can forward-declare Player in the .h file.
 }
 
 void MainWindow::cue_in_clicked()
@@ -374,6 +379,9 @@ pair<Clip, size_t> MainWindow::live_player_get_next_clip()
 {
 	// playlist_clips can only be accessed on the main thread.
 	// Hopefully, we won't have to wait too long for this to come back.
+	//
+	// TODO: If MainWindow is in the process of being destroyed and waiting
+	// for Player to shut down, we could have a deadlock here.
 	promise<pair<Clip, size_t>> clip_promise;
 	future<pair<Clip, size_t>> clip = clip_promise.get_future();
 	post_to_main_thread([this, &clip_promise] {

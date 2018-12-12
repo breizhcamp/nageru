@@ -269,6 +269,8 @@ void VideoStream::start()
 
 void VideoStream::stop()
 {
+	should_quit = true;
+	clear_queue();
 	encode_thread.join();
 }
 
@@ -552,7 +554,7 @@ void VideoStream::encode_thread_func()
 		exit(1);
 	}
 
-	for ( ;; ) {
+	while (!should_quit) {
 		QueuedFrame qf;
 		{
 			unique_lock<mutex> lock(queue_lock);

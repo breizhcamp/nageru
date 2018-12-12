@@ -13,6 +13,7 @@ extern "C" {
 #include "shared/ref_counted_gl_sync.h"
 #include "queue_spot_holder.h"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <deque>
@@ -66,6 +67,7 @@ private:
 
 	void encode_thread_func();
 	std::thread encode_thread;
+	std::atomic<bool> should_quit{false};
 
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);

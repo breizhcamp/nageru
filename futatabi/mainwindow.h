@@ -5,6 +5,7 @@
 #include "db.h"
 #include "state.pb.h"
 
+#include <memory>
 #include <mutex>
 #include <QLabel>
 #include <QMainWindow>
@@ -24,6 +25,7 @@ class MainWindow : public QMainWindow {
 
 public:
 	MainWindow();
+	~MainWindow();
 
 	// HTTP callback. TODO: Does perhaps not belong to MainWindow?
 	std::pair<std::string, std::string> get_queue_status() const;
@@ -33,7 +35,7 @@ public:
 
 private:
 	QLabel *disk_free_label;
-	Player *preview_player, *live_player;
+	std::unique_ptr<Player> preview_player, live_player;
 	DB db;
 
 	// State when doing a scrub operation on a timestamp with the mouse.

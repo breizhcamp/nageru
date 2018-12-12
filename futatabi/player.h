@@ -12,6 +12,7 @@ extern "C" {
 #include <condition_variable>
 #include <functional>
 #include <mutex>
+#include <thread>
 
 class JPEGFrameView;
 class VideoStream;
@@ -21,6 +22,7 @@ class QSurfaceFormat;
 class Player : public QueueInterface {
 public:
 	Player(JPEGFrameView *destination, bool also_output_to_stream);
+	~Player();
 
 	void play_clip(const Clip &clip, size_t clip_idx, unsigned stream_idx);
 	void override_angle(unsigned stream_idx);  // For the current clip only.
@@ -54,6 +56,9 @@ private:
 	// Find the frame immediately before and after this point.
 	// Returns false if pts is after the last frame.
 	bool find_surrounding_frames(int64_t pts, int stream_idx, FrameOnDisk *frame_lower, FrameOnDisk *frame_upper);
+
+	std::thread player_thread;
+	std::atomic<bool> should_quit{false};
 
 	JPEGFrameView *destination;
 	done_callback_func done_callback;

@@ -54,7 +54,7 @@ void Player::thread_func(bool also_output_to_stream)
 	bool got_next_clip = false;
 	double next_clip_fade_time = -1.0;
 
-	for ( ;; ) {
+	while (!should_quit) {
 wait_for_clip:
 		bool clip_ready;
 		steady_clock::time_point before_sleep = steady_clock::now();
@@ -63,8 +63,11 @@ wait_for_clip:
 		{
 			unique_lock<mutex> lock(queue_state_mu);
 			clip_ready = new_clip_changed.wait_for(lock, milliseconds(100), [this] {
-				return new_clip_ready && current_clip.pts_in != -1;
+				return should_quit || (new_clip_ready && current_clip.pts_in != -1);
 			});
+			if (should_quit) {
+				return;
+			}
 			new_clip_ready = false;
 			playing = true;
 		}
@@ -114,7 +117,7 @@ got_clip:
 
 		int64_t in_pts_start_next_clip = -1;
 		steady_clock::time_point next_frame_start;
-		for (int frameno = 0; ; ++frameno) {  // Ends when the clip ends.
+		for (int frameno = 0; !should_quit; ++frameno) {  // Ends when the clip ends.
 			double out_pts = out_pts_origin + TIMEBASE * frameno / output_framerate;
 			next_frame_start =
 				origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
@@ -198,8 +201,11 @@ got_clip:
 				if (video_stream == nullptr) {
 					// No queue, just wait until the right time and then show the frame.
 					new_clip_changed.wait_until(lock, next_frame_start, [this]{
-						return new_clip_ready || override_stream_idx != -1;
+						return should_quit || new_clip_ready || override_stream_idx != -1;
 					});
+				if (should_quit) {
+					return;
+				}
 				} else {
 					// If the queue is full (which is really the state we'd like to be in),
 					// wait until there's room for one more frame (ie., one was output from
@@ -211,8 +217,11 @@ got_clip:
 						if (num_queued_frames < max_queued_frames) {
 							return true;
 						}
-						return new_clip_ready || override_stream_idx != -1;
+						return should_quit || new_clip_ready || override_stream_idx != -1;
 					});
+				}
+				if (should_quit) {
+					return;
 				}
 				if (new_clip_ready) {
 					if (video_stream != nullptr) {
@@ -307,6 +316,10 @@ got_clip:
 			}
 		}
 
+		if (should_quit) {
+			return;
+		}
+
 		// The clip ended.
 
 		// Last-ditch effort to get the next clip (if e.g. the fade time was zero seconds).
@@ -373,7 +386,17 @@ bool Player::find_surrounding_frames(int64_t pts, int stream_idx, FrameOnDisk *f
 Player::Player(JPEGFrameView *destination, bool also_output_to_stream)
 	: destination(destination)
 {
-	thread(&Player::thread_func, this, also_output_to_stream).detach();
+	player_thread = thread(&Player::thread_func, this, also_output_to_stream);
+}
+
+Player::~Player()
+{
+	should_quit = true;
+	if (video_stream != nullptr) {
+		video_stream->stop();
+	}
+	new_clip_changed.notify_all();
+	player_thread.join();
 }
 
 void Player::play_clip(const Clip &clip, size_t clip_idx, unsigned stream_idx)
