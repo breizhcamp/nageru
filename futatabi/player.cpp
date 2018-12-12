@@ -103,10 +103,7 @@ got_clip:
 			lock_guard<mutex> lock(frame_mu);
 
 			// Find the first frame such that frame.pts <= in_pts.
-			auto it = lower_bound(frames[stream_idx].begin(),
-				frames[stream_idx].end(),
-				in_pts_origin,
-				[](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
+			auto it = find_last_frame_before(frames[stream_idx], in_pts_origin);
 			if (it != frames[stream_idx].end()) {
 				in_pts_origin = it->pts;
 			}
@@ -363,10 +360,7 @@ bool Player::find_surrounding_frames(int64_t pts, int stream_idx, FrameOnDisk *f
 	lock_guard<mutex> lock(frame_mu);
 
 	// Find the first frame such that frame.pts >= pts.
-	auto it = lower_bound(frames[stream_idx].begin(),
-		frames[stream_idx].end(),
-		pts,
-		[](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
+	auto it = find_last_frame_before(frames[stream_idx], pts);
 	if (it == frames[stream_idx].end()) {
 		return false;
 	}
@@ -451,8 +445,7 @@ void Player::override_angle(unsigned stream_idx)
 	}
 
 	lock_guard<mutex> lock(frame_mu);
-	auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts_out,
-		[](int64_t pts, const FrameOnDisk &frame) { return pts < frame.pts; });
+	auto it = find_first_frame_at_or_after(frames[stream_idx], pts_out);
 	if (it == frames[stream_idx].end()) {
 		return;
 	}

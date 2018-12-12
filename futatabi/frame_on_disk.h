@@ -1,6 +1,7 @@
 #ifndef _FRAME_ON_DISK_H
 #define _FRAME_ON_DISK_H 1
 
+#include <algorithm>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -33,5 +34,20 @@ private:
 	int fd = -1;
 	int last_filename_idx = -1;
 };
+
+// Utility functions for dealing with binary search.
+inline std::vector<FrameOnDisk>::iterator
+find_last_frame_before(std::vector<FrameOnDisk> &frames, int64_t pts_origin)
+{
+	return std::lower_bound(frames.begin(), frames.end(), pts_origin,
+		[](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
+}
+
+inline std::vector<FrameOnDisk>::iterator
+find_first_frame_at_or_after(std::vector<FrameOnDisk> &frames, int64_t pts_origin)
+{
+	return std::upper_bound(frames.begin(), frames.end(), pts_origin - 1,
+		[](int64_t pts, const FrameOnDisk &frame) { return pts < frame.pts; });
+}
 
 #endif  // !defined(_FRAME_ON_DISK_H)

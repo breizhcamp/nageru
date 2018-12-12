@@ -661,8 +661,7 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 		lock_guard<mutex> lock(frame_mu);
 		if (frames[stream_idx].empty())
 			return;
-		auto it = lower_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts,
-			[](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
+		auto it = find_last_frame_before(frames[stream_idx], pts);
 		if (it != frames[stream_idx].end()) {
 			pts = it->pts;
 		}
@@ -671,8 +670,7 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 		lock_guard<mutex> lock(frame_mu);
 		if (frames[stream_idx].empty())
 			return;
-		auto it = upper_bound(frames[stream_idx].begin(), frames[stream_idx].end(), pts - 1,
-			[](int64_t pts, const FrameOnDisk &frame) { return pts < frame.pts; });
+		auto it = find_first_frame_at_or_after(frames[stream_idx], pts);
 		if (it != frames[stream_idx].end()) {
 			pts = it->pts;
 		}
