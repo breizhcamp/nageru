@@ -297,6 +297,7 @@ futatabi_srcs = ['futatabi/flow.cpp', 'futatabi/gpu_timers.cpp']
 futatabi_srcs += ['futatabi/main.cpp', 'futatabi/player.cpp', 'futatabi/video_stream.cpp', 'futatabi/chroma_subsampler.cpp']
 futatabi_srcs += ['futatabi/vaapi_jpeg_decoder.cpp', 'futatabi/db.cpp', 'futatabi/ycbcr_converter.cpp', 'futatabi/flags.cpp']
 futatabi_srcs += ['futatabi/mainwindow.cpp', 'futatabi/jpeg_frame_view.cpp', 'futatabi/clip_list.cpp', 'futatabi/frame_on_disk.cpp']
+futatabi_srcs += ['futatabi/export.cpp']
 futatabi_srcs += moc_files
 futatabi_srcs += proto_generated
 

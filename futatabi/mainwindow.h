@@ -102,6 +102,7 @@ private:
 
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
 	void exit_triggered();
+	void export_cliplist_clip_multitrack_triggered();
 	void manual_triggered();
 	void about_triggered();
 

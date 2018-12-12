@@ -2,6 +2,7 @@
 
 #include "shared/aboutdialog.h"
 #include "clip_list.h"
+#include "export.h"
 #include "shared/disk_space_estimator.h"
 #include "flags.h"
 #include "frame_on_disk.h"
@@ -11,6 +12,7 @@
 #include "ui_mainwindow.h"
 
 #include <QDesktopServices>
+#include <QFileDialog>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QShortcut>
@@ -39,6 +41,7 @@ MainWindow::MainWindow()
 
 	// The menus.
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
+	connect(ui->export_cliplist_clip_multitrack_action, &QAction::triggered, this, &MainWindow::export_cliplist_clip_multitrack_triggered);
 	connect(ui->manual_action, &QAction::triggered, this, &MainWindow::manual_triggered);
 	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
 
@@ -752,6 +755,30 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
 void MainWindow::exit_triggered()
 {
 	close();
+}
+
+void MainWindow::export_cliplist_clip_multitrack_triggered()
+{
+	QItemSelectionModel *selected = ui->clip_list->selectionModel();
+	if (!selected->hasSelection()) {
+		QMessageBox msgbox;
+		msgbox.setText("No clip selected in the clip list. Select one and try exporting again.");
+		msgbox.exec();
+		return;
+	}
+
+	QModelIndex index = selected->currentIndex();
+	Clip clip = *cliplist_clips->clip(index.row());
+	QString filename = QFileDialog::getSaveFileName(this,
+		"Export multitrack clip", QString(), tr("Matroska video files (*.mkv)"));
+	if (filename.isNull()) {
+		// Cancel.
+		return;
+	}
+	if (!filename.endsWith(".mkv")) {
+		filename += ".mkv";
+	}
+	export_multitrack_clip(filename.toStdString(), clip);
 }
 
 void MainWindow::manual_triggered()

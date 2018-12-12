@@ -450,6 +450,13 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
+    <widget class="QMenu" name="menu_Export">
+     <property name="title">
+      <string>&amp;Export</string>
+     </property>
+     <addaction name="export_cliplist_clip_multitrack_action"/>
+    </widget>
+    <addaction name="menu_Export"/>
     <addaction name="exit_action"/>
    </widget>
    <widget class="QMenu" name="menu_Help">
@@ -475,6 +482,11 @@
   <action name="about_action">
    <property name="text">
     <string>&amp;About Futatabi…</string>
+   </property>
+  </action>
+  <action name="export_cliplist_clip_multitrack_action">
+   <property name="text">
+    <string>Selected clip list clip as raw &amp;multitrack…</string>
    </property>
   </action>
  </widget>
