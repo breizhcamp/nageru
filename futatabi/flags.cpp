@@ -27,7 +27,8 @@ void usage()
 	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
 	fprintf(stderr, "      --slow-down-input           slow down input to realtime (default on if no\n");
 	fprintf(stderr, "                                    source URL given)\n");
-	fprintf(stderr, "  -q, --interpolation-quality N   1 = fastest\n");
+	fprintf(stderr, "  -q, --interpolation-quality N   0 = off\n");
+	fprintf(stderr, "                                  1 = fastest\n");
 	fprintf(stderr, "                                  2 = default (realtime 720p on fast embedded GPUs)\n");
 	fprintf(stderr, "                                  3 = good (realtime 720p on GTX 970 or so)\n");
 	fprintf(stderr, "                                  4 = best (not realtime on any current GPU)\n");
@@ -84,8 +85,8 @@ void parse_flags(int argc, char * const argv[])
 		}
 	}
 
-	if (global_flags.interpolation_quality < 1 || global_flags.interpolation_quality > 4) {
-		fprintf(stderr, "Interpolation quality must be 1, 2, 3 or 4.\n");
+	if (global_flags.interpolation_quality < 0 || global_flags.interpolation_quality > 4) {
+		fprintf(stderr, "Interpolation quality must be 0, 1, 2, 3 or 4.\n");
 		usage();
 		exit(1);
 	}

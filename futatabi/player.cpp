@@ -4,6 +4,7 @@
 #include "shared/context.h"
 #include "defs.h"
 #include "shared/ffmpeg_raii.h"
+#include "flags.h"
 #include "frame_on_disk.h"
 #include "shared/httpd.h"
 #include "jpeg_frame_view.h"
@@ -229,7 +230,7 @@ got_clip:
 				}
 			}
 
-			if (frame_lower.pts == frame_upper.pts) {
+			if (frame_lower.pts == frame_upper.pts || global_flags.interpolation_quality == 0) {
 				auto display_func = [this, primary_stream_idx, frame_lower, secondary_frame, fade_alpha]{
 					destination->setFrame(primary_stream_idx, frame_lower, secondary_frame, fade_alpha);
 				};

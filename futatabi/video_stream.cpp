@@ -207,7 +207,10 @@ VideoStream::VideoStream()
 	check_error();
 
 	OperatingPoint op;
-	if (global_flags.interpolation_quality == 1) {
+	if (global_flags.interpolation_quality == 0) {
+		// Allocate something just for simplicity; we won't be using it.
+		op = operating_point1;
+	} else if (global_flags.interpolation_quality == 1) {
 		op = operating_point1;
 	} else if (global_flags.interpolation_quality == 2) {
 		op = operating_point2;
