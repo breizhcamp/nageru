@@ -269,6 +269,7 @@ void VideoStream::start()
 void VideoStream::stop()
 {
 	should_quit = true;
+	queue_changed.notify_all();
 	clear_queue();
 	encode_thread.join();
 }
@@ -560,8 +561,11 @@ void VideoStream::encode_thread_func()
 
 			// Wait until we have a frame to play.
 			queue_changed.wait(lock, [this]{
-				return !frame_queue.empty();
+				return !frame_queue.empty() || should_quit;
 			});
+			if (should_quit) {
+				break;
+			}
 			steady_clock::time_point frame_start = frame_queue.front().local_pts;
 
 			// Now sleep until the frame is supposed to start (the usual case),
