@@ -228,21 +228,20 @@ void export_interpolated_clip(const string &filename, const Clip &clip)
 	future<void> done = done_promise.get_future();
 	std::atomic<double> current_value{0.0};
 
-	unique_ptr<Player> player(new Player(/*destination=*/nullptr, Player::FILE_STREAM_OUTPUT, closer.release()));
-	player->set_done_callback([&done_promise] {
+	Player player(/*destination=*/nullptr, Player::FILE_STREAM_OUTPUT, closer.release());
+	player.set_done_callback([&done_promise] {
 		done_promise.set_value();
 	});
-	player->set_progress_callback([&current_value] (const std::map<size_t, double> &player_progress) {
+	player.set_progress_callback([&current_value] (const std::map<size_t, double> &player_progress) {
 		assert(player_progress.size() == 1);
 		current_value = player_progress.begin()->second;
 	});
-	player->play_clip(clip, /*clip_idx=*/0, clip.stream_idx);
+	player.play_clip(clip, /*clip_idx=*/0, clip.stream_idx);
 	while (done.wait_for(std::chrono::milliseconds(100)) != future_status::ready && !progress.wasCanceled()) {
 		progress.setValue(lrint(100000.0 * current_value));
 	}
 	if (progress.wasCanceled()) {
 		unlink(filename.c_str());
-		player.reset();
-		return;
+		// Destroying player on scope exit will abort the render job.
 	}
 }
