@@ -42,6 +42,7 @@ MainWindow::MainWindow()
 	// The menus.
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
 	connect(ui->export_cliplist_clip_multitrack_action, &QAction::triggered, this, &MainWindow::export_cliplist_clip_multitrack_triggered);
+	connect(ui->export_playlist_clip_interpolated_action, &QAction::triggered, this, &MainWindow::export_playlist_clip_interpolated_triggered);
 	connect(ui->manual_action, &QAction::triggered, this, &MainWindow::manual_triggered);
 	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
 
@@ -129,8 +130,8 @@ MainWindow::MainWindow()
 		this, &MainWindow::playlist_selection_changed);
 	playlist_selection_changed();  // First time set-up.
 
-	preview_player.reset(new Player(ui->preview_display, /*also_output_to_stream=*/false));
-	live_player.reset(new Player(ui->live_display, /*also_output_to_stream=*/true));
+	preview_player.reset(new Player(ui->preview_display, Player::NO_STREAM_OUTPUT));
+	live_player.reset(new Player(ui->live_display, Player::HTTPD_STREAM_OUTPUT));
 	live_player->set_done_callback([this]{
 		post_to_main_thread([this]{
 			live_player_clip_done();
@@ -779,6 +780,30 @@ void MainWindow::export_cliplist_clip_multitrack_triggered()
 		filename += ".mkv";
 	}
 	export_multitrack_clip(filename.toStdString(), clip);
+}
+
+void MainWindow::export_playlist_clip_interpolated_triggered()
+{
+	QItemSelectionModel *selected = ui->playlist->selectionModel();
+	if (!selected->hasSelection()) {
+		QMessageBox msgbox;
+		msgbox.setText("No clip selected in the playlist. Select one and try exporting again.");
+		msgbox.exec();
+		return;
+	}
+
+	QModelIndex index = selected->currentIndex();
+	Clip clip = *playlist_clips->clip(index.row());
+	QString filename = QFileDialog::getSaveFileName(this,
+		"Export interpolated clip", QString(), tr("Matroska video files (*.mkv)"));
+	if (filename.isNull()) {
+		// Cancel.
+		return;
+	}
+	if (!filename.endsWith(".mkv")) {
+		filename += ".mkv";
+	}
+	export_interpolated_clip(filename.toStdString(), clip);
 }
 
 void MainWindow::manual_triggered()

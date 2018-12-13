@@ -129,7 +129,8 @@ vector<uint8_t> encode_jpeg(const uint8_t *y_data, const uint8_t *cb_data, const
 	return move(dest.dest);
 }
 
-VideoStream::VideoStream()
+VideoStream::VideoStream(AVFormatContext *file_avctx)
+	: avctx(file_avctx), output_fast_forward(file_avctx != nullptr)
 {
 	ycbcr_converter.reset(new YCbCrConverter(YCbCrConverter::OUTPUT_TO_DUAL_YCBCR, /*resource_pool=*/nullptr));
 	ycbcr_semiplanar_converter.reset(new YCbCrConverter(YCbCrConverter::OUTPUT_TO_SEMIPLANAR, /*resource_pool=*/nullptr));
@@ -240,27 +241,25 @@ VideoStream::~VideoStream() {}
 
 void VideoStream::start()
 {
-	AVFormatContext *avctx = avformat_alloc_context();
+	if (avctx == nullptr) {
+		avctx = avformat_alloc_context();
 
-	// We use Matroska, because it's pretty much the only mux where FFmpeg
-	// allows writing chroma location to override JFIF's default center placement.
-	// (Note that at the time of writing, however, FFmpeg does not correctly
-	// _read_ this information!)
-	avctx->oformat = av_guess_format("matroska", nullptr, nullptr);
+		// We use Matroska, because it's pretty much the only mux where FFmpeg
+		// allows writing chroma location to override JFIF's default center placement.
+		// (Note that at the time of writing, however, FFmpeg does not correctly
+		// _read_ this information!)
+		avctx->oformat = av_guess_format("matroska", nullptr, nullptr);
 
-	uint8_t *buf = (uint8_t *)av_malloc(MUX_BUFFER_SIZE);
-	avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, nullptr, nullptr);
-	avctx->pb->write_data_type = &VideoStream::write_packet2_thunk;
-	avctx->pb->ignore_boundary_point = 1;
+		uint8_t *buf = (uint8_t *)av_malloc(MUX_BUFFER_SIZE);
+		avctx->pb = avio_alloc_context(buf, MUX_BUFFER_SIZE, 1, this, nullptr, nullptr, nullptr);
+		avctx->pb->write_data_type = &VideoStream::write_packet2_thunk;
+		avctx->pb->ignore_boundary_point = 1;
 
-	Mux::Codec video_codec = Mux::CODEC_MJPEG;
-
-	avctx->flags = AVFMT_FLAG_CUSTOM_IO;
-
-	string video_extradata;
+		avctx->flags = AVFMT_FLAG_CUSTOM_IO;
+	}
 
 	size_t width = global_flags.width, height = global_flags.height;  // Doesn't matter for MJPEG.
-	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, /*audio_codec_parameters=*/nullptr,
+	mux.reset(new Mux(avctx, width, height, Mux::CODEC_MJPEG, /*video_extradata=*/"", /*audio_codec_parameters=*/nullptr,
 		AVCOL_SPC_BT709, Mux::WITHOUT_AUDIO,
 		COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
 
@@ -567,9 +566,14 @@ void VideoStream::encode_thread_func()
 
 			// Now sleep until the frame is supposed to start (the usual case),
 			// _or_ clear_queue() happened.
-			bool aborted = queue_changed.wait_until(lock, frame_start, [this, frame_start]{
-				return frame_queue.empty() || frame_queue.front().local_pts != frame_start;
-			});
+			bool aborted;
+			if (output_fast_forward) {
+				aborted = frame_queue.empty() || frame_queue.front().local_pts != frame_start;
+			} else {
+				aborted = queue_changed.wait_until(lock, frame_start, [this, frame_start]{
+					return frame_queue.empty() || frame_queue.front().local_pts != frame_start;
+				});
+			}
 			if (aborted) {
 				// clear_queue() happened, so don't play this frame after all.
 				continue;
@@ -586,7 +590,7 @@ void VideoStream::encode_thread_func()
 			pkt.stream_index = 0;
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
-			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 
 			last_frame.assign(&jpeg[0], &jpeg[0] + jpeg.size());
 		} else if (qf.type == QueuedFrame::FADED) {
@@ -602,7 +606,7 @@ void VideoStream::encode_thread_func()
 			pkt.stream_index = 0;
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
-			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 			last_frame = move(jpeg);
 		} else if (qf.type == QueuedFrame::INTERPOLATED || qf.type == QueuedFrame::FADED_INTERPOLATED) {
 			glClientWaitSync(qf.fence.get(), /*flags=*/0, GL_TIMEOUT_IGNORED);
@@ -626,7 +630,7 @@ void VideoStream::encode_thread_func()
 			pkt.stream_index = 0;
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
-			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 			last_frame = move(jpeg);
 		} else if (qf.type == QueuedFrame::REFRESH) {
 			AVPacket pkt;
@@ -634,7 +638,7 @@ void VideoStream::encode_thread_func()
 			pkt.stream_index = 0;
 			pkt.data = (uint8_t *)last_frame.data();
 			pkt.size = last_frame.size();
-			stream_mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 		} else {
 			assert(false);
 		}

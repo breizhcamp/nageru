@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 extern "C" {
+#include <libavformat/avformat.h>
 #include <libavformat/avio.h>
 }
 
@@ -35,7 +36,7 @@ class YCbCrConverter;
 
 class VideoStream {
 public:
-	VideoStream();
+	VideoStream(AVFormatContext *file_avctx);  // nullptr if output to stream.
 	~VideoStream();
 	void start();
 	void stop();
@@ -131,9 +132,11 @@ private:
 	std::deque<QueuedFrame> frame_queue;  // Under <queue_lock>.
 	std::condition_variable queue_changed;
 
-	std::unique_ptr<Mux> stream_mux;  // To HTTP.
-	std::string stream_mux_header;
+	AVFormatContext *avctx;
+	std::unique_ptr<Mux> mux;  // To HTTP, or to file.
+	std::string stream_mux_header;  // Only used in HTTP.
 	bool seen_sync_markers = false;
+	bool output_fast_forward;
 
 	std::unique_ptr<YCbCrConverter> ycbcr_converter;
 	std::unique_ptr<YCbCrConverter> ycbcr_semiplanar_converter;

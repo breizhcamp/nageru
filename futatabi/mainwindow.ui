@@ -455,6 +455,7 @@
       <string>&amp;Export</string>
      </property>
      <addaction name="export_cliplist_clip_multitrack_action"/>
+     <addaction name="export_playlist_clip_interpolated_action"/>
     </widget>
     <addaction name="menu_Export"/>
     <addaction name="exit_action"/>
@@ -487,6 +488,11 @@
   <action name="export_cliplist_clip_multitrack_action">
    <property name="text">
     <string>Selected clip list clip as raw &amp;multitrack…</string>
+   </property>
+  </action>
+  <action name="export_playlist_clip_interpolated_action">
+   <property name="text">
+    <string>Selected playlist clip as &amp;interpolated single track…</string>
    </property>
   </action>
  </widget>

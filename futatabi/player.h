@@ -6,6 +6,7 @@
 #include "queue_spot_holder.h"
 
 extern "C" {
+#include <libavformat/avformat.h>
 #include <libavformat/avio.h>
 }
 
@@ -21,7 +22,12 @@ class QSurfaceFormat;
 
 class Player : public QueueInterface {
 public:
-	Player(JPEGFrameView *destination, bool also_output_to_stream);
+	enum StreamOutput {
+		NO_STREAM_OUTPUT,
+		HTTPD_STREAM_OUTPUT,  // Output to global_httpd.
+		FILE_STREAM_OUTPUT    // Output to file_avctx.
+	};
+	Player(JPEGFrameView *destination, StreamOutput stream_output, AVFormatContext *file_avctx = nullptr);
 	~Player();
 
 	void play_clip(const Clip &clip, size_t clip_idx, unsigned stream_idx);
@@ -48,7 +54,7 @@ public:
 	void release_queue_spot() override;
 
 private:
-	void thread_func(bool also_output_to_stream);
+	void thread_func(StreamOutput stream_output, AVFormatContext *file_avctx);
 	void open_output_stream();
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);

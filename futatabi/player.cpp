@@ -26,7 +26,7 @@ using namespace std::chrono;
 
 extern HTTPD *global_httpd;
 
-void Player::thread_func(bool also_output_to_stream)
+void Player::thread_func(Player::StreamOutput stream_output, AVFormatContext *file_avctx)
 {
 	pthread_setname_np(pthread_self(), "Player");
 
@@ -40,8 +40,8 @@ void Player::thread_func(bool also_output_to_stream)
 	check_error();
 
 	// Create the VideoStream object, now that we have an OpenGL context.
-	if (also_output_to_stream) {
-		video_stream.reset(new VideoStream);
+	if (stream_output != NO_STREAM_OUTPUT) {
+		video_stream.reset(new VideoStream(file_avctx));
 		video_stream->start();
 	}
 
@@ -126,7 +126,7 @@ got_clip:
 			}
 
 			steady_clock::duration time_behind = steady_clock::now() - next_frame_start;
-			if (time_behind >= milliseconds(200)) {
+			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(200)) {
 				fprintf(stderr, "WARNING: %ld ms behind, dropping a frame (no matter the type).\n",
 					lrint(1e3 * duration<double>(time_behind).count()));
 				continue;
@@ -238,7 +238,9 @@ got_clip:
 
 			if (frame_lower.pts == frame_upper.pts || global_flags.interpolation_quality == 0) {
 				auto display_func = [this, primary_stream_idx, frame_lower, secondary_frame, fade_alpha]{
-					destination->setFrame(primary_stream_idx, frame_lower, secondary_frame, fade_alpha);
+					if (destination != nullptr) {
+						destination->setFrame(primary_stream_idx, frame_lower, secondary_frame, fade_alpha);
+					}
 				};
 				if (video_stream == nullptr) {
 					display_func();
@@ -265,7 +267,9 @@ got_clip:
 				double snap_pts_as_frameno = (snap_frame.pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
 					auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
-						destination->setFrame(primary_stream_idx, snap_frame, secondary_frame, fade_alpha);
+						if (destination != nullptr) {
+							destination->setFrame(primary_stream_idx, snap_frame, secondary_frame, fade_alpha);
+						}
 					};
 					if (video_stream == nullptr) {
 						display_func();
@@ -290,7 +294,7 @@ got_clip:
 				continue;
 			}
 
-			if (time_behind >= milliseconds(100)) {
+			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(100)) {
 				fprintf(stderr, "WARNING: %ld ms behind, dropping an interpolated frame.\n",
 					lrint(1e3 * duration<double>(time_behind).count()));
 				continue;
@@ -301,10 +305,14 @@ got_clip:
 			if (video_stream == nullptr) {
 				// Previews don't do any interpolation.
 				assert(secondary_stream_idx == -1);
-				destination->setFrame(primary_stream_idx, frame_lower);
+				if (destination != nullptr) {
+					destination->setFrame(primary_stream_idx, frame_lower);
+				}
 			} else {
 				auto display_func = [this](shared_ptr<Frame> frame) {
-					destination->setFrame(frame);
+					if (destination != nullptr) {
+						destination->setFrame(frame);
+					}
 				};
 				video_stream->schedule_interpolated_frame(
 					next_frame_start, pts, display_func, QueueSpotHolder(this),
@@ -377,10 +385,10 @@ bool Player::find_surrounding_frames(int64_t pts, int stream_idx, FrameOnDisk *f
 	return true;
 }
 
-Player::Player(JPEGFrameView *destination, bool also_output_to_stream)
+Player::Player(JPEGFrameView *destination, Player::StreamOutput stream_output, AVFormatContext *file_avctx)
 	: destination(destination)
 {
-	player_thread = thread(&Player::thread_func, this, also_output_to_stream);
+	player_thread = thread(&Player::thread_func, this, stream_output, file_avctx);
 }
 
 Player::~Player()

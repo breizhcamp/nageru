@@ -3,12 +3,14 @@
 #include "export.h"
 #include "flags.h"
 #include "frame_on_disk.h"
+#include "player.h"
 #include "shared/ffmpeg_raii.h"
 #include "shared/timebase.h"
 
 #include <QMessageBox>
 #include <QProgressDialog>
 
+#include <future>
 #include <vector>
 
 #include <unistd.h>
@@ -193,4 +195,54 @@ void export_multitrack_clip(const string &filename, const Clip &clip)
 	}
 	frames_written += buffered_jpegs.size();
 	progress.setValue(frames_written);
+}
+
+void export_interpolated_clip(const string &filename, const Clip &clip)
+{
+	AVFormatContext *avctx = nullptr;
+	avformat_alloc_output_context2(&avctx, NULL, NULL, filename.c_str());
+	if (avctx == nullptr) {
+		QMessageBox msgbox;
+		msgbox.setText("Could not allocate FFmpeg context");
+		msgbox.exec();
+		return;
+	}
+	AVFormatContextWithCloser closer(avctx);
+
+	int ret = avio_open(&avctx->pb, filename.c_str(), AVIO_FLAG_WRITE);
+	if (ret < 0) {
+		QMessageBox msgbox;
+		msgbox.setText(QString::fromStdString("Could not open output file '" + filename + "'"));
+		msgbox.exec();
+		return;
+	}
+
+	QProgressDialog progress(QString::fromStdString("Exporting to " + filename + "..."), "Abort", 0, 1);
+	progress.setWindowTitle("Futatabi");
+	progress.setWindowModality(Qt::WindowModal);
+	progress.setMinimumDuration(1000);
+	progress.setMaximum(100000);
+	progress.setValue(0);
+
+	promise<void> done_promise;
+	future<void> done = done_promise.get_future();
+	std::atomic<double> current_value{0.0};
+
+	unique_ptr<Player> player(new Player(/*destination=*/nullptr, Player::FILE_STREAM_OUTPUT, closer.release()));
+	player->set_done_callback([&done_promise] {
+		done_promise.set_value();
+	});
+	player->set_progress_callback([&current_value] (const std::map<size_t, double> &player_progress) {
+		assert(player_progress.size() == 1);
+		current_value = player_progress.begin()->second;
+	});
+	player->play_clip(clip, /*clip_idx=*/0, clip.stream_idx);
+	while (done.wait_for(std::chrono::milliseconds(100)) != future_status::ready && !progress.wasCanceled()) {
+		progress.setValue(lrint(100000.0 * current_value));
+	}
+	if (progress.wasCanceled()) {
+		unlink(filename.c_str());
+		player.reset();
+		return;
+	}
 }
