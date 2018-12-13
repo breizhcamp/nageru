@@ -431,6 +431,7 @@ void load_existing_frames()
 		// Add a gap of one second from the old frames to the new ones.
 		start_pts += TIMEBASE;
 	}
+	current_pts = start_pts;
 
 	for (int stream_idx = 0; stream_idx < MAX_STREAMS; ++stream_idx) {
 		sort(frames[stream_idx].begin(), frames[stream_idx].end(),
