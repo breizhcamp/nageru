@@ -138,7 +138,7 @@ got_clip:
 				if (next_clip.pts_in != -1) {
 					got_next_clip = true;
 
-					double duration_next_clip = (next_clip.pts_out - next_clip.pts_in) / TIMEBASE / speed;
+					double duration_next_clip = double(next_clip.pts_out - next_clip.pts_in) / TIMEBASE / speed;
 					next_clip_fade_time = std::min(time_left_this_clip, duration_next_clip);
 					in_pts_start_next_clip = next_clip.pts_in + lrint(next_clip_fade_time * TIMEBASE * speed);
 				}
