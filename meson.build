@@ -314,7 +314,13 @@ endforeach
 futatabi_shader_srcs = bin2h_gen.process(shaders)
 futatabi_srcs += futatabi_shader_srcs
 
-executable('futatabi', futatabi_srcs, dependencies: [shareddep, qt5deps, libjpegdep, movitdep, libmicrohttpddep, protobufdep, sqlite3dep, vax11dep, vadrmdep, x11dep, libavformatdep, libavcodecdep, libavutildep, libswscaledep], link_with: shared, include_directories: [include_directories('futatabi')])
+executable('futatabi', futatabi_srcs,
+	dependencies: [shareddep, qt5deps, libjpegdep, movitdep, libmicrohttpddep, protobufdep, sqlite3dep, vax11dep, vadrmdep, x11dep, libavformatdep, libavcodecdep, libavutildep, libswscaledep],
+	link_with: shared,
+	include_directories: [include_directories('futatabi')],
+	install: true)
+
+# Test binaries for the optical flow code.
 executable('flow', 'futatabi/flow_main.cpp', 'futatabi/flow.cpp', 'futatabi/gpu_timers.cpp', futatabi_shader_srcs, dependencies: [shareddep, epoxydep, sdl2dep, sdl2_imagedep])
 executable('eval', 'futatabi/eval.cpp', 'futatabi/util.cpp')
 executable('vis', 'futatabi/vis.cpp', 'futatabi/util.cpp')
