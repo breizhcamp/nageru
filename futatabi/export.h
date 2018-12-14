@@ -2,8 +2,9 @@
 #define _EXPORT_H 1
 
 #include <string>
+#include <vector>
 
 void export_multitrack_clip(const std::string &filename, const Clip &clip);
-void export_interpolated_clip(const std::string &filename, const Clip &clip);
+void export_interpolated_clip(const std::string &filename, const std::vector<Clip> &clips);
 
 #endif

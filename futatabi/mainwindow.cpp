@@ -796,8 +796,6 @@ void MainWindow::export_playlist_clip_interpolated_triggered()
 		return;
 	}
 
-	QModelIndex index = selected->currentIndex();
-	Clip clip = *playlist_clips->clip(index.row());
 	QString filename = QFileDialog::getSaveFileName(this,
 		"Export interpolated clip", QString(), tr("Matroska video files (*.mkv)"));
 	if (filename.isNull()) {
@@ -807,7 +805,13 @@ void MainWindow::export_playlist_clip_interpolated_triggered()
 	if (!filename.endsWith(".mkv")) {
 		filename += ".mkv";
 	}
-	export_interpolated_clip(filename.toStdString(), clip);
+
+	vector<Clip> clips;
+	QModelIndexList rows = selected->selectedRows();
+	for (QModelIndex index : rows) {
+		clips.push_back(*playlist_clips->clip(index.row()));
+	}
+	export_interpolated_clip(filename.toStdString(), clips);
 }
 
 void MainWindow::manual_triggered()
