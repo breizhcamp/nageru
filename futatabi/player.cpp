@@ -47,7 +47,6 @@ void Player::thread_func(Player::StreamOutput stream_output, AVFormatContext *fi
 
 	check_error();
 
-	constexpr double output_framerate = 60000.0 / 1001.0;  // FIXME: make configurable
 	int64_t pts = 0;
 	Clip next_clip;
 	size_t next_clip_idx = size_t(-1);
@@ -115,10 +114,10 @@ got_clip:
 		int64_t in_pts_start_next_clip = -1;
 		steady_clock::time_point next_frame_start;
 		for (int frameno = 0; !should_quit; ++frameno) {  // Ends when the clip ends.
-			double out_pts = out_pts_origin + TIMEBASE * frameno / output_framerate;
+			double out_pts = out_pts_origin + TIMEBASE * frameno / global_flags.output_framerate;
 			next_frame_start =
 				origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
-			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * speed / output_framerate);
+			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * speed / global_flags.output_framerate);
 			pts = lrint(out_pts);
 
 			if (in_pts >= clip.pts_out) {
@@ -264,7 +263,7 @@ got_clip:
 			// TODO: Snap secondary (fade-to) clips in the same fashion.
 			bool snapped = false;
 			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
-				double snap_pts_as_frameno = (snap_frame.pts - in_pts_origin) * output_framerate / TIMEBASE / speed;
+				double snap_pts_as_frameno = (snap_frame.pts - in_pts_origin) * global_flags.output_framerate / TIMEBASE / speed;
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
 					auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
 						if (destination != nullptr) {

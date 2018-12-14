@@ -12,6 +12,7 @@ struct Flags {
 	bool slow_down_input = false;
 	int interpolation_quality = 2;
 	uint16_t http_port = DEFAULT_HTTPD_PORT;
+	double output_framerate = 60000.0 / 1001.0;
 };
 extern Flags global_flags;
 

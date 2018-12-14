@@ -25,6 +25,8 @@ void usage()
 	fprintf(stderr, "      --help                      print usage information\n");
 	fprintf(stderr, "  -w, --width                     output width in pixels (default 1280)\n");
 	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
+	fprintf(stderr, "  -r, --frame-rate NUM[/NUM]      output frame rate, as a float or fraction\n");
+	fprintf(stderr, "                                    (default 60000/1001 ~= 59.94)\n");
 	fprintf(stderr, "      --slow-down-input           slow down input to realtime (default on if no\n");
 	fprintf(stderr, "                                    source URL given)\n");
 	fprintf(stderr, "  -q, --interpolation-quality N   0 = off\n");
@@ -42,6 +44,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "help", no_argument, 0, OPTION_HELP },
 		{ "width", required_argument, 0, 'w' },
 		{ "height", required_argument, 0, 'h' },
+		{ "frame-rate", required_argument, 0, 'r' },
 		{ "slow-down-input", no_argument, 0, OPTION_SLOW_DOWN_INPUT },
 		{ "interpolation-quality", required_argument, 0, 'q' },
 		{ "working-directory", required_argument, 0, 'd' },
@@ -50,7 +53,7 @@ void parse_flags(int argc, char * const argv[])
 	};
 	for ( ;; ) {
 		int option_index = 0;
-		int c = getopt_long(argc, argv, "w:h:q:d:", long_options, &option_index);
+		int c = getopt_long(argc, argv, "w:h:r:q:d:", long_options, &option_index);
 
 		if (c == -1) {
 			break;
@@ -62,6 +65,18 @@ void parse_flags(int argc, char * const argv[])
 		case 'h':
 			global_flags.height = atoi(optarg);
 			break;
+		case 'r': {
+			double num, den;
+			if (sscanf(optarg, "%lf/%lf", &num, &den) == 2) {
+				global_flags.output_framerate = num / den;
+			} else if (sscanf(optarg, "%lf", &num) == 1) {
+				global_flags.output_framerate = num;
+			} else {
+				fprintf(stderr, "Invalid frame rate given (must be on the form N or N/M)\n");
+				exit(1);
+			}
+			break;
+		}
 		case OPTION_SLOW_DOWN_INPUT:
 			global_flags.slow_down_input = true;
 			break;
