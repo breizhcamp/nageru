@@ -469,9 +469,9 @@ void set_pts_in(int64_t pts, int64_t current_pts, ClipProxy &clip)
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
 	constexpr int dead_zone_pixels = 3;  // To avoid that simple clicks get misinterpreted.
-	constexpr int scrub_sensitivity = 100;  // pts units per pixel.
-	constexpr int wheel_sensitivity = 100;  // pts units per degree.
 	constexpr int camera_degrees_per_pixel = 15;  // One click of most mice.
+	int scrub_sensitivity = 100;  // pts units per pixel.
+	int wheel_sensitivity = 100;  // pts units per degree.
 
 	unsigned stream_idx = ui->preview_display->get_stream_idx();
 
@@ -534,8 +534,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		scrub_x_origin = mouse->x();
 		scrub_type = type;
 	} else if (event->type() == QEvent::MouseMove) {
+		QMouseEvent *mouse = (QMouseEvent *)event;
+		if (mouse->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
+			scrub_sensitivity *= 10;
+			wheel_sensitivity *= 10;
+		}
+		if (mouse->modifiers() & Qt::KeyboardModifier::AltModifier) {  // Note: Shift + Alt cancel each other out.
+			scrub_sensitivity /= 10;
+			wheel_sensitivity /= 10;
+		}
 		if (scrubbing) {
-			QMouseEvent *mouse = (QMouseEvent *)event;
 			int offset = mouse->x() - scrub_x_origin;
 			int adjusted_offset;
 			if (offset >= dead_zone_pixels) {
@@ -581,6 +589,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		}
 	} else if (event->type() == QEvent::Wheel) {
 		QWheelEvent *wheel = (QWheelEvent *)event;
+		int angle_delta = wheel->angleDelta().y();
+		if (wheel->modifiers() & Qt::KeyboardModifier::ShiftModifier) {
+			scrub_sensitivity *= 10;
+			wheel_sensitivity *= 10;
+		}
+		if (wheel->modifiers() & Qt::KeyboardModifier::AltModifier) {  // Note: Shift + Alt cancel each other out.
+			scrub_sensitivity /= 10;
+			wheel_sensitivity /= 10;
+			angle_delta = wheel->angleDelta().x();  // Qt ickiness.
+		}
 
 		QTableView *destination;
 		int in_column, out_column, camera_column;
@@ -623,19 +641,19 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			}
 			if (column == in_column) {
 				current_change_id += "in:" + to_string(row);
-				int64_t pts = clip->pts_in + wheel->angleDelta().y() * wheel_sensitivity;
+				int64_t pts = clip->pts_in + angle_delta * wheel_sensitivity;
 				set_pts_in(pts, current_pts, clip);
 				preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
 			} else if (column == out_column) {
 				current_change_id += "out:" + to_string(row);
-				int64_t pts = clip->pts_out + wheel->angleDelta().y() * wheel_sensitivity;
+				int64_t pts = clip->pts_out + angle_delta * wheel_sensitivity;
 				pts = std::max(pts, clip->pts_in);
 				pts = std::min(pts, current_pts);
 				clip->pts_out = pts;
 				preview_single_frame(pts, stream_idx, LAST_BEFORE);
 			} else if (column == camera_column) {
 				current_change_id += "camera:" + to_string(row);
-				int angle_degrees = wheel->angleDelta().y();
+				int angle_degrees = angle_delta;
 				if (last_mousewheel_camera_row == row) {
 					angle_degrees += leftover_angle_degrees;
 				}
