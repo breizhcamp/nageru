@@ -20,6 +20,8 @@ class VideoStream;
 class QSurface;
 class QSurfaceFormat;
 
+double compute_time_left(const std::vector<Clip> &clips, const std::map<size_t, double> &progress);
+
 class Player : public QueueInterface {
 public:
 	enum StreamOutput {

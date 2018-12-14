@@ -418,25 +418,11 @@ void MainWindow::live_player_clip_progress(const map<size_t, double> &progress)
 {
 	playlist_clips->set_progress(progress);
 
-	// Look at the last clip and then start counting from there.
-	assert(!progress.empty());
-	auto last_it = progress.end();
-	--last_it;
-	double remaining = 0.0;
-	double last_fade_time_seconds = 0.0;
-	for (size_t row = last_it->first; row < playlist_clips->size(); ++row) {
-		const Clip clip = *playlist_clips->clip(row);
-		double clip_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;  // FIXME: stop hardcoding speed.
-		if (row == last_it->first) {
-			// A clip we're playing: Subtract the part we've already played.
-			remaining = clip_length * (1.0 - last_it->second);
-		} else {
-			// A clip we haven't played yet: Subtract the part that's overlapping
-			// with a previous clip (due to fade).
-			remaining += max(clip_length - last_fade_time_seconds, 0.0);
-		}
-		last_fade_time_seconds = min(clip_length, clip.fade_time_seconds);
+	vector<Clip> clips;
+	for (size_t row = 0; row < playlist_clips->size(); ++row) {
+		clips.push_back(*playlist_clips->clip(row));
 	}
+	double remaining = compute_time_left(clips, progress);
 	set_output_status(format_duration(remaining) + " left");
 }
 
