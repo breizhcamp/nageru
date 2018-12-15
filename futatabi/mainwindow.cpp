@@ -146,6 +146,9 @@ MainWindow::MainWindow()
 	connect(play, &QShortcut::activated, ui->play_btn, &QPushButton::click);
 	connect(ui->play_btn, &QPushButton::clicked, this, &MainWindow::play_clicked);
 
+	connect(ui->stop_btn, &QPushButton::clicked, this, &MainWindow::stop_clicked);
+	ui->stop_btn->setEnabled(false);
+
 	QShortcut *preview_1 = new QShortcut(QKeySequence(Qt::Key_1), this);
 	connect(preview_1, &QShortcut::activated, ui->preview_1_btn, &QPushButton::click);
 	connect(ui->input1_display, &JPEGFrameView::clicked, ui->preview_1_btn, &QPushButton::click);
@@ -441,6 +444,18 @@ void MainWindow::play_clicked()
 	playlist_clips->set_progress({{ row, 0.0f }});
 	playlist_clips->set_currently_playing(row, 0.0f);
 	playlist_selection_changed();
+
+	ui->stop_btn->setEnabled(true);
+}
+
+void MainWindow::stop_clicked()
+{
+	Clip fake_clip;
+	fake_clip.pts_in = 0;
+	fake_clip.pts_out = 0;
+	size_t last_row = playlist_clips->size() - 1;
+	playlist_clips->set_currently_playing(last_row, 0.0f);
+	live_player->play_clip(fake_clip, last_row, 0);
 }
 
 void MainWindow::live_player_clip_done()
@@ -454,6 +469,7 @@ void MainWindow::live_player_clip_done()
 		playlist_clips->set_progress({{ row + 1, 0.0f }});
 		playlist_clips->set_currently_playing(row + 1, 0.0f);
 	}
+	ui->stop_btn->setEnabled(false);
 }
 
 pair<Clip, size_t> MainWindow::live_player_get_next_clip()

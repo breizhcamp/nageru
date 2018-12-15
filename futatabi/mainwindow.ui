@@ -154,6 +154,16 @@
            </spacer>
           </item>
           <item>
+           <widget class="QPushButton" name="stop_btn">
+            <property name="text">
+             <string>Stop</string>
+            </property>
+            <property name="icon">
+             <iconset theme="media-playback-stop"/>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="play_btn">
             <property name="text">
              <string>Play (space)</string>

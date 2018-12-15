@@ -81,6 +81,7 @@ private:
 	void preview_clicked();
 	void preview_angle_clicked(unsigned stream_idx);
 	void play_clicked();
+	void stop_clicked();
 	void live_player_clip_done();
 	std::pair<Clip, size_t> live_player_get_next_clip();
 	void live_player_clip_progress(const std::map<size_t, double> &progress);
