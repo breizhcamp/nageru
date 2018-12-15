@@ -10,6 +10,7 @@
 using namespace std;
 
 Flags global_flags;
+int flow_initialized_interpolation_quality;
 
 // Long options that have no corresponding short option.
 enum LongOption {
@@ -82,6 +83,7 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case 'q':
 			global_flags.interpolation_quality = atoi(optarg);
+			global_flags.interpolation_quality_set = true;
 			break;
 		case 'd':
 			global_flags.working_directory = optarg;

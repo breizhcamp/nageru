@@ -17,6 +17,9 @@ public:
 	StateProto get_state();
 	void store_state(const StateProto &state);
 
+	SettingsProto get_settings();
+	void store_settings(const SettingsProto &settings);
+
 	struct FrameOnDiskAndStreamIdx {
 		FrameOnDisk frame;
 		unsigned stream_idx;

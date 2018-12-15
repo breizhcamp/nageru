@@ -448,7 +448,7 @@
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>&amp;File</string>
+     <string>&amp;Video</string>
     </property>
     <widget class="QMenu" name="menu_Export">
      <property name="title">
@@ -457,6 +457,17 @@
      <addaction name="export_cliplist_clip_multitrack_action"/>
      <addaction name="export_playlist_clip_interpolated_action"/>
     </widget>
+    <widget class="QMenu" name="interpolation_menu">
+     <property name="title">
+      <string>Interpolation &amp;quality</string>
+     </property>
+     <addaction name="quality_0_action"/>
+     <addaction name="quality_1_action"/>
+     <addaction name="quality_2_action"/>
+     <addaction name="quality_3_action"/>
+     <addaction name="quality_4_action"/>
+    </widget>
+    <addaction name="interpolation_menu"/>
     <addaction name="menu_Export"/>
     <addaction name="exit_action"/>
    </widget>
@@ -517,6 +528,46 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Y</string>
+   </property>
+  </action>
+  <action name="quality_0_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>No interpolation (&amp;0)</string>
+   </property>
+  </action>
+  <action name="quality_1_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Fastest (&amp;1)</string>
+   </property>
+  </action>
+  <action name="quality_2_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Default (&amp;2) (realtime 720p on fast embedded GPUs)</string>
+   </property>
+  </action>
+  <action name="quality_3_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Good (&amp;3) (realtime 720p on GTX 970 or so)</string>
+   </property>
+  </action>
+  <action name="quality_4_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Best (&amp;4) (not realtime on any current GPU)</string>
    </property>
   </action>
  </widget>

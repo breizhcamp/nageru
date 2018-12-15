@@ -50,6 +50,22 @@ MainWindow::MainWindow()
 	global_mainwindow = this;
 	ui->setupUi(this);
 
+	// Load settings from database if needed.
+	if (!global_flags.interpolation_quality_set) {
+		SettingsProto settings = db.get_settings();
+		if (settings.interpolation_quality() != 0) {
+			global_flags.interpolation_quality = settings.interpolation_quality() - 1;
+		}
+	}
+	if (global_flags.interpolation_quality == 0) {
+		// Allocate something just for simplicity; we won't be using it
+		// unless the user changes runtime, in which case 1 is fine.
+		flow_initialized_interpolation_quality = 1;
+	} else {
+		flow_initialized_interpolation_quality = global_flags.interpolation_quality;
+	}
+	save_settings();
+
 	// The menus.
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
 	connect(ui->export_cliplist_clip_multitrack_action, &QAction::triggered, this, &MainWindow::export_cliplist_clip_multitrack_triggered);
@@ -60,6 +76,32 @@ MainWindow::MainWindow()
 	connect(ui->redo_action, &QAction::triggered, this, &MainWindow::redo_triggered);
 	ui->undo_action->setEnabled(false);
 	ui->redo_action->setEnabled(false);
+
+	// The quality group.
+	QActionGroup *quality_group = new QActionGroup(ui->interpolation_menu);
+	quality_group->addAction(ui->quality_0_action);
+	quality_group->addAction(ui->quality_1_action);
+	quality_group->addAction(ui->quality_2_action);
+	quality_group->addAction(ui->quality_3_action);
+	quality_group->addAction(ui->quality_4_action);
+	if (global_flags.interpolation_quality == 0) {
+		ui->quality_0_action->setChecked(true);
+	} else if (global_flags.interpolation_quality == 1) {
+		ui->quality_1_action->setChecked(true);
+	} else if (global_flags.interpolation_quality == 2) {
+		ui->quality_2_action->setChecked(true);
+	} else if (global_flags.interpolation_quality == 3) {
+		ui->quality_3_action->setChecked(true);
+	} else if (global_flags.interpolation_quality == 4) {
+		ui->quality_4_action->setChecked(true);
+	} else {
+		assert(false);
+	}
+	connect(ui->quality_0_action, &QAction::toggled, bind(&MainWindow::quality_toggled, this, 0, _1));
+	connect(ui->quality_1_action, &QAction::toggled, bind(&MainWindow::quality_toggled, this, 1, _1));
+	connect(ui->quality_2_action, &QAction::toggled, bind(&MainWindow::quality_toggled, this, 2, _1));
+	connect(ui->quality_3_action, &QAction::toggled, bind(&MainWindow::quality_toggled, this, 3, _1));
+	connect(ui->quality_4_action, &QAction::toggled, bind(&MainWindow::quality_toggled, this, 4, _1));
 
 	global_disk_space_estimator = new DiskSpaceEstimator(bind(&MainWindow::report_disk_space, this, _1, _2));
 	disk_free_label = new QLabel(this);
@@ -372,6 +414,13 @@ void MainWindow::state_changed(const StateProto &state)
 	while (undo_stack.size() >= 100) {
 		undo_stack.pop_front();
 	}
+}
+
+void MainWindow::save_settings()
+{
+	SettingsProto settings;
+	settings.set_interpolation_quality(global_flags.interpolation_quality + 1);
+	db.store_settings(settings);
 }
 
 void MainWindow::play_clicked()
@@ -901,6 +950,25 @@ void MainWindow::redo_triggered()
 	replace_model(ui->playlist, &playlist_clips, new PlayList(state.play_list()), this);
 
 	db.store_state(state);
+}
+
+void MainWindow::quality_toggled(int quality, bool checked)
+{
+	if (!checked) {
+		return;
+	}
+	global_flags.interpolation_quality = quality;
+	if (quality != 0 &&  // Turning interpolation off is always possible.
+	    quality != flow_initialized_interpolation_quality) {
+		QMessageBox msgbox;
+		msgbox.setText(QString::fromStdString(
+			"The interpolation quality for the main output cannot be changed at runtime, "
+			"except being turned completely off; it will take effect for exported files "
+			"only until next restart. The live output quality thus remains at " + to_string(flow_initialized_interpolation_quality) + "."));
+		msgbox.exec();
+	}
+
+	save_settings();
 }
 
 void MainWindow::highlight_camera_input(int stream_idx)

@@ -208,18 +208,16 @@ VideoStream::VideoStream(AVFormatContext *file_avctx)
 	check_error();
 
 	OperatingPoint op;
-	if (global_flags.interpolation_quality == 0) {
-		// Allocate something just for simplicity; we won't be using it.
+	if (flow_initialized_interpolation_quality == 1) {
 		op = operating_point1;
-	} else if (global_flags.interpolation_quality == 1) {
-		op = operating_point1;
-	} else if (global_flags.interpolation_quality == 2) {
+	} else if (flow_initialized_interpolation_quality == 2) {
 		op = operating_point2;
-	} else if (global_flags.interpolation_quality == 3) {
+	} else if (flow_initialized_interpolation_quality == 3) {
 		op = operating_point3;
-	} else if (global_flags.interpolation_quality == 4) {
+	} else if (flow_initialized_interpolation_quality == 4) {
 		op = operating_point4;
 	} else {
+		// Quality 0 will be changed to 1 in flags.cpp.
 		assert(false);
 	}
 

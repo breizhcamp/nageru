@@ -17,3 +17,7 @@ message StateProto {
 	ClipListProto clip_list = 1;
 	ClipListProto play_list = 2;
 }
+
+message SettingsProto {
+	int32 interpolation_quality = 1;  // 0 = unset, 1 = quality 0, 2 = quality 1, etc.
+}

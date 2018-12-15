@@ -92,6 +92,7 @@ private:
 	void defer_timer_expired();
 	void content_changed();  // In clip_list or play_list.
 	void state_changed(const StateProto &state);  // Called post-filtering.
+	void save_settings();
 
 	enum Rounding { FIRST_AT_OR_AFTER, LAST_BEFORE };
 	void preview_single_frame(int64_t pts, unsigned stream_idx, Rounding rounding);
@@ -112,6 +113,7 @@ private:
 	void about_triggered();
 	void undo_triggered();
 	void redo_triggered();
+	void quality_toggled(int quality, bool checked);
 
 	void highlight_camera_input(int stream_idx);
 
