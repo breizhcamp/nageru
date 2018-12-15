@@ -32,6 +32,17 @@ static PlayList *playlist_clips;
 
 extern int64_t current_pts;
 
+template <class Model>
+void replace_model(QTableView *view, Model **model, Model *new_model, MainWindow *main_window)
+{
+	QItemSelectionModel *old_selection_model = view->selectionModel();
+	view->setModel(new_model);
+	delete *model;
+	delete old_selection_model;
+	*model = new_model;
+	main_window->connect(new_model, &Model::any_content_changed, main_window, &MainWindow::content_changed);
+}
+
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow),
 	  db(global_flags.working_directory + "/futatabi.db")
@@ -45,6 +56,10 @@ MainWindow::MainWindow()
 	connect(ui->export_playlist_clip_interpolated_action, &QAction::triggered, this, &MainWindow::export_playlist_clip_interpolated_triggered);
 	connect(ui->manual_action, &QAction::triggered, this, &MainWindow::manual_triggered);
 	connect(ui->about_action, &QAction::triggered, this, &MainWindow::about_triggered);
+	connect(ui->undo_action, &QAction::triggered, this, &MainWindow::undo_triggered);
+	connect(ui->redo_action, &QAction::triggered, this, &MainWindow::redo_triggered);
+	ui->undo_action->setEnabled(false);
+	ui->redo_action->setEnabled(false);
 
 	global_disk_space_estimator = new DiskSpaceEstimator(bind(&MainWindow::report_disk_space, this, _1, _2));
 	disk_free_label = new QLabel(this);
@@ -52,6 +67,7 @@ MainWindow::MainWindow()
 	ui->menuBar->setCornerWidget(disk_free_label);
 
 	StateProto state = db.get_state();
+	undo_stack.push_back(state);  // The undo stack always has the current state on top.
 
 	cliplist_clips = new ClipList(state.clip_list());
 	ui->clip_list->setModel(cliplist_clips);
@@ -148,6 +164,7 @@ MainWindow::MainWindow()
 	defer_timeout = new QTimer(this);
 	defer_timeout->setSingleShot(true);
 	connect(defer_timeout, &QTimer::timeout, this, &MainWindow::defer_timer_expired);
+	ui->undo_action->setEnabled(true);
 
 	connect(ui->clip_list->selectionModel(), &QItemSelectionModel::currentChanged,
 		this, &MainWindow::clip_list_selection_changed);
@@ -344,6 +361,17 @@ void MainWindow::content_changed()
 void MainWindow::state_changed(const StateProto &state)
 {
 	db.store_state(state);
+
+	redo_stack.clear();
+	ui->redo_action->setEnabled(false);
+
+	undo_stack.push_back(state);
+	ui->undo_action->setEnabled(undo_stack.size() > 1);
+
+	// Make sure it doesn't grow without bounds.
+	while (undo_stack.size() >= 100) {
+		undo_stack.pop_front();
+	}
 }
 
 void MainWindow::play_clicked()
@@ -826,6 +854,53 @@ void MainWindow::manual_triggered()
 void MainWindow::about_triggered()
 {
 	AboutDialog("Futatabi", "Multicamera slow motion video server").exec();
+}
+
+void MainWindow::undo_triggered()
+{
+	// Finish any deferred action.
+	if (defer_timeout->isActive()) {
+		defer_timeout->stop();
+		state_changed(deferred_state);
+	}
+
+	StateProto redo_state;
+	*redo_state.mutable_clip_list() = cliplist_clips->serialize();
+	*redo_state.mutable_play_list() = playlist_clips->serialize();
+	redo_stack.push_back(std::move(redo_state));
+	ui->redo_action->setEnabled(true);
+
+	assert(undo_stack.size() > 1);
+
+	// Pop off the current state, which is always at the top of the stack.
+	undo_stack.pop_back();
+
+	StateProto state = undo_stack.back();
+	ui->undo_action->setEnabled(undo_stack.size() > 1);
+
+	replace_model(ui->clip_list, &cliplist_clips, new ClipList(state.clip_list()), this);
+	replace_model(ui->playlist, &playlist_clips, new PlayList(state.play_list()), this);
+
+	db.store_state(state);
+}
+
+void MainWindow::redo_triggered()
+{
+	assert(!redo_stack.empty());
+
+	ui->undo_action->setEnabled(true);
+	ui->redo_action->setEnabled(true);
+
+	undo_stack.push_back(std::move(redo_stack.back()));
+	redo_stack.pop_back();
+	ui->undo_action->setEnabled(true);
+	ui->redo_action->setEnabled(!redo_stack.empty());
+
+	const StateProto &state = undo_stack.back();
+	replace_model(ui->clip_list, &cliplist_clips, new ClipList(state.clip_list()), this);
+	replace_model(ui->playlist, &playlist_clips, new PlayList(state.play_list()), this);
+
+	db.store_state(state);
 }
 
 void MainWindow::highlight_camera_input(int stream_idx)

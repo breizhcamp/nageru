@@ -5,6 +5,7 @@
 #include "db.h"
 #include "state.pb.h"
 
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <QLabel>
@@ -62,6 +63,9 @@ private:
 	std::string deferred_change_id;
 	StateProto deferred_state;
 
+	// NOTE: The undo stack always has the current state on top.
+	std::deque<StateProto> undo_stack, redo_stack;
+
 	// Before a change that should be deferred (see above), currently_deferring_model_changes
 	// must be set to true, and current_change_id must be given contents describing what's
 	// changed to avoid accidental grouping.
@@ -106,6 +110,8 @@ private:
 	void export_playlist_clip_interpolated_triggered();
 	void manual_triggered();
 	void about_triggered();
+	void undo_triggered();
+	void redo_triggered();
 
 	void highlight_camera_input(int stream_idx);
 
