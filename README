@@ -71,6 +71,8 @@ Nageru currently needs:
 
  - LuaJIT, for driving the theme engine.
 
+ - SQLite, for storing Futatabi state.
+
  - Meson, for building.
 
  - Optional: CEF (Chromium Embedded Framework), for HTML graphics.
@@ -92,7 +94,7 @@ with:
     libzita-resampler-dev libva-dev libavcodec-dev libavformat-dev \
     libswscale-dev libavresample-dev libmovit-dev libegl1-mesa-dev \
     libasound2-dev libx264-dev libbmusb-dev protobuf-compiler \
-    libprotobuf-dev meson
+    libprotobuf-dev libsqlite3-dev meson
 
 Exceptions as of November 2018:
 
