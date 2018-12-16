@@ -20,6 +20,7 @@ class MainWindow;
 }  // namespace Ui
 
 class Player;
+class QTableView;
 
 class MainWindow : public QMainWindow {
 	Q_OBJECT
@@ -117,6 +118,9 @@ private:
 	void quality_toggled(int quality, bool checked);
 
 	void highlight_camera_input(int stream_idx);
+
+	template <class Model>
+	void replace_model(QTableView *view, Model **model, Model *new_model);
 
 private slots:
 	void relayout();

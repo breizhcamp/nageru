@@ -32,17 +32,6 @@ static PlayList *playlist_clips;
 
 extern int64_t current_pts;
 
-template <class Model>
-void replace_model(QTableView *view, Model **model, Model *new_model, MainWindow *main_window)
-{
-	QItemSelectionModel *old_selection_model = view->selectionModel();
-	view->setModel(new_model);
-	delete *model;
-	delete old_selection_model;
-	*model = new_model;
-	main_window->connect(new_model, &Model::any_content_changed, main_window, &MainWindow::content_changed);
-}
-
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow),
 	  db(global_flags.working_directory + "/futatabi.db")
@@ -943,8 +932,8 @@ void MainWindow::undo_triggered()
 	StateProto state = undo_stack.back();
 	ui->undo_action->setEnabled(undo_stack.size() > 1);
 
-	replace_model(ui->clip_list, &cliplist_clips, new ClipList(state.clip_list()), this);
-	replace_model(ui->playlist, &playlist_clips, new PlayList(state.play_list()), this);
+	replace_model(ui->clip_list, &cliplist_clips, new ClipList(state.clip_list()));
+	replace_model(ui->playlist, &playlist_clips, new PlayList(state.play_list()));
 
 	db.store_state(state);
 }
@@ -962,8 +951,8 @@ void MainWindow::redo_triggered()
 	ui->redo_action->setEnabled(!redo_stack.empty());
 
 	const StateProto &state = undo_stack.back();
-	replace_model(ui->clip_list, &cliplist_clips, new ClipList(state.clip_list()), this);
-	replace_model(ui->playlist, &playlist_clips, new PlayList(state.play_list()), this);
+	replace_model(ui->clip_list, &cliplist_clips, new ClipList(state.clip_list()));
+	replace_model(ui->playlist, &playlist_clips, new PlayList(state.play_list()));
 
 	db.store_state(state);
 }
@@ -1022,4 +1011,15 @@ void MainWindow::set_output_status(const string &status)
 pair<string, string> MainWindow::get_queue_status() const {
 	lock_guard<mutex> lock(queue_status_mu);
 	return {queue_status, "text/plain"};
+}
+
+template <class Model>
+void MainWindow::replace_model(QTableView *view, Model **model, Model *new_model)
+{
+	QItemSelectionModel *old_selection_model = view->selectionModel();
+	view->setModel(new_model);
+	delete *model;
+	delete old_selection_model;
+	*model = new_model;
+	connect(new_model, &Model::any_content_changed, this, &MainWindow::content_changed);
 }
