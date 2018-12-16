@@ -53,11 +53,8 @@ public:
 		IN,
 		OUT,
 		DURATION,
-		CAMERA_1,
-		CAMERA_2,
-		CAMERA_3,
-		CAMERA_4,
-		NUM_COLUMNS
+		CAMERA_1,  // Then CAMERA_2, CAMERA_3, etc. as needed.
+		NUM_NON_CAMERA_COLUMNS = CAMERA_1
 	};
 
 	int rowCount(const QModelIndex &parent) const override;
@@ -80,6 +77,11 @@ public:
 	ClipListProto serialize() const;
 
 	void emit_data_changed(size_t row) override;
+
+	static bool is_camera_column(int column)
+	{
+		return (column >= int(Column::CAMERA_1) && column < int(Column::CAMERA_1) + NUM_CAMERAS);
+	}
 
 signals:
 	void any_content_changed();

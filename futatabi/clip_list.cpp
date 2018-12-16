@@ -58,7 +58,7 @@ int ClipList::columnCount(const QModelIndex &parent) const
 {
 	if (parent.isValid())
 		return 0;
-	return int(Column::NUM_COLUMNS);
+	return int(Column::NUM_NON_CAMERA_COLUMNS) + NUM_CAMERAS;
 }
 
 int PlayList::columnCount(const QModelIndex &parent) const
@@ -105,15 +105,13 @@ QVariant ClipList::data(const QModelIndex &parent, int role) const
 		} else {
 			return QVariant();
 		}
-	case Column::CAMERA_1:
-	case Column::CAMERA_2:
-	case Column::CAMERA_3:
-	case Column::CAMERA_4: {
-		unsigned stream_idx = column - int(Column::CAMERA_1);
-		return QString::fromStdString(clips[row].descriptions[stream_idx]);
-	}
 	default:
-		return "";
+		if (is_camera_column(column)) {
+			unsigned stream_idx = column - int(Column::CAMERA_1);
+			return QString::fromStdString(clips[row].descriptions[stream_idx]);
+		} else {
+			return "";
+		}
 	}
 }
 
@@ -213,16 +211,12 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 		return "Out";
 	case Column::DURATION:
 		return "Duration";
-	case Column::CAMERA_1:
-		return "Camera 1";
-	case Column::CAMERA_2:
-		return "Camera 2";
-	case Column::CAMERA_3:
-		return "Camera 3";
-	case Column::CAMERA_4:
-		return "Camera 4";
 	default:
-		return "";
+		if (section >= int(Column::CAMERA_1) && section < int(Column::CAMERA_1) + NUM_CAMERAS) {
+			return QString::fromStdString("Camera " + to_string(section - int(Column::CAMERA_1) + 1));
+		} else {
+			return "";
+		}
 	}
 }
 
@@ -261,13 +255,9 @@ Qt::ItemFlags ClipList::flags(const QModelIndex &index) const
 	if (size_t(row) >= clips.size())
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
 
-	switch (Column(column)) {
-	case Column::CAMERA_1:
-	case Column::CAMERA_2:
-	case Column::CAMERA_3:
-	case Column::CAMERA_4:
+	if (is_camera_column(column)) {
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable | Qt::ItemIsDragEnabled;
-	default:
+	} else {
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
 	}
 }
@@ -301,17 +291,12 @@ bool ClipList::setData(const QModelIndex &index, const QVariant &value, int role
 	if (size_t(row) >= clips.size())
 		return false;
 
-	switch (Column(column)) {
-	case Column::CAMERA_1:
-	case Column::CAMERA_2:
-	case Column::CAMERA_3:
-	case Column::CAMERA_4: {
+	if (is_camera_column(column)) {
 		unsigned stream_idx = column - int(Column::CAMERA_1);
 		clips[row].descriptions[stream_idx] = value.toString().toStdString();
 		emit_data_changed(row);
 		return true;
-	}
-	default:
+	} else {
 		return false;
 	}
 }
@@ -405,7 +390,7 @@ void PlayList::move_clips(size_t first, size_t last, int delta)
 
 void ClipList::emit_data_changed(size_t row)
 {
-	emit dataChanged(index(row, 0), index(row, int(Column::NUM_COLUMNS)));
+	emit dataChanged(index(row, 0), index(row, int(Column::NUM_NON_CAMERA_COLUMNS) + NUM_CAMERAS));
 	emit any_content_changed();
 }
 

@@ -19,7 +19,10 @@ namespace Ui {
 class MainWindow;
 }  // namespace Ui
 
+struct FrameOnDisk;
+class JPEGFrameView;
 class Player;
+class QPushButton;
 class QTableView;
 
 class MainWindow : public QMainWindow {
@@ -32,10 +35,11 @@ public:
 	// HTTP callback. TODO: Does perhaps not belong to MainWindow?
 	std::pair<std::string, std::string> get_queue_status() const;
 
-//private:
-	Ui::MainWindow *ui;
+	void display_frame(unsigned stream_idx, const FrameOnDisk &frame);
 
 private:
+	Ui::MainWindow *ui;
+
 	QLabel *disk_free_label;
 	std::unique_ptr<Player> preview_player, live_player;
 	DB db;
@@ -75,6 +79,13 @@ private:
 
 	mutable std::mutex queue_status_mu;
 	std::string queue_status;  // Under queue_status_mu.
+
+	struct FrameAndDisplay {
+		QFrame *frame;
+		JPEGFrameView *display;
+		QPushButton *preview_btn;
+	};
+	std::vector<FrameAndDisplay> displays;
 
 	void cue_in_clicked();
 	void cue_out_clicked();

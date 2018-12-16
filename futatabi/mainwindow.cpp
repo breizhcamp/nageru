@@ -138,30 +138,6 @@ MainWindow::MainWindow()
 	connect(ui->stop_btn, &QPushButton::clicked, this, &MainWindow::stop_clicked);
 	ui->stop_btn->setEnabled(false);
 
-	QShortcut *preview_1 = new QShortcut(QKeySequence(Qt::Key_1), this);
-	connect(preview_1, &QShortcut::activated, ui->preview_1_btn, &QPushButton::click);
-	connect(ui->input1_display, &JPEGFrameView::clicked, ui->preview_1_btn, &QPushButton::click);
-	connect(ui->preview_1_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(0); });
-	ui->input1_display->set_overlay("1");
-
-	QShortcut *preview_2 = new QShortcut(QKeySequence(Qt::Key_2), this);
-	connect(preview_2, &QShortcut::activated, ui->preview_2_btn, &QPushButton::click);
-	connect(ui->input2_display, &JPEGFrameView::clicked, ui->preview_2_btn, &QPushButton::click);
-	connect(ui->preview_2_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(1); });
-	ui->input2_display->set_overlay("2");
-
-	QShortcut *preview_3 = new QShortcut(QKeySequence(Qt::Key_3), this);
-	connect(preview_3, &QShortcut::activated, ui->preview_3_btn, &QPushButton::click);
-	connect(ui->input3_display, &JPEGFrameView::clicked, ui->preview_3_btn, &QPushButton::click);
-	connect(ui->preview_3_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(2); });
-	ui->input3_display->set_overlay("3");
-
-	QShortcut *preview_4 = new QShortcut(QKeySequence(Qt::Key_4), this);
-	connect(preview_4, &QShortcut::activated, ui->preview_4_btn, &QPushButton::click);
-	connect(ui->input4_display, &JPEGFrameView::clicked, ui->preview_4_btn, &QPushButton::click);
-	connect(ui->preview_4_btn, &QPushButton::clicked, [this]{ preview_angle_clicked(3); });
-	ui->input4_display->set_overlay("4");
-
 	connect(ui->playlist_duplicate_btn, &QPushButton::clicked, this, &MainWindow::playlist_duplicate);
 
 	connect(ui->playlist_remove_btn, &QPushButton::clicked, this, &MainWindow::playlist_remove);
@@ -202,6 +178,38 @@ MainWindow::MainWindow()
 
 	connect(ui->clip_list->selectionModel(), &QItemSelectionModel::currentChanged,
 		this, &MainWindow::clip_list_selection_changed);
+
+	// Make the display rows.
+	unsigned display_rows = (NUM_CAMERAS + 1) / 2;
+	ui->video_displays->setStretch(1, display_rows);
+	for (unsigned i = 0; i < NUM_CAMERAS; ++i) {
+		QFrame *frame = new QFrame(this);
+		frame->setAutoFillBackground(true);
+
+		QLayout *layout = new QGridLayout(frame);
+		frame->setLayout(layout);
+		layout->setContentsMargins(3, 3, 3, 3);
+
+		JPEGFrameView *display = new JPEGFrameView(frame);
+		display->setAutoFillBackground(true);
+		layout->addWidget(display);
+
+		ui->input_displays->addWidget(frame, i / 2, i % 2);
+		display->set_overlay(to_string(i + 1));
+
+		QPushButton *preview_btn = new QPushButton(this);
+		preview_btn->setMaximumSize(20, 17);
+		preview_btn->setText(QString::fromStdString(to_string(i + 1)));
+		ui->preview_layout->addWidget(preview_btn);
+
+		displays.emplace_back(FrameAndDisplay{ frame, display, preview_btn });
+
+		connect(display, &JPEGFrameView::clicked, preview_btn, &QPushButton::click);
+		QShortcut *shortcut = new QShortcut(QKeySequence(Qt::Key_1 + i), this);
+		connect(shortcut, &QShortcut::activated, preview_btn, &QPushButton::click);
+
+		connect(preview_btn, &QPushButton::clicked, [this, i]{ preview_angle_clicked(i); });
+	}
 }
 
 MainWindow::~MainWindow()
@@ -250,8 +258,7 @@ void MainWindow::queue_clicked()
 
 	QModelIndex index = selected->currentIndex();
 	Clip clip = *cliplist_clips->clip(index.row());
-	if (index.column() >= int(ClipList::Column::CAMERA_1) &&
-	    index.column() <= int(ClipList::Column::CAMERA_4)) {
+	if (ClipList::is_camera_column(index.column())) {
 		clip.stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 	} else {
 		clip.stream_idx = ui->preview_display->get_stream_idx();
@@ -293,8 +300,7 @@ void MainWindow::preview_clicked()
 
 	QModelIndex index = selected->currentIndex();
 	unsigned stream_idx;
-	if (index.column() >= int(ClipList::Column::CAMERA_1) &&
-	    index.column() <= int(ClipList::Column::CAMERA_4)) {
+	if (ClipList::is_camera_column(index.column())) {
 		stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 	} else {
 		stream_idx = ui->preview_display->get_stream_idx();
@@ -799,8 +805,7 @@ void MainWindow::playlist_selection_changed()
 void MainWindow::clip_list_selection_changed(const QModelIndex &current, const QModelIndex &)
 {
 	int camera_selected = -1;
-	if (current.column() >= int(ClipList::Column::CAMERA_1) &&
-	    current.column() <= int(ClipList::Column::CAMERA_4)) {
+	if (ClipList::is_camera_column(current.column())) {
 		camera_selected = current.column() - int(ClipList::Column::CAMERA_1);
 	}
 	highlight_camera_input(camera_selected);
@@ -978,25 +983,12 @@ void MainWindow::quality_toggled(int quality, bool checked)
 
 void MainWindow::highlight_camera_input(int stream_idx)
 {
-	if (stream_idx == 0) {
-		ui->input1_frame->setStyleSheet("background: rgb(0,255,0)");
-	} else {
-		ui->input1_frame->setStyleSheet("");
-	}
-	if (stream_idx == 1) {
-		ui->input2_frame->setStyleSheet("background: rgb(0,255,0)");
-	} else {
-		ui->input2_frame->setStyleSheet("");
-	}
-	if (stream_idx == 2) {
-		ui->input3_frame->setStyleSheet("background: rgb(0,255,0)");
-	} else {
-		ui->input3_frame->setStyleSheet("");
-	}
-	if (stream_idx == 3) {
-		ui->input4_frame->setStyleSheet("background: rgb(0,255,0)");
-	} else {
-		ui->input4_frame->setStyleSheet("");
+	for (unsigned i = 0; i < NUM_CAMERAS; ++i) {
+		if (stream_idx == i) {
+			displays[i].frame->setStyleSheet("background: rgb(0,255,0)");
+		} else {
+			displays[i].frame->setStyleSheet("");
+		}
 	}
 }
 
@@ -1011,6 +1003,13 @@ void MainWindow::set_output_status(const string &status)
 pair<string, string> MainWindow::get_queue_status() const {
 	lock_guard<mutex> lock(queue_status_mu);
 	return {queue_status, "text/plain"};
+}
+
+void MainWindow::display_frame(unsigned stream_idx, const FrameOnDisk &frame)
+{
+	if (stream_idx < NUM_CAMERAS) {
+		displays[stream_idx].display->setFrame(stream_idx, frame);
+	}
 }
 
 template <class Model>
