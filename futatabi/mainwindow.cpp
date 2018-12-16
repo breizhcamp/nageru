@@ -470,7 +470,7 @@ pair<Clip, size_t> MainWindow::live_player_get_next_clip()
 	// for Player to shut down, we could have a deadlock here.
 	promise<pair<Clip, size_t>> clip_promise;
 	future<pair<Clip, size_t>> clip = clip_promise.get_future();
-	post_to_main_thread([this, &clip_promise] {
+	post_to_main_thread([&clip_promise] {
 		int row = playlist_clips->get_currently_playing();
 		if (row != -1 && row < int(playlist_clips->size()) - 1) {
 			clip_promise.set_value(make_pair(*playlist_clips->clip(row + 1), row + 1));
