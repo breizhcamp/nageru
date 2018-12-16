@@ -793,11 +793,11 @@ void MainWindow::playlist_selection_changed()
 	if (!any_selected) {
 		set_output_status("paused");
 	} else {
-		double remaining = 0.0;
-		for (int row = selected->selectedRows().front().row(); row < int(playlist_clips->size()); ++row) {
-			const Clip clip = *playlist_clips->clip(row);
-			remaining += double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;  // FIXME: stop hardcoding speed.
+		vector<Clip> clips;
+		for (size_t row = 0; row < playlist_clips->size(); ++row) {
+			clips.push_back(*playlist_clips->clip(row));
 		}
+		double remaining = compute_time_left(clips, {{selected->selectedRows().front().row(), 0.0}});
 		set_output_status(format_duration(remaining) + " ready");
 	}
 }
