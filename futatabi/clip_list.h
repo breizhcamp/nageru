@@ -12,7 +12,7 @@
 
 struct Clip {
 	int64_t pts_in = -1, pts_out = -1;  // pts_in is inclusive, pts_out is exclusive.
-	std::string descriptions[NUM_CAMERAS];
+	std::string descriptions[MAX_STREAMS];
 	unsigned stream_idx = 0;  // For the playlist only.
 	double fade_time_seconds = 0.5;  // For the playlist only.
 };
@@ -47,7 +47,7 @@ class ClipList : public QAbstractTableModel, public DataChangedReceiver {
 	Q_OBJECT
 
 public:
-	explicit ClipList(const ClipListProto &serialized);
+	ClipList(const ClipListProto &serialized);
 
 	enum class Column {
 		IN,
@@ -76,11 +76,12 @@ public:
 
 	ClipListProto serialize() const;
 
+	void change_num_cameras(size_t num_cameras);  // Defaults to 1. Cannot decrease.
 	void emit_data_changed(size_t row) override;
 
-	static bool is_camera_column(int column)
+	bool is_camera_column(int column) const
 	{
-		return (column >= int(Column::CAMERA_1) && column < int(Column::CAMERA_1) + NUM_CAMERAS);
+		return (column >= int(Column::CAMERA_1) && column < int(Column::CAMERA_1) + num_cameras);
 	}
 
 signals:
@@ -88,6 +89,7 @@ signals:
 
 private:
 	std::vector<Clip> clips;
+	size_t num_cameras = 1;
 };
 
 class PlayList : public QAbstractTableModel, public DataChangedReceiver {
@@ -139,6 +141,11 @@ public:
 
 	ClipListProto serialize() const;
 
+	void change_num_cameras(size_t num_cameras)  // Defaults to 1. Cannot decrease.
+	{
+		this->num_cameras = num_cameras;
+	}
+
 	void emit_data_changed(size_t row) override;
 
 signals:
@@ -149,6 +156,7 @@ private:
 	int currently_playing_index = -1;
 	double play_progress = 0.0;
 	std::map<size_t, double> current_progress;
+	size_t num_cameras = 1;
 };
 
 #endif  // !defined (_CLIP_LIST_H)

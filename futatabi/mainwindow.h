@@ -43,6 +43,7 @@ private:
 	QLabel *disk_free_label;
 	std::unique_ptr<Player> preview_player, live_player;
 	DB db;
+	unsigned num_cameras;
 
 	// State when doing a scrub operation on a timestamp with the mouse.
 	bool scrubbing = false;
@@ -87,6 +88,7 @@ private:
 	};
 	std::vector<FrameAndDisplay> displays;
 
+	void change_num_cameras();
 	void cue_in_clicked();
 	void cue_out_clicked();
 	void queue_clicked();

@@ -58,7 +58,7 @@ int ClipList::columnCount(const QModelIndex &parent) const
 {
 	if (parent.isValid())
 		return 0;
-	return int(Column::NUM_NON_CAMERA_COLUMNS) + NUM_CAMERAS;
+	return int(Column::NUM_NON_CAMERA_COLUMNS) + num_cameras;
 }
 
 int PlayList::columnCount(const QModelIndex &parent) const
@@ -212,7 +212,7 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 	case Column::DURATION:
 		return "Duration";
 	default:
-		if (section >= int(Column::CAMERA_1) && section < int(Column::CAMERA_1) + NUM_CAMERAS) {
+		if (section >= int(Column::CAMERA_1) && section < int(Column::CAMERA_1) + num_cameras) {
 			return QString::fromStdString("Camera " + to_string(section - int(Column::CAMERA_1) + 1));
 		} else {
 			return "";
@@ -319,7 +319,7 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 	case Column::CAMERA: {
 		bool ok;
 		int camera_idx = value.toInt(&ok);
-		if (!ok || camera_idx < 1 || camera_idx > NUM_CAMERAS) {
+		if (!ok || camera_idx < 1 || camera_idx > num_cameras) {
 			return false;
 		}
 		clips[row].stream_idx = camera_idx - 1;
@@ -390,13 +390,26 @@ void PlayList::move_clips(size_t first, size_t last, int delta)
 
 void ClipList::emit_data_changed(size_t row)
 {
-	emit dataChanged(index(row, 0), index(row, int(Column::NUM_NON_CAMERA_COLUMNS) + NUM_CAMERAS));
+	emit dataChanged(index(row, 0), index(row, int(Column::NUM_NON_CAMERA_COLUMNS) + num_cameras));
 	emit any_content_changed();
 }
 
 void PlayList::emit_data_changed(size_t row)
 {
 	emit dataChanged(index(row, 0), index(row, int(Column::NUM_COLUMNS)));
+	emit any_content_changed();
+}
+
+void ClipList::change_num_cameras(size_t num_cameras)
+{
+	assert(num_cameras >= this->num_cameras);
+	if (num_cameras == this->num_cameras) {
+		return;
+	}
+
+	beginInsertColumns(QModelIndex(), int(Column::NUM_NON_CAMERA_COLUMNS) + this->num_cameras, int(Column::NUM_NON_CAMERA_COLUMNS) + num_cameras - 1);
+	this->num_cameras = num_cameras;
+	endInsertColumns();
 	emit any_content_changed();
 }
 
@@ -444,7 +457,7 @@ Clip deserialize_clip(const ClipProto &clip_proto)
 	Clip clip;
 	clip.pts_in = clip_proto.pts_in();
 	clip.pts_out = clip_proto.pts_out();
-	for (int camera_idx = 0; camera_idx < min(clip_proto.description_size(), NUM_CAMERAS); ++camera_idx) {
+	for (int camera_idx = 0; camera_idx < min(clip_proto.description_size(), MAX_STREAMS); ++camera_idx) {
 		clip.descriptions[camera_idx] = clip_proto.description(camera_idx);
 	}
 	clip.stream_idx = clip_proto.stream_idx();
@@ -456,7 +469,7 @@ void serialize_clip(const Clip &clip, ClipProto *clip_proto)
 {
 	clip_proto->set_pts_in(clip.pts_in);
 	clip_proto->set_pts_out(clip.pts_out);
-	for (int camera_idx = 0; camera_idx < NUM_CAMERAS; ++camera_idx) {
+	for (int camera_idx = 0; camera_idx < MAX_STREAMS; ++camera_idx) {
 		*clip_proto->add_description() = clip.descriptions[camera_idx];
 	}
 	clip_proto->set_stream_idx(clip.stream_idx);

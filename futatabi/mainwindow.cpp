@@ -179,10 +179,28 @@ MainWindow::MainWindow()
 	connect(ui->clip_list->selectionModel(), &QItemSelectionModel::currentChanged,
 		this, &MainWindow::clip_list_selection_changed);
 
-	// Make the display rows.
-	unsigned display_rows = (NUM_CAMERAS + 1) / 2;
+	// Find out how many cameras we have in the existing frames;
+	// if none, we start with a single camera.
+	num_cameras = 1;
+	{
+		lock_guard<mutex> lock(frame_mu);
+		for (size_t stream_idx = 1; stream_idx < MAX_STREAMS; ++stream_idx) {
+			if (!frames[stream_idx].empty()) {
+				num_cameras = stream_idx + 1;
+			}
+		}
+	}
+	change_num_cameras();
+}
+
+void MainWindow::change_num_cameras()
+{
+	assert(num_cameras >= displays.size());  // We only add, never remove.
+
+	// Make new display rows.
+	unsigned display_rows = (num_cameras + 1) / 2;
 	ui->video_displays->setStretch(1, display_rows);
-	for (unsigned i = 0; i < NUM_CAMERAS; ++i) {
+	for (unsigned i = displays.size(); i < num_cameras; ++i) {
 		QFrame *frame = new QFrame(this);
 		frame->setAutoFillBackground(true);
 
@@ -210,6 +228,11 @@ MainWindow::MainWindow()
 
 		connect(preview_btn, &QPushButton::clicked, [this, i]{ preview_angle_clicked(i); });
 	}
+
+	cliplist_clips->change_num_cameras(num_cameras);
+	playlist_clips->change_num_cameras(num_cameras);
+
+	QMetaObject::invokeMethod(this, "relayout", Qt::QueuedConnection);
 }
 
 MainWindow::~MainWindow()
@@ -258,7 +281,7 @@ void MainWindow::queue_clicked()
 
 	QModelIndex index = selected->currentIndex();
 	Clip clip = *cliplist_clips->clip(index.row());
-	if (ClipList::is_camera_column(index.column())) {
+	if (cliplist_clips->is_camera_column(index.column())) {
 		clip.stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 	} else {
 		clip.stream_idx = ui->preview_display->get_stream_idx();
@@ -300,7 +323,7 @@ void MainWindow::preview_clicked()
 
 	QModelIndex index = selected->currentIndex();
 	unsigned stream_idx;
-	if (ClipList::is_camera_column(index.column())) {
+	if (cliplist_clips->is_camera_column(index.column())) {
 		stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 	} else {
 		stream_idx = ui->preview_display->get_stream_idx();
@@ -734,7 +757,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 				int stream_idx = clip->stream_idx + angle_degrees / camera_degrees_per_pixel;
 				stream_idx = std::max(stream_idx, 0);
-				stream_idx = std::min(stream_idx, NUM_CAMERAS - 1);
+				stream_idx = std::min<int>(stream_idx, num_cameras - 1);
 				clip->stream_idx = stream_idx;
 
 				last_mousewheel_camera_row = row;
@@ -805,7 +828,7 @@ void MainWindow::playlist_selection_changed()
 void MainWindow::clip_list_selection_changed(const QModelIndex &current, const QModelIndex &)
 {
 	int camera_selected = -1;
-	if (ClipList::is_camera_column(current.column())) {
+	if (cliplist_clips->is_camera_column(current.column())) {
 		camera_selected = current.column() - int(ClipList::Column::CAMERA_1);
 	}
 	highlight_camera_input(camera_selected);
@@ -983,7 +1006,7 @@ void MainWindow::quality_toggled(int quality, bool checked)
 
 void MainWindow::highlight_camera_input(int stream_idx)
 {
-	for (unsigned i = 0; i < NUM_CAMERAS; ++i) {
+	for (unsigned i = 0; i < num_cameras; ++i) {
 		if (stream_idx == i) {
 			displays[i].frame->setStyleSheet("background: rgb(0,255,0)");
 		} else {
@@ -1007,9 +1030,17 @@ pair<string, string> MainWindow::get_queue_status() const {
 
 void MainWindow::display_frame(unsigned stream_idx, const FrameOnDisk &frame)
 {
-	if (stream_idx < NUM_CAMERAS) {
-		displays[stream_idx].display->setFrame(stream_idx, frame);
+	if (stream_idx >= MAX_STREAMS) {
+		fprintf(stderr, "WARNING: Ignoring too-high stream index %u.\n", stream_idx);
+		return;
 	}
+	if (stream_idx >= num_cameras) {
+		post_to_main_thread_and_wait([this, stream_idx]{
+			num_cameras = stream_idx + 1;
+			change_num_cameras();
+		});
+	}
+	displays[stream_idx].display->setFrame(stream_idx, frame);
 }
 
 template <class Model>
