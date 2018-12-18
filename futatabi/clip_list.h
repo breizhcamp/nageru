@@ -13,8 +13,11 @@
 struct Clip {
 	int64_t pts_in = -1, pts_out = -1;  // pts_in is inclusive, pts_out is exclusive.
 	std::string descriptions[MAX_STREAMS];
-	unsigned stream_idx = 0;  // For the playlist only.
-	double fade_time_seconds = 0.5;  // For the playlist only.
+
+	// These are for the playlist only.
+	unsigned stream_idx = 0;
+	double fade_time_seconds = 0.5;
+	double speed = 0.5;
 };
 
 class DataChangedReceiver {
@@ -106,6 +109,7 @@ public:
 		CAMERA,
 		DESCRIPTION,
 		FADE_TIME,
+		SPEED,
 		NUM_COLUMNS
 	};
 

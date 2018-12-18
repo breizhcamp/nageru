@@ -108,8 +108,7 @@ got_clip:
 			}
 		}
 
-		// TODO: Lock to a rational multiple of the frame rate if possible.
-		double speed = 0.5;
+		// TODO: Lock the speed to a rational multiple of the frame rate if possible.
 
 		int64_t in_pts_start_next_clip = -1;
 		steady_clock::time_point next_frame_start;
@@ -117,7 +116,7 @@ got_clip:
 			double out_pts = out_pts_origin + TIMEBASE * frameno / global_flags.output_framerate;
 			next_frame_start =
 				origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
-			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * speed / global_flags.output_framerate);
+			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * clip.speed / global_flags.output_framerate);
 			pts = lrint(out_pts);
 
 			if (in_pts >= clip.pts_out) {
@@ -131,16 +130,16 @@ got_clip:
 				continue;
 			}
 
-			double time_left_this_clip = double(clip.pts_out - in_pts) / TIMEBASE / speed;
+			double time_left_this_clip = double(clip.pts_out - in_pts) / TIMEBASE / clip.speed;
 			if (!got_next_clip && next_clip_callback != nullptr && time_left_this_clip <= clip.fade_time_seconds) {
 				// Find the next clip so that we can begin a fade.
 				tie(next_clip, next_clip_idx) = next_clip_callback();
 				if (next_clip.pts_in != -1) {
 					got_next_clip = true;
 
-					double duration_next_clip = double(next_clip.pts_out - next_clip.pts_in) / TIMEBASE / speed;
+					double duration_next_clip = double(next_clip.pts_out - next_clip.pts_in) / TIMEBASE / clip.speed;
 					next_clip_fade_time = std::min(time_left_this_clip, duration_next_clip);
-					in_pts_start_next_clip = next_clip.pts_in + lrint(next_clip_fade_time * TIMEBASE * speed);
+					in_pts_start_next_clip = next_clip.pts_in + lrint(next_clip_fade_time * TIMEBASE * clip.speed);
 				}
 			}
 
@@ -153,7 +152,7 @@ got_clip:
 			float fade_alpha = 0.0f;
 			if (got_next_clip && time_left_this_clip <= next_clip_fade_time) {
 				secondary_stream_idx = next_clip.stream_idx;
-				int64_t in_pts_secondary = lrint(next_clip.pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * speed);
+				int64_t in_pts_secondary = lrint(next_clip.pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * clip.speed);
 				in_pts_secondary_for_progress = in_pts_secondary;
 				fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
 
@@ -174,13 +173,13 @@ got_clip:
 
 			if (progress_callback != nullptr) {
 				// NOTE: None of this will take into account any snapping done below.
-				double played_this_clip = double(in_pts_for_progress - clip.pts_in) / TIMEBASE / speed;
-				double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / speed;
+				double played_this_clip = double(in_pts_for_progress - clip.pts_in) / TIMEBASE / clip.speed;
+				double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / clip.speed;
 				map<size_t, double> progress{{ clip_idx, played_this_clip / total_length }};
 
 				if (got_next_clip && time_left_this_clip <= next_clip_fade_time) {
-					double played_next_clip = double(in_pts_secondary_for_progress - next_clip.pts_in) / TIMEBASE / speed;
-					double total_next_length = double(next_clip.pts_out - next_clip.pts_in) / TIMEBASE / speed;
+					double played_next_clip = double(in_pts_secondary_for_progress - next_clip.pts_in) / TIMEBASE / next_clip.speed;
+					double total_next_length = double(next_clip.pts_out - next_clip.pts_in) / TIMEBASE / next_clip.speed;
 					progress[next_clip_idx] = played_next_clip / total_next_length;
 				}
 				progress_callback(progress);
@@ -263,7 +262,7 @@ got_clip:
 			// TODO: Snap secondary (fade-to) clips in the same fashion.
 			bool snapped = false;
 			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
-				double snap_pts_as_frameno = (snap_frame.pts - in_pts_origin) * global_flags.output_framerate / TIMEBASE / speed;
+				double snap_pts_as_frameno = (snap_frame.pts - in_pts_origin) * global_flags.output_framerate / TIMEBASE / clip.speed;
 				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
 					auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
 						if (destination != nullptr) {
@@ -483,7 +482,7 @@ double compute_time_left(const vector<Clip> &clips, const map<size_t, double> &p
 	double last_fade_time_seconds = 0.0;
 	for (size_t row = last_it->first; row < clips.size(); ++row) {
 		const Clip &clip = clips[row];
-		double clip_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / 0.5;  // FIXME: stop hardcoding speed.
+		double clip_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / clip.speed;
 		if (row == last_it->first) {
 			// A clip we're playing: Subtract the part we've already played.
 			remaining = clip_length * (1.0 - last_it->second);

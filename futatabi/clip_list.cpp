@@ -131,6 +131,7 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const
 		case Column::OUT:
 		case Column::DURATION:
 		case Column::FADE_TIME:
+		case Column::SPEED:
 			return Qt::AlignRight + Qt::AlignVCenter;
 		case Column::CAMERA:
 			return Qt::AlignCenter;
@@ -192,6 +193,13 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const
 		ss << fixed << clips[row].fade_time_seconds;
 		return QString::fromStdString(ss.str());
 	}
+	case Column::SPEED: {
+		stringstream ss;
+		ss.imbue(locale("C"));
+		ss.precision(3);
+		ss << fixed << clips[row].speed;
+		return QString::fromStdString(ss.str());
+	}
 	default:
 		return "";
 	}
@@ -242,6 +250,8 @@ QVariant PlayList::headerData(int section, Qt::Orientation orientation, int role
 		return "Description";
 	case Column::FADE_TIME:
 		return "Fade time";
+	case Column::SPEED:
+		return "Speed";
 	default:
 		return "";
 	}
@@ -274,7 +284,7 @@ Qt::ItemFlags PlayList::flags(const QModelIndex &index) const
 	case Column::DESCRIPTION:
 	case Column::CAMERA:
 	case Column::FADE_TIME:
-		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable;
+	case Column::SPEED:
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable;
 	default:
 		return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
@@ -333,6 +343,16 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 			return false;
 		}
 		clips[row].fade_time_seconds = val;
+		emit_data_changed(row);
+		return true;
+	}
+	case Column::SPEED: {
+		bool ok;
+		double val = value.toDouble(&ok);
+		if (!ok || !(val >= 0.001)) {
+			return false;
+		}
+		clips[row].speed = val;
 		emit_data_changed(row);
 		return true;
 	}
@@ -462,6 +482,11 @@ Clip deserialize_clip(const ClipProto &clip_proto)
 	}
 	clip.stream_idx = clip_proto.stream_idx();
 	clip.fade_time_seconds = clip_proto.fade_time_seconds();
+	if (clip_proto.speed() < 0.001) {
+		clip.speed = 0.5;  // Default.
+	} else {
+		clip.speed = clip_proto.speed();
+	}
 	return clip;
 }
 
@@ -474,6 +499,7 @@ void serialize_clip(const Clip &clip, ClipProto *clip_proto)
 	}
 	clip_proto->set_stream_idx(clip.stream_idx);
 	clip_proto->set_fade_time_seconds(clip.fade_time_seconds);
+	clip_proto->set_speed(clip.speed);
 }
 
 }  // namespace
