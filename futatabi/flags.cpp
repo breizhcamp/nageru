@@ -16,7 +16,8 @@ int flow_initialized_interpolation_quality;
 enum LongOption {
 	OPTION_HELP = 1000,
 	OPTION_SLOW_DOWN_INPUT = 1001,
-	OPTION_HTTP_PORT = 1002
+	OPTION_HTTP_PORT = 1002,
+	OPTION_TALLY_URL = 1003
 };
 
 void usage()
@@ -37,6 +38,7 @@ void usage()
 	fprintf(stderr, "                                  4 = best (not realtime on any current GPU)\n");
 	fprintf(stderr, "  -d, --working-directory DIR     where to store frames and database\n");
 	fprintf(stderr, "      --http-port PORT            which port to listen on for output\n");
+	fprintf(stderr, "      --tally-url URL             URL to get tally color from (polled every 100 ms)\n");
 }
 
 void parse_flags(int argc, char * const argv[])
@@ -50,6 +52,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "interpolation-quality", required_argument, 0, 'q' },
 		{ "working-directory", required_argument, 0, 'd' },
 		{ "http-port", required_argument, 0, OPTION_HTTP_PORT },
+		{ "tally-url", required_argument, 0, OPTION_TALLY_URL },
 		{ 0, 0, 0, 0 }
 	};
 	for ( ;; ) {
@@ -90,6 +93,9 @@ void parse_flags(int argc, char * const argv[])
 			break;
 		case OPTION_HTTP_PORT:
 			global_flags.http_port = atoi(optarg);
+			break;
+		case OPTION_TALLY_URL:
+			global_flags.tally_url = optarg;
 			break;
 		case OPTION_HELP:
 			usage();

@@ -10,6 +10,7 @@
 #include <mutex>
 #include <QLabel>
 #include <QMainWindow>
+#include <QNetworkAccessManager>
 #include <stdbool.h>
 #include <sys/types.h>
 #include <string>
@@ -88,6 +89,10 @@ private:
 	};
 	std::vector<FrameAndDisplay> displays;
 
+	// Used to get tally information, if a tally URL is set.
+	QNetworkAccessManager http;
+	QNetworkReply *http_reply = nullptr;
+
 	void change_num_cameras();
 	void cue_in_clicked();
 	void cue_out_clicked();
@@ -134,6 +139,9 @@ private:
 
 	template <class Model>
 	void replace_model(QTableView *view, Model **model, Model *new_model);
+
+	void start_tally();
+	void tally_received();
 
 private slots:
 	void relayout();

@@ -15,6 +15,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QNetworkReply>
 #include <QShortcut>
 #include <QTimer>
 #include <QWheelEvent>
@@ -191,6 +192,10 @@ MainWindow::MainWindow()
 		}
 	}
 	change_num_cameras();
+
+	if (!global_flags.tally_url.empty()) {
+		start_tally();
+	}
 }
 
 void MainWindow::change_num_cameras()
@@ -1052,4 +1057,29 @@ void MainWindow::replace_model(QTableView *view, Model **model, Model *new_model
 	delete old_selection_model;
 	*model = new_model;
 	connect(new_model, &Model::any_content_changed, this, &MainWindow::content_changed);
+}
+
+void MainWindow::start_tally()
+{
+	http_reply = http.get(QNetworkRequest(QString::fromStdString(global_flags.tally_url)));
+	connect(http_reply, &QNetworkReply::finished, this, &MainWindow::tally_received);
+}
+
+void MainWindow::tally_received()
+{
+	unsigned time_to_next_tally_ms;
+	if (http_reply->error()) {
+		fprintf(stderr, "HTTP get of '%s' failed: %s\n", global_flags.tally_url.c_str(),
+			http_reply->errorString().toStdString().c_str());
+		ui->live_frame->setStyleSheet("");
+		time_to_next_tally_ms = 1000;
+	} else {
+		string contents = http_reply->readAll().toStdString();
+		ui->live_frame->setStyleSheet(QString::fromStdString("background: " + contents));
+		time_to_next_tally_ms = 100;
+	}
+	http_reply->deleteLater();
+	http_reply = nullptr;
+
+	QTimer::singleShot(time_to_next_tally_ms, this, &MainWindow::start_tally);
 }

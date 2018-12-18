@@ -14,6 +14,7 @@ struct Flags {
 	bool interpolation_quality_set = false;
 	uint16_t http_port = DEFAULT_HTTPD_PORT;
 	double output_framerate = 60000.0 / 1001.0;
+	std::string tally_url;
 };
 extern Flags global_flags;
 

@@ -183,18 +183,48 @@
        <layout class="QVBoxLayout" name="video_displays" stretch="1,2">
         <item>
          <layout class="QHBoxLayout" name="preview_and_live_panes">
+          <property name="spacing">
+           <number>3</number>
+          </property>
           <item>
            <layout class="QVBoxLayout" name="preview_pane" stretch="1,0">
             <item>
-             <widget class="JPEGFrameView" name="preview_display" native="true"/>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" name="preview_layout">
-              <property name="spacing">
+             <widget class="QFrame" name="preview_frame">
+              <property name="autoFillBackground">
+               <bool>true</bool>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::NoFrame</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Plain</enum>
+              </property>
+              <property name="lineWidth">
                <number>0</number>
               </property>
+              <layout class="QGridLayout" name="gridLayout_3">
+               <property name="leftMargin">
+                <number>3</number>
+               </property>
+               <property name="topMargin">
+                <number>3</number>
+               </property>
+               <property name="rightMargin">
+                <number>3</number>
+               </property>
+               <property name="bottomMargin">
+                <number>3</number>
+               </property>
+               <item row="0" column="0">
+                <widget class="JPEGFrameView" name="preview_display" native="true"/>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="preview_layout" stretch="0">
               <item>
-               <widget class="QLabel" name="label_2">
+               <widget class="QLabel" name="preview_label">
                 <property name="text">
                  <string>Preview output</string>
                 </property>
@@ -210,7 +240,37 @@
           <item>
            <layout class="QVBoxLayout" name="live_pane" stretch="1,0">
             <item>
-             <widget class="JPEGFrameView" name="live_display" native="true"/>
+             <widget class="QFrame" name="live_frame">
+              <property name="autoFillBackground">
+               <bool>true</bool>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::NoFrame</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Plain</enum>
+              </property>
+              <property name="lineWidth">
+               <number>0</number>
+              </property>
+              <layout class="QGridLayout" name="gridLayout_2">
+               <property name="leftMargin">
+                <number>3</number>
+               </property>
+               <property name="topMargin">
+                <number>3</number>
+               </property>
+               <property name="rightMargin">
+                <number>3</number>
+               </property>
+               <property name="bottomMargin">
+                <number>3</number>
+               </property>
+               <item row="0" column="0">
+                <widget class="JPEGFrameView" name="live_display" native="true"/>
+               </item>
+              </layout>
+             </widget>
             </item>
             <item>
              <widget class="QLabel" name="live_label">
