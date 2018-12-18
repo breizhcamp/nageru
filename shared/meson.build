@@ -1,12 +1,12 @@
 qt5 = import('qt5')
-qt5deps = dependency('qt5', modules: ['Core', 'Gui', 'Widgets', 'OpenGL'])
+shared_qt5deps = dependency('qt5', modules: ['Core', 'Gui', 'Widgets', 'OpenGL'])
 libmicrohttpddep = dependency('libmicrohttpd')
 
 # Preprocess Qt as needed.
 qt_files = qt5.preprocess(
 	moc_headers: ['aboutdialog.h'],
 	ui_files: ['aboutdialog.ui'],
-	dependencies: qt5deps)
+	dependencies: shared_qt5deps)
 
 srcs = ['memcpy_interleaved.cpp', 'metacube2.cpp', 'ffmpeg_raii.cpp', 'mux.cpp', 'metrics.cpp', 'context.cpp', 'httpd.cpp', 'disk_space_estimator.cpp', 'read_file.cpp']
 
@@ -14,7 +14,7 @@ srcs = ['memcpy_interleaved.cpp', 'metacube2.cpp', 'ffmpeg_raii.cpp', 'mux.cpp',
 srcs += qt_files
 srcs += ['aboutdialog.cpp']
 
-shared = static_library('shared', srcs, include_directories: top_include, dependencies: [qt5deps, libmicrohttpddep])
+shared = static_library('shared', srcs, include_directories: top_include, dependencies: [shared_qt5deps, libmicrohttpddep])
 shareddep = declare_dependency(
    include_directories: top_include,
    link_with: shared)
