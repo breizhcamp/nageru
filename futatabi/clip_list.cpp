@@ -220,7 +220,7 @@ QVariant ClipList::headerData(int section, Qt::Orientation orientation, int role
 	case Column::DURATION:
 		return "Duration";
 	default:
-		if (section >= int(Column::CAMERA_1) && section < int(Column::CAMERA_1) + num_cameras) {
+		if (is_camera_column(section)) {
 			return QString::fromStdString("Camera " + to_string(section - int(Column::CAMERA_1) + 1));
 		} else {
 			return "";
@@ -329,7 +329,7 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 	case Column::CAMERA: {
 		bool ok;
 		int camera_idx = value.toInt(&ok);
-		if (!ok || camera_idx < 1 || camera_idx > num_cameras) {
+		if (!ok || camera_idx < 1 || camera_idx > int(num_cameras)) {
 			return false;
 		}
 		clips[row].stream_idx = camera_idx - 1;

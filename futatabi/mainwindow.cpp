@@ -1012,7 +1012,7 @@ void MainWindow::quality_toggled(int quality, bool checked)
 void MainWindow::highlight_camera_input(int stream_idx)
 {
 	for (unsigned i = 0; i < num_cameras; ++i) {
-		if (stream_idx == i) {
+		if (unsigned(stream_idx) == i) {
 			displays[i].frame->setStyleSheet("background: rgb(0,255,0)");
 		} else {
 			displays[i].frame->setStyleSheet("");

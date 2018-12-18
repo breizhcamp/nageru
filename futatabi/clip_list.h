@@ -84,7 +84,7 @@ public:
 
 	bool is_camera_column(int column) const
 	{
-		return (column >= int(Column::CAMERA_1) && column < int(Column::CAMERA_1) + num_cameras);
+		return (column >= int(Column::CAMERA_1) && column < int(Column::CAMERA_1) + int(num_cameras));
 	}
 
 signals:
