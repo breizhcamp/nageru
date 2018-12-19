@@ -1,3 +1,16 @@
+Nageru and Futatabi 1.8.0, December 20th, 2018
+
+  - Initial release of Futatabi, a multicamera slow motion video server
+    designed to be used with Nageru. Futatabi is currently in alpha stage
+    and largely undocumented.
+
+  - Add support for multi-camera export from Nageru. A multi-camera stream
+    contains all frames from all camera inputs (unless overridden by
+    --mjpeg-export-cards), unprocessed except for MJPEG encoding.
+    MJPEG encoding is done in hardware (via VA-API) on Skylake or newer,
+    or using libjpeg otherwise. The intended user of this stream is Futatabi.
+
+
 Nageru 1.7.5, November 11th, 2018
 
   - Fix a bug where --record-x264-video would not work when VA-API was

@@ -1,4 +1,4 @@
-project('nageru', 'cpp', default_options: ['buildtype=debugoptimized'], version: '1.8.0-pre')
+project('nageru', 'cpp', default_options: ['buildtype=debugoptimized'], version: '1.8.0')
 
 cxx = meson.get_compiler('cpp')
 qt5 = import('qt5')
