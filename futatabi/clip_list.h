@@ -79,7 +79,7 @@ public:
 
 	ClipListProto serialize() const;
 
-	void change_num_cameras(size_t num_cameras);  // Defaults to 1. Cannot decrease.
+	void change_num_cameras(size_t num_cameras);  // Defaults to 2. Cannot decrease.
 	void emit_data_changed(size_t row) override;
 
 	bool is_camera_column(int column) const
@@ -92,7 +92,7 @@ signals:
 
 private:
 	std::vector<Clip> clips;
-	size_t num_cameras = 1;
+	size_t num_cameras = 2;
 };
 
 class PlayList : public QAbstractTableModel, public DataChangedReceiver {
@@ -145,7 +145,7 @@ public:
 
 	ClipListProto serialize() const;
 
-	void change_num_cameras(size_t num_cameras)  // Defaults to 1. Cannot decrease.
+	void change_num_cameras(size_t num_cameras)  // Defaults to 2. Cannot decrease.
 	{
 		this->num_cameras = num_cameras;
 	}
@@ -160,7 +160,7 @@ private:
 	int currently_playing_index = -1;
 	double play_progress = 0.0;
 	std::map<size_t, double> current_progress;
-	size_t num_cameras = 1;
+	size_t num_cameras = 2;
 };
 
 #endif  // !defined (_CLIP_LIST_H)

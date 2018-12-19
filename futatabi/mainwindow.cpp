@@ -181,11 +181,11 @@ MainWindow::MainWindow()
 		this, &MainWindow::clip_list_selection_changed);
 
 	// Find out how many cameras we have in the existing frames;
-	// if none, we start with a single camera.
-	num_cameras = 1;
+	// if none, we start with two cameras.
+	num_cameras = 2;
 	{
 		lock_guard<mutex> lock(frame_mu);
-		for (size_t stream_idx = 1; stream_idx < MAX_STREAMS; ++stream_idx) {
+		for (size_t stream_idx = 2; stream_idx < MAX_STREAMS; ++stream_idx) {
 			if (!frames[stream_idx].empty()) {
 				num_cameras = stream_idx + 1;
 			}
