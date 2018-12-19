@@ -108,8 +108,6 @@ got_clip:
 			}
 		}
 
-		// TODO: Lock the speed to a rational multiple of the frame rate if possible.
-
 		int64_t in_pts_start_next_clip = -1;
 		steady_clock::time_point next_frame_start;
 		for (int frameno = 0; !should_quit; ++frameno) {  // Ends when the clip ends.
@@ -260,10 +258,10 @@ got_clip:
 			// Snap to input frame: If we can do so with less than 1% jitter
 			// (ie., move less than 1% of an _output_ frame), do so.
 			// TODO: Snap secondary (fade-to) clips in the same fashion.
+			double pts_snap_tolerance = 0.01 * double(TIMEBASE) / global_flags.output_framerate;
 			bool snapped = false;
 			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
-				double snap_pts_as_frameno = (snap_frame.pts - in_pts_origin) * global_flags.output_framerate / TIMEBASE / clip.speed;
-				if (fabs(snap_pts_as_frameno - frameno) < 0.01) {
+				if (fabs(snap_frame.pts - in_pts) < pts_snap_tolerance) {
 					auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
 						if (destination != nullptr) {
 							destination->setFrame(primary_stream_idx, snap_frame, secondary_frame, fade_alpha);
@@ -290,6 +288,31 @@ got_clip:
 			}
 			if (snapped) {
 				continue;
+			}
+
+			// The snapping above makes us lock to the input framerate, even in the presence
+			// of pts drift, for most typical cases where it's needed, like converting 60 → 2x60
+			// or 60 → 2x59.94. However, there are some corner cases like 25 → 2x59.94, where we'd
+			// get a snap very rarely (in the given case, once every 24 output frames), and by
+			// that time, we'd have drifted out. We could have solved this by changing the overall
+			// speed ever so slightly, but it requires that we know the actual frame rate (which
+			// is difficult in the presence of jitter and missed frames), or at least do some kind
+			// of matching/clustering. Instead, we take the opportunity to lock to in-between rational
+			// points if we can. E.g., if we are converting 60 → 2x60, we would not only snap to
+			// an original frame every other frame; we would also snap to exactly alpha=0.5 every
+			// in-between frame. Of course, we will still need to interpolate, but we get a lot
+			// closer when we actually get close to an original frame. In other words: Snap more
+			// often, but snap less each time. Unless the input and output frame rates are completely
+			// decorrelated with no common factor, of course (e.g. 12.345 → 34.567, which we should
+			// really never see in practice).
+			for (double fraction : { 1.0 / 2.0, 1.0 / 3.0, 2.0 / 3.0, 1.0 / 4.0, 3.0 / 4.0,
+			                         1.0 / 5.0, 2.0 / 5.0, 3.0 / 5.0, 4.0 / 5.0 }) {
+				double subsnap_pts = frame_lower.pts + fraction * (frame_upper.pts - frame_lower.pts);
+				if (fabs(subsnap_pts - in_pts) < pts_snap_tolerance) {
+					in_pts_origin += lrint(subsnap_pts) - in_pts;
+					in_pts = lrint(subsnap_pts);
+					break;
+				}
 			}
 
 			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(100)) {
