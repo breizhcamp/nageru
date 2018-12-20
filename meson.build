@@ -22,8 +22,8 @@ movitdep = dependency('movit')
 protobufdep = dependency('protobuf')
 qcustomplotdep = cxx.find_library('qcustomplot')
 qt5deps = dependency('qt5', modules: ['Core', 'Gui', 'Widgets', 'OpenGLExtensions', 'OpenGL', 'Network'])
-sdl2_imagedep = dependency('SDL2_image')
-sdl2dep = dependency('sdl2')
+sdl2_imagedep = dependency('SDL2_image', required: false)
+sdl2dep = dependency('sdl2', required: false)
 sqlite3dep = dependency('sqlite3')
 threaddep = dependency('threads')
 vadrmdep = dependency('libva-drm')
@@ -314,6 +314,8 @@ executable('futatabi', futatabi_srcs,
 	install: true)
 
 # Test binaries for the optical flow code.
-executable('flow', 'futatabi/flow_main.cpp', 'futatabi/flow.cpp', 'futatabi/gpu_timers.cpp', futatabi_shader_srcs, dependencies: [shareddep, epoxydep, sdl2dep, sdl2_imagedep])
+if sdl2dep.found() and sdl2_imagedep.found()
+	executable('flow', 'futatabi/flow_main.cpp', 'futatabi/flow.cpp', 'futatabi/gpu_timers.cpp', futatabi_shader_srcs, dependencies: [shareddep, epoxydep, sdl2dep, sdl2_imagedep])
+endif
 executable('eval', 'futatabi/eval.cpp', 'futatabi/util.cpp')
 executable('vis', 'futatabi/vis.cpp', 'futatabi/util.cpp')
