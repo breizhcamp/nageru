@@ -41,11 +41,8 @@ if cxx.links(code, args: '-fuse-ld=lld', name: 'check for LLD')
 endif
 
 # Add the right MOVIT_SHADER_DIR definition.
-r = run_command('pkg-config', '--variable=shaderdir', 'movit')
-if r.returncode() != 0
-	error('Movit pkg-config installation is broken.')
-endif
-add_project_arguments('-DMOVIT_SHADER_DIR="' + r.stdout().strip() + '"', language: 'cpp')
+movit_shader_dir = movitdep.get_pkgconfig_variable('shaderdir')
+add_project_arguments('-DMOVIT_SHADER_DIR="' + movit_shader_dir + '"', language: 'cpp')
 
 # Make the Nageru version available as a #define.
 add_project_arguments('-DNAGERU_VERSION="' + meson.project_version() + '"', language: 'cpp')
