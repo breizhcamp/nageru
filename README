@@ -74,6 +74,14 @@ Nageru currently needs:
 
  - SQLite, for storing Futatabi state.
 
+ - libjpeg, for encoding MJPEG streams when VA-API JPEG support is not
+   available.
+
+ - Zita-resampler, for adjusting audio to be in sync with video.
+
+ - Protocol Buffers (protobuf), for storing various forms of settings and
+   state.
+
  - Meson, for building.
 
  - Optional: CEF (Chromium Embedded Framework), for HTML graphics.
