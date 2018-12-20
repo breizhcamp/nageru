@@ -11,7 +11,7 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libavresample/avresample.h>
+#include <libswresample/swresample.h>
 #include <libavutil/frame.h>
 }
 
@@ -39,7 +39,7 @@ private:
 	int64_t last_pts = 0;  // The first pts after all audio we've encoded.
 
 	AVCodecContext *ctx;
-	AVAudioResampleContext *resampler;
+	SwrContext *resampler;
 	AVFrame *audio_frame = nullptr;
 	std::vector<Mux *> muxes;
 };

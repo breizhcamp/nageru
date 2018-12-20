@@ -31,7 +31,7 @@
 #include <movit/ycbcr.h>
 
 extern "C" {
-#include <libavresample/avresample.h>
+#include <libswresample/swresample.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/rational.h>
 #include <libavutil/samplefmt.h>
@@ -271,7 +271,7 @@ private:
 	std::vector<QueuedCommand> command_queue;  // Protected by <queue_mu>.
 
 	// Audio resampler.
-	AVAudioResampleContext *resampler = nullptr;
+	SwrContext *resampler = nullptr;
 	AVSampleFormat last_src_format, last_dst_format;
 	int64_t last_channel_layout;
 	int last_sample_rate;

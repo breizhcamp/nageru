@@ -137,7 +137,7 @@ AVPixelFormat decide_dst_format(AVPixelFormat src_format, bmusb::PixelFormat dst
 YCbCrFormat decode_ycbcr_format(const AVPixFmtDescriptor *desc, const AVFrame *frame, bool is_mjpeg)
 {
 	YCbCrFormat format;
-	AVColorSpace colorspace = av_frame_get_colorspace(frame);
+	AVColorSpace colorspace = frame->colorspace;
 	switch (colorspace) {
 	case AVCOL_SPC_BT709:
 		format.luma_coefficients = YCBCR_REC_709;
@@ -231,7 +231,7 @@ FFmpegCapture::~FFmpegCapture()
 	if (has_dequeue_callbacks) {
 		dequeue_cleanup_callback();
 	}
-	avresample_free(&resampler);
+	swr_free(&resampler);
 }
 
 void FFmpegCapture::configure_card()
@@ -753,22 +753,24 @@ void FFmpegCapture::convert_audio(const AVFrame *audio_avframe, FrameAllocator::
 	    audio_avframe->format != last_src_format ||
 	    dst_format != last_dst_format ||
 	    channel_layout != last_channel_layout ||
-	    av_frame_get_sample_rate(audio_avframe) != last_sample_rate) {
-		avresample_free(&resampler);
-		resampler = avresample_alloc_context();
+	    audio_avframe->sample_rate != last_sample_rate) {
+		swr_free(&resampler);
+		resampler = swr_alloc_set_opts(nullptr,
+		                               /*out_ch_layout=*/AV_CH_LAYOUT_STEREO_DOWNMIX,
+		                               /*out_sample_fmt=*/dst_format,
+		                               /*out_sample_rate=*/OUTPUT_FREQUENCY,
+		                               /*in_ch_layout=*/channel_layout,
+		                               /*in_sample_fmt=*/AVSampleFormat(audio_avframe->format),
+		                               /*in_sample_rate=*/audio_avframe->sample_rate,
+		                               /*log_offset=*/0,
+		                               /*log_ctx=*/nullptr);
+
 		if (resampler == nullptr) {
 			fprintf(stderr, "Allocating resampler failed.\n");
 			exit(1);
 		}
 
-		av_opt_set_int(resampler, "in_channel_layout",  channel_layout,                             0);
-		av_opt_set_int(resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO_DOWNMIX,                0);
-		av_opt_set_int(resampler, "in_sample_rate",     av_frame_get_sample_rate(audio_avframe),    0);
-		av_opt_set_int(resampler, "out_sample_rate",    OUTPUT_FREQUENCY,                           0);
-		av_opt_set_int(resampler, "in_sample_fmt",      audio_avframe->format,                      0);
-		av_opt_set_int(resampler, "out_sample_fmt",     dst_format,                                 0);
-
-		if (avresample_open(resampler) < 0) {
+		if (swr_init(resampler) < 0) {
 			fprintf(stderr, "Could not open resample context.\n");
 			exit(1);
 		}
@@ -776,15 +778,15 @@ void FFmpegCapture::convert_audio(const AVFrame *audio_avframe, FrameAllocator::
 		last_src_format = AVSampleFormat(audio_avframe->format);
 		last_dst_format = dst_format;
 		last_channel_layout = channel_layout;
-		last_sample_rate = av_frame_get_sample_rate(audio_avframe);
+		last_sample_rate = audio_avframe->sample_rate;
 	}
 
 	size_t bytes_per_sample = (audio_format->bits_per_sample / 8) * 2;
 	size_t num_samples_room = (audio_frame->size - audio_frame->len) / bytes_per_sample;
 
 	uint8_t *data = audio_frame->data + audio_frame->len;
-	int out_samples = avresample_convert(resampler, &data, 0, num_samples_room,
-		const_cast<uint8_t **>(audio_avframe->data), audio_avframe->linesize[0], audio_avframe->nb_samples);
+	int out_samples = swr_convert(resampler, &data, num_samples_room,
+		const_cast<const uint8_t **>(audio_avframe->data), audio_avframe->nb_samples);
 	if (out_samples < 0) {
                 fprintf(stderr, "Audio conversion failed.\n");
                 exit(1);
@@ -807,7 +809,7 @@ VideoFormat FFmpegCapture::construct_video_format(const AVFrame *frame, AVRation
 		video_format.stride = width;
 	}
 	video_format.frame_rate_nom = video_timebase.den;
-	video_format.frame_rate_den = av_frame_get_pkt_duration(frame) * video_timebase.num;
+	video_format.frame_rate_den = frame->pkt_duration * video_timebase.num;
 	if (video_format.frame_rate_nom == 0 || video_format.frame_rate_den == 0) {
 		// Invalid frame rate.
 		video_format.frame_rate_nom = 60;

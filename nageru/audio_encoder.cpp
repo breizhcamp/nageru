@@ -3,7 +3,7 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libavresample/avresample.h>
+#include <libswresample/swresample.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/error.h>
 #include <libavutil/frame.h>
@@ -50,20 +50,21 @@ AudioEncoder::AudioEncoder(const string &codec_name, int bit_rate, const AVOutpu
 		exit(1);
 	}
 
-	resampler = avresample_alloc_context();
+	resampler = swr_alloc_set_opts(nullptr,
+	                               /*out_ch_layout=*/AV_CH_LAYOUT_STEREO,
+	                               /*out_sample_fmt=*/ctx->sample_fmt,
+	                               /*out_sample_rate=*/OUTPUT_FREQUENCY,
+	                               /*in_ch_layout=*/AV_CH_LAYOUT_STEREO,
+	                               /*in_sample_fmt=*/AV_SAMPLE_FMT_FLT,
+	                               /*in_sample_rate=*/OUTPUT_FREQUENCY,
+	                               /*log_offset=*/0,
+	                               /*log_ctx=*/nullptr);
 	if (resampler == nullptr) {
 		fprintf(stderr, "Allocating resampler failed.\n");
 		exit(1);
 	}
 
-	av_opt_set_int(resampler, "in_channel_layout",  AV_CH_LAYOUT_STEREO,       0);
-	av_opt_set_int(resampler, "out_channel_layout", AV_CH_LAYOUT_STEREO,       0);
-	av_opt_set_int(resampler, "in_sample_rate",     OUTPUT_FREQUENCY,          0);
-	av_opt_set_int(resampler, "out_sample_rate",    OUTPUT_FREQUENCY,          0);
-	av_opt_set_int(resampler, "in_sample_fmt",      AV_SAMPLE_FMT_FLT,         0);
-	av_opt_set_int(resampler, "out_sample_fmt",     ctx->sample_fmt, 0);
-
-	if (avresample_open(resampler) < 0) {
+	if (swr_init(resampler) < 0) {
 		fprintf(stderr, "Could not open resample context.\n");
 		exit(1);
 	}
@@ -74,7 +75,7 @@ AudioEncoder::AudioEncoder(const string &codec_name, int bit_rate, const AVOutpu
 AudioEncoder::~AudioEncoder()
 {
 	av_frame_free(&audio_frame);
-	avresample_free(&resampler);
+	swr_free(&resampler);
 	avcodec_free_context(&ctx);
 }
 
@@ -118,8 +119,7 @@ void AudioEncoder::encode_audio_one_frame(const float *audio, size_t num_samples
 		exit(1);
 	}
 
-	if (avresample_convert(resampler, audio_frame->data, 0, num_samples,
-	                       (uint8_t **)&audio, 0, num_samples) < 0) {
+	if (swr_convert(resampler, audio_frame->data, num_samples, reinterpret_cast<const uint8_t **>(&audio), num_samples) < 0) {
 		fprintf(stderr, "Audio conversion failed.\n");
 		exit(1);
 	}

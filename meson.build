@@ -12,7 +12,7 @@ dldep = cxx.find_library('dl')
 epoxydep = dependency('epoxy')
 libavcodecdep = dependency('libavcodec')
 libavformatdep = dependency('libavformat')
-libavresampledep = dependency('libavresample')
+libswresampledep = dependency('libswresample')
 libavutildep = dependency('libavutil')
 libjpegdep = dependency('libjpeg')
 libswscaledep = dependency('libswscale')
@@ -55,12 +55,6 @@ if cxx.has_argument('-Wno-non-virtual-dtor')
 	add_project_arguments('-Wno-non-virtual-dtor', language: 'cpp')
 endif
 
-# FFmpeg has a lot of deprecated APIs whose replacements are not available
-# in Debian stable, so we suppress these warnings.
-if cxx.has_argument('-Wno-deprecated-declarations')
-	add_project_arguments('-Wno-deprecated-declarations', language: 'cpp')
-endif
-
 # This needs to be done before declaring any build targets.
 if get_option('cef_dir') != ''
 	add_project_arguments('-DHAVE_CEF=1', language: 'cpp')
@@ -74,7 +68,7 @@ subdir('shared')
 
 nageru_srcs = []
 nageru_deps = [shareddep, qt5deps, libjpegdep, movitdep, protobufdep,
-	vax11dep, vadrmdep, x11dep, libavformatdep, libavresampledep, libavcodecdep, libavutildep,
+	vax11dep, vadrmdep, x11dep, libavformatdep, libswresampledep, libavcodecdep, libavutildep,
 	libswscaledep, libusbdep, luajitdep, dldep, x264dep, alsadep, zitaresamplerdep,
 	qcustomplotdep, threaddep]
 nageru_include_dirs = [include_directories('nageru')]
