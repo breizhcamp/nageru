@@ -87,7 +87,7 @@ Nageru currently needs:
    on the meson command line (substituting X with the real version as required).
 
 
-If on Debian stretch or something similar, you can install everything you need
+If on Debian buster or something similar, you can install everything you need
 with:
 
   apt install qtbase5-dev libqt5opengl5-dev qt5-default libqcustomplot-dev \
@@ -97,13 +97,7 @@ with:
     libasound2-dev libx264-dev libbmusb-dev protobuf-compiler \
     libprotobuf-dev libsqlite3-dev meson
 
-Exceptions as of November 2018:
-
-  - You will need Movit from testing or unstable; stretch only has 1.4.0.
-
-  - You will need bmusb from testing or unstable; stretch only has 0.5.4.
-
-  - You will need a Meson backport; the version in stretch is too old.
+Exceptions as of December 2018:
 
   - Debian does not carry CEF (but it is optional). You can get experimental
     (and not security-supported) CEF Debian packages built for unstable at
