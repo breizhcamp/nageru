@@ -1481,13 +1481,18 @@ void QuickSyncEncoderImpl::storage_task_thread()
 void QuickSyncEncoderImpl::release_encode()
 {
 	for (unsigned i = 0; i < SURFACE_NUM; i++) {
-		vaDestroyBuffer(va_dpy->va_dpy, gl_surfaces[i].coded_buf);
-		vaDestroySurfaces(va_dpy->va_dpy, &gl_surfaces[i].src_surface, 1);
-		vaDestroySurfaces(va_dpy->va_dpy, &gl_surfaces[i].ref_surface, 1);
+		VAStatus va_status = vaDestroyBuffer(va_dpy->va_dpy, gl_surfaces[i].coded_buf);
+		CHECK_VASTATUS(va_status, "vaDestroyBuffer");
+		va_status = vaDestroySurfaces(va_dpy->va_dpy, &gl_surfaces[i].src_surface, 1);
+		CHECK_VASTATUS(va_status, "vaDestroySurfaces");
+		va_status = vaDestroySurfaces(va_dpy->va_dpy, &gl_surfaces[i].ref_surface, 1);
+		CHECK_VASTATUS(va_status, "vaDestroySurfaces");
 	}
 
-	vaDestroyContext(va_dpy->va_dpy, context_id);
-	vaDestroyConfig(va_dpy->va_dpy, config_id);
+	VAStatus va_status = vaDestroyContext(va_dpy->va_dpy, context_id);
+	CHECK_VASTATUS(va_status, "vaDestroyContext");
+	va_status = vaDestroyConfig(va_dpy->va_dpy, config_id);
+	CHECK_VASTATUS(va_status, "vaDestroyConfig");
 }
 
 void QuickSyncEncoderImpl::release_gl_resources()
