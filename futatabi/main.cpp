@@ -344,6 +344,10 @@ void load_frame_file(const char *filename, const string &basename, unsigned file
 		FrameOnDisk frame;
 		frame.pts = hdr.pts();
 		frame.offset = ftell(fp);
+		if (frame.offset == -1) {
+			fprintf(stderr, "WARNING: %s: ftell() failed (%s).\n", filename, strerror(errno));
+			break;
+		}
 		frame.filename_idx = filename_idx;
 		frame.size = hdr.file_size();
 
@@ -364,7 +368,11 @@ void load_frame_file(const char *filename, const string &basename, unsigned file
 			filename, skipped_bytes);
 	}
 
-	size_t size = ftell(fp);
+	off_t size = ftell(fp);
+	if (size == -1) {
+		fprintf(stderr, "WARNING: %s: ftell() failed (%s).\n", filename, strerror(errno));
+		return;
+	}
 	fclose(fp);
 
 	db->store_frame_file(basename, size, all_frames);
