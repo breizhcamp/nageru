@@ -367,11 +367,12 @@ void load_frame_file(const char *filename, const string &basename, unsigned file
 	}
 
 	off_t size = ftell(fp);
+	fclose(fp);
+
 	if (size == -1) {
 		fprintf(stderr, "WARNING: %s: ftell() failed (%s).\n", filename, strerror(errno));
 		return;
 	}
-	fclose(fp);
 
 	db->store_frame_file(basename, size, all_frames);
 }
