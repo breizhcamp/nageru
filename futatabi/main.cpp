@@ -282,7 +282,7 @@ void load_frame_file(const char *filename, const string &basename, unsigned file
 	if (!all_frames.empty()) {
 		// We already had this cached in the database, so no need to look in the file.
 		for (const DB::FrameOnDiskAndStreamIdx &frame : all_frames) {
-			if (frame.stream_idx >= 0 && frame.stream_idx < MAX_STREAMS) {
+			if (frame.stream_idx < MAX_STREAMS) {
 				frames[frame.stream_idx].push_back(frame.frame);
 				start_pts = max(start_pts, frame.frame.pts);
 			}
