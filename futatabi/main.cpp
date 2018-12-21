@@ -200,13 +200,11 @@ int main(int argc, char **argv)
 
 	string frame_dir = global_flags.working_directory + "/frames";
 
-	struct stat st;
-	if (stat(frame_dir.c_str(), &st) == -1) {
+	if (mkdir(frame_dir.c_str(), 0777) == 0) {
 		fprintf(stderr, "%s does not exist, creating it.\n", frame_dir.c_str());
-		if (mkdir(frame_dir.c_str(), 0777) == -1) {
-			perror(global_flags.working_directory.c_str());
-			exit(1);
-		}
+	} else if (errno != EEXIST) {
+		perror(global_flags.working_directory.c_str());
+		exit(1);
 	}
 
 	avformat_network_init();
