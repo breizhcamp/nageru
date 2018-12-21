@@ -41,7 +41,7 @@ public:
 		std::vector<RefCountedFrame> input_frames;
 	};
 
-	Chain get_chain(unsigned num, float t, unsigned width, unsigned height, InputState input_state);
+	Chain get_chain(unsigned num, float t, unsigned width, unsigned height, const InputState &input_state);
 
 	int get_num_channels() const { return num_channels; }
 	int map_signal(int signal_num);

@@ -1217,7 +1217,7 @@ void Theme::register_class(const char *class_name, const luaL_Reg *funcs)
 	assert(lua_gettop(L) == 0);
 }
 
-Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned height, InputState input_state) 
+Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned height, const InputState &input_state) 
 {
 	Chain chain;
 
