@@ -27,6 +27,10 @@ string read_file(const string &filename, const unsigned char *start, const size_
 	}
 
 	int disk_size = ftell(fp);
+	if (disk_size == -1) {
+		perror("ftell");
+		exit(1);
+	}
 
 	ret = fseek(fp, 0, SEEK_SET);
 	if (ret == -1) {
