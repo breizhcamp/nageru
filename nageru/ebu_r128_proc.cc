@@ -154,6 +154,7 @@ void Ebu_r128_hist::calc_range (float *v0, float *v1, float *th)
 
 Ebu_r128_proc::Ebu_r128_proc (void)
 {
+    _fragm = 0;
     reset ();
 }
 
