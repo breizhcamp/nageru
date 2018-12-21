@@ -91,7 +91,7 @@ void video_frame_callback(FFmpegCapture *video, X264Encoder *x264_encoder, Audio
 		ts.ts.push_back(steady_clock::now());
 
 		video_pts = av_rescale_q(video_pts, video_timebase, AVRational{ 1, TIMEBASE });
-		int64_t frame_duration = TIMEBASE * video_format.frame_rate_den / video_format.frame_rate_nom;
+		int64_t frame_duration = int64_t(TIMEBASE) * video_format.frame_rate_den / video_format.frame_rate_nom;
 		x264_encoder->add_frame(video_pts, frame_duration, video->get_current_frame_ycbcr_format().luma_coefficients, video_frame.data + video_offset, ts);
 		global_basic_stats->update(frame_num++, /*dropped_frames=*/0);
 	}
