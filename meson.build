@@ -148,10 +148,10 @@ endif
 
 # bmusb.
 if embedded_bmusb
-	bmusb_dir = include_directories('bmusb')
+	bmusb_dir = include_directories('nageru/bmusb')
 	nageru_include_dirs += bmusb_dir
 
-	bmusb = static_library('bmusb', 'bmusb/bmusb.cpp', 'bmusb/fake_capture.cpp',
+	bmusb = static_library('bmusb', 'nageru/bmusb/bmusb.cpp', 'nageru/bmusb/fake_capture.cpp',
 		dependencies: [libusbdep],
 		include_directories: [bmusb_dir])
 	nageru_link_with += bmusb
