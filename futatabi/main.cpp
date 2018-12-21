@@ -240,7 +240,10 @@ int main(int argc, char **argv)
 	{
 		QSurface *surface = create_surface();
 		QOpenGLContext *context = create_context(surface);
-		make_current(context, surface);
+		if (!make_current(context, surface)) {
+			printf("oops\n");
+			exit(1);
+		}
 		CHECK(movit::init_movit(MOVIT_SHADER_DIR, movit::MOVIT_DEBUG_OFF));
 		delete_context(context);
 		// TODO: Delete the surface, too.
