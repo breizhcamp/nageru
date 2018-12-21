@@ -343,9 +343,20 @@
      <addaction name="quality_3_action"/>
      <addaction name="quality_4_action"/>
     </widget>
+    <widget class="QMenu" name="padding_menu">
+     <property name="title">
+      <string>Cue point &amp;padding</string>
+     </property>
+     <addaction name="padding_0_action"/>
+     <addaction name="padding_1_action"/>
+     <addaction name="padding_2_action"/>
+     <addaction name="padding_5_action"/>
+    </widget>
     <addaction name="interpolation_menu"/>
+    <addaction name="padding_menu"/>
     <addaction name="menu_Export"/>
     <addaction name="exit_action"/>
+    <addaction name="separator"/>
    </widget>
    <widget class="QMenu" name="menu_Help">
     <property name="title">
@@ -444,6 +455,38 @@
    </property>
    <property name="text">
     <string>Best (&amp;4) (not realtime on any current GPU)</string>
+   </property>
+  </action>
+  <action name="padding_0_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;0 seconds</string>
+   </property>
+  </action>
+  <action name="padding_1_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;1 second</string>
+   </property>
+  </action>
+  <action name="padding_2_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;2 seconds</string>
+   </property>
+  </action>
+  <action name="padding_5_action">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;5 seconds</string>
    </property>
   </action>
  </widget>

@@ -134,6 +134,7 @@ private:
 	void undo_triggered();
 	void redo_triggered();
 	void quality_toggled(int quality, bool checked);
+	void padding_toggled(double seconds, bool checked);
 
 	void highlight_camera_input(int stream_idx);
 

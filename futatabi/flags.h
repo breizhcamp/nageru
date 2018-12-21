@@ -15,6 +15,8 @@ struct Flags {
 	uint16_t http_port = DEFAULT_HTTPD_PORT;
 	double output_framerate = 60000.0 / 1001.0;
 	std::string tally_url;
+	double cue_point_padding_seconds = 0.0;  // Can be changed in the menus.
+	bool cue_point_padding_set = false;
 };
 extern Flags global_flags;
 

@@ -40,12 +40,15 @@ MainWindow::MainWindow()
 	global_mainwindow = this;
 	ui->setupUi(this);
 
-	// Load settings from database if needed.
+	// Load settings from database.
+	SettingsProto settings = db.get_settings();
 	if (!global_flags.interpolation_quality_set) {
-		SettingsProto settings = db.get_settings();
 		if (settings.interpolation_quality() != 0) {
 			global_flags.interpolation_quality = settings.interpolation_quality() - 1;
 		}
+	}
+	if (!global_flags.cue_point_padding_set) {
+		global_flags.cue_point_padding_seconds = settings.cue_point_padding_seconds();  // Default 0 is fine.
 	}
 	if (global_flags.interpolation_quality == 0) {
 		// Allocate something just for simplicity; we won't be using it
@@ -92,6 +95,28 @@ MainWindow::MainWindow()
 	connect(ui->quality_2_action, &QAction::toggled, bind(&MainWindow::quality_toggled, this, 2, _1));
 	connect(ui->quality_3_action, &QAction::toggled, bind(&MainWindow::quality_toggled, this, 3, _1));
 	connect(ui->quality_4_action, &QAction::toggled, bind(&MainWindow::quality_toggled, this, 4, _1));
+
+	// The cue point padding group.
+	QActionGroup *padding_group = new QActionGroup(ui->interpolation_menu);
+	padding_group->addAction(ui->padding_0_action);
+	padding_group->addAction(ui->padding_1_action);
+	padding_group->addAction(ui->padding_2_action);
+	padding_group->addAction(ui->padding_5_action);
+	if (global_flags.cue_point_padding_seconds <= 1e-3) {
+		ui->padding_0_action->setChecked(true);
+	} else if (fabs(global_flags.cue_point_padding_seconds - 1.0) < 1e-3) {
+		ui->padding_1_action->setChecked(true);
+	} else if (fabs(global_flags.cue_point_padding_seconds - 2.0) < 1e-3) {
+		ui->padding_2_action->setChecked(true);
+	} else if (fabs(global_flags.cue_point_padding_seconds - 5.0) < 1e-3) {
+		ui->padding_5_action->setChecked(true);
+	} else {
+		// Nothing to check, which is fine.
+	}
+	connect(ui->padding_0_action, &QAction::toggled, bind(&MainWindow::padding_toggled, this, 0.0, _1));
+	connect(ui->padding_1_action, &QAction::toggled, bind(&MainWindow::padding_toggled, this, 1.0, _1));
+	connect(ui->padding_2_action, &QAction::toggled, bind(&MainWindow::padding_toggled, this, 2.0, _1));
+	connect(ui->padding_5_action, &QAction::toggled, bind(&MainWindow::padding_toggled, this, 5.0, _1));
 
 	global_disk_space_estimator = new DiskSpaceEstimator(bind(&MainWindow::report_disk_space, this, _1, _2));
 	disk_free_label = new QLabel(this);
@@ -252,7 +277,7 @@ void MainWindow::cue_in_clicked()
 		return;
 	}
 	Clip clip;
-	clip.pts_in = current_pts;
+	clip.pts_in = max<int64_t>(current_pts - lrint(global_flags.cue_point_padding_seconds * TIMEBASE), 0);
 	cliplist_clips->add_clip(clip);
 	playlist_selection_changed();
 	ui->clip_list->scrollToBottom();
@@ -261,7 +286,7 @@ void MainWindow::cue_in_clicked()
 void MainWindow::cue_out_clicked()
 {
 	if (!cliplist_clips->empty()) {
-		cliplist_clips->mutable_back()->pts_out = current_pts;
+		cliplist_clips->mutable_back()->pts_out = current_pts + lrint(global_flags.cue_point_padding_seconds * TIMEBASE);
 		// TODO: select the row in the clip list?
 	}
 }
@@ -446,6 +471,7 @@ void MainWindow::save_settings()
 {
 	SettingsProto settings;
 	settings.set_interpolation_quality(global_flags.interpolation_quality + 1);
+	settings.set_cue_point_padding_seconds(global_flags.cue_point_padding_seconds);
 	db.store_settings(settings);
 }
 
@@ -1006,6 +1032,15 @@ void MainWindow::quality_toggled(int quality, bool checked)
 		msgbox.exec();
 	}
 
+	save_settings();
+}
+
+void MainWindow::padding_toggled(double seconds, bool checked)
+{
+	if (!checked) {
+		return;
+	}
+	global_flags.cue_point_padding_seconds = seconds;
 	save_settings();
 }
 
