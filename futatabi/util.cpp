@@ -16,6 +16,7 @@ Flow read_flow(const char *filename)
 
 	unique_ptr<Vec2[]> flow(new Vec2[width * height]);
 	fread(flow.get(), width * height * sizeof(Vec2), 1, flowfp);
+	fclose(flowfp);
 
 	Flow ret;
 	ret.width = width;
