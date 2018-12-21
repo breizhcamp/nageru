@@ -225,6 +225,7 @@ int main(int argc, char *argv[])
 
 	video.stop_dequeue_thread();
 	// Stop the x264 encoder before killing the mux it's writing to.
+	global_x264_encoder = nullptr;
 	x264_encoder.reset();
 	return 0;
 }
