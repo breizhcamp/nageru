@@ -183,7 +183,7 @@ FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t
 HTTPD *global_httpd;
 
 void load_existing_frames();
-int record_thread_func();
+void record_thread_func();
 
 int main(int argc, char **argv)
 {
@@ -451,8 +451,13 @@ void load_existing_frames()
 	db.clean_unused_frame_files(frame_basenames);
 }
 
-int record_thread_func()
+void record_thread_func()
 {
+	if (global_flags.stream_source.empty() || global_flags.stream_source == "/dev/null") {
+		// Save the user from some repetitive messages.
+		return;
+	}
+
 	pthread_setname_np(pthread_self(), "ReceiveFrames");
 
 	int64_t pts_offset;
@@ -512,5 +517,4 @@ int record_thread_func()
 
 		start_pts = last_pts + TIMEBASE;
 	}
-	return 0;
 }
