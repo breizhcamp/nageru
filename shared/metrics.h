@@ -38,6 +38,11 @@ public:
 		PRINT_WHEN_NONEMPTY,
 	};
 
+	void set_prefix(const std::string &prefix)  // Not thread-safe; must be set before HTTPD starts up.
+	{
+		this->prefix = prefix;
+	}
+
 	void add(const std::string &name, std::atomic<int64_t> *location, Type type = TYPE_COUNTER)
 	{
 		add(name, {}, location, type);
@@ -113,6 +118,7 @@ private:
 	mutable std::mutex mu;
 	std::map<std::string, Type> types;  // Ordered the same as metrics.
 	std::map<MetricKey, Metric> metrics;
+	static std::string prefix;
 
 	friend class Histogram;
 	friend class Summary;

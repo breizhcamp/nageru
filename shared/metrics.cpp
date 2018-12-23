@@ -12,6 +12,7 @@ using namespace std;
 using namespace std::chrono;
 
 Metrics global_metrics;
+string Metrics::prefix = "nageru";
 
 double get_timestamp_for_metrics()
 {
@@ -20,7 +21,7 @@ double get_timestamp_for_metrics()
 
 string Metrics::serialize_name(const string &name, const vector<pair<string, string>> &labels)
 {
-	return "nageru_" + name + serialize_labels(labels);
+	return prefix + "_" + name + serialize_labels(labels);
 }
 
 string Metrics::serialize_labels(const vector<pair<string, string>> &labels)
@@ -114,7 +115,7 @@ string Metrics::serialize() const
 	lock_guard<mutex> lock(mu);
 	auto type_it = types.cbegin();
 	for (const auto &key_and_metric : metrics) {
-		string name = "nageru_" + key_and_metric.first.name + key_and_metric.first.serialized_labels;
+		string name = prefix + "_" + key_and_metric.first.name + key_and_metric.first.serialized_labels;
 		const Metric &metric = key_and_metric.second;
 
 		if (type_it != types.cend() &&
@@ -122,11 +123,11 @@ string Metrics::serialize() const
 			// It's the first time we print out any metric with this name,
 			// so add the type header.
 			if (type_it->second == TYPE_GAUGE) {
-				ss << "# TYPE nageru_" << type_it->first << " gauge\n";
+				ss << "# TYPE " + prefix + "_" << type_it->first << " gauge\n";
 			} else if (type_it->second == TYPE_HISTOGRAM) {
-				ss << "# TYPE nageru_" << type_it->first << " histogram\n";
+				ss << "# TYPE " + prefix + "_" << type_it->first << " histogram\n";
 			} else if (type_it->second == TYPE_SUMMARY) {
-				ss << "# TYPE nageru_" << type_it->first << " summary\n";
+				ss << "# TYPE " + prefix + "_" << type_it->first << " summary\n";
 			}
 			++type_it;
 		}
