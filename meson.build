@@ -47,11 +47,6 @@ add_project_arguments('-DMOVIT_SHADER_DIR="' + movit_shader_dir + '"', language:
 # Make the Nageru version available as a #define.
 add_project_arguments('-DNAGERU_VERSION="' + meson.project_version() + '"', language: 'cpp')
 
-# DeckLink has these issues, and we include it from various places.
-if cxx.has_argument('-Wno-non-virtual-dtor')
-	add_project_arguments('-Wno-non-virtual-dtor', language: 'cpp')
-endif
-
 # This needs to be done before declaring any build targets.
 if get_option('cef_dir') != ''
 	add_project_arguments('-DHAVE_CEF=1', language: 'cpp')
@@ -208,9 +203,11 @@ stream = static_library('stream', stream_srcs, dependencies: nageru_deps, includ
 nageru_link_with += stream
 
 # DeckLink.
-nageru_srcs += ['nageru/decklink_capture.cpp', 'nageru/decklink_util.cpp', 'nageru/decklink_output.cpp',
-	'nageru/decklink/DeckLinkAPIDispatch.cpp']
-decklink_dir = include_directories('nageru/decklink')
+decklink_dir = include_directories('nageru/decklink', is_system: true)
+decklink_lib = static_library('decklink', 'nageru/decklink/DeckLinkAPIDispatch.cpp', include_directories: decklink_dir, cpp_args: '-w')
+nageru_link_with += decklink_lib
+
+nageru_srcs += ['nageru/decklink_capture.cpp', 'nageru/decklink_util.cpp', 'nageru/decklink_output.cpp']
 nageru_include_dirs += decklink_dir
 
 # CEF input.
