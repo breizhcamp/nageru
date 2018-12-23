@@ -34,6 +34,7 @@ extern "C" {
 #include "shared/post_to_main_thread.h"
 #include "shared/ref_counted_gl_sync.h"
 #include "shared/timebase.h"
+#include "shared/metrics.h"
 #include "ui_mainwindow.h"
 #include "vaapi_jpeg_decoder.h"
 
@@ -68,6 +69,8 @@ std::map<int, FrameFile> open_frame_files;
 mutex frame_mu;
 vector<FrameOnDisk> frames[MAX_STREAMS];  // Under frame_mu.
 vector<string> frame_filenames;  // Under frame_mu.
+
+atomic<int64_t> metric_received_frames[MAX_STREAMS]{{0}};
 
 namespace {
 
@@ -453,6 +456,10 @@ void load_existing_frames()
 
 void record_thread_func()
 {
+	for (unsigned i = 0; i < MAX_STREAMS; ++i) {
+		global_metrics.add("received_frames", {{ "stream", to_string(i) }}, &metric_received_frames[i]);
+	}
+
 	if (global_flags.stream_source.empty() || global_flags.stream_source == "/dev/null") {
 		// Save the user from some repetitive messages.
 		return;
@@ -460,7 +467,7 @@ void record_thread_func()
 
 	pthread_setname_np(pthread_self(), "ReceiveFrames");
 
-	int64_t pts_offset;
+	int64_t pts_offset = 0;  // Needs to be initialized due to a spurious GCC warning.
 	DB db(global_flags.working_directory + "/futatabi.db");
 
 	while (!should_quit.load()) {
@@ -486,6 +493,11 @@ void record_thread_func()
 			if (av_read_frame(format_ctx.get(), &pkt) != 0) {
 				break;
 			}
+			if (pkt.stream_index >= MAX_STREAMS) {
+				continue;
+			}
+
+			++metric_received_frames[pkt.stream_index];
 
 			// Convert pts to our own timebase.
 			AVRational stream_timebase = format_ctx->streams[pkt.stream_index]->time_base;
