@@ -593,6 +593,7 @@ void VideoStream::encode_thread_func()
 			pkt.stream_index = 0;
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
+			pkt.flags = AV_PKT_FLAG_KEY;
 			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 
 			last_frame.assign(&jpeg[0], &jpeg[0] + jpeg.size());
@@ -609,6 +610,7 @@ void VideoStream::encode_thread_func()
 			pkt.stream_index = 0;
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
+			pkt.flags = AV_PKT_FLAG_KEY;
 			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 			last_frame = move(jpeg);
 		} else if (qf.type == QueuedFrame::INTERPOLATED || qf.type == QueuedFrame::FADED_INTERPOLATED) {
@@ -633,6 +635,7 @@ void VideoStream::encode_thread_func()
 			pkt.stream_index = 0;
 			pkt.data = (uint8_t *)jpeg.data();
 			pkt.size = jpeg.size();
+			pkt.flags = AV_PKT_FLAG_KEY;
 			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 			last_frame = move(jpeg);
 		} else if (qf.type == QueuedFrame::REFRESH) {
@@ -641,6 +644,7 @@ void VideoStream::encode_thread_func()
 			pkt.stream_index = 0;
 			pkt.data = (uint8_t *)last_frame.data();
 			pkt.size = last_frame.size();
+			pkt.flags = AV_PKT_FLAG_KEY;
 			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
 		} else {
 			assert(false);
