@@ -121,7 +121,7 @@ private:
 		float alpha;
 		BorrowedInterpolatedFrameResources resources;
 		RefCountedGLsync fence;  // Set when the interpolated image is read back to the CPU.
-		GLuint flow_tex, output_tex, cbcr_tex;  // Released in the receiving thread; not really used for anything else.
+		GLuint flow_tex, output_tex, cbcr_tex;  // Released in the receiving thread; not really used for anything else. flow_tex will typically even be from a previous frame.
 		FrameOnDisk id;
 
 		std::function<void()> display_func;  // Called when the image is done decoding.
@@ -145,6 +145,10 @@ private:
 	std::unique_ptr<DISComputeFlow> compute_flow;
 	std::unique_ptr<Interpolate> interpolate, interpolate_no_split;
 	std::unique_ptr<ChromaSubsampler> chroma_subsampler;
+
+	// Cached flow computation from previous frame, if any.
+	GLuint last_flow_tex = 0;
+	FrameOnDisk last_frame1, last_frame2;
 
 	std::vector<uint8_t> last_frame;
 };

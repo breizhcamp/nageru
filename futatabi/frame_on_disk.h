@@ -20,6 +20,14 @@ struct FrameOnDisk {
 extern std::vector<FrameOnDisk> frames[MAX_STREAMS];  // Under frame_mu.
 extern std::vector<std::string> frame_filenames;  // Under frame_mu.
 
+static bool inline operator==(const FrameOnDisk &a, const FrameOnDisk &b)
+{
+	return a.pts == b.pts &&
+		a.offset == b.offset &&
+		a.filename_idx == b.filename_idx &&
+		a.size == b.size;
+}
+
 // A helper class to read frames from disk. It caches the file descriptor
 // so that the kernel has a better chance of doing readahead when it sees
 // the sequential reads. (For this reason, each display has a private

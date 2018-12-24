@@ -236,7 +236,12 @@ VideoStream::VideoStream(AVFormatContext *file_avctx)
 	last_frame = encode_jpeg(y.get(), cb_or_cr.get(), cb_or_cr.get(), global_flags.width, global_flags.height);
 }
 
-VideoStream::~VideoStream() {}
+VideoStream::~VideoStream()
+{
+	if (last_flow_tex != 0) {
+		compute_flow->release_texture(last_flow_tex);
+	}
+}
 
 void VideoStream::start()
 {
@@ -287,7 +292,9 @@ void VideoStream::clear_queue()
 	for (const QueuedFrame &qf : q) {
 		if (qf.type == QueuedFrame::INTERPOLATED ||
 		    qf.type == QueuedFrame::FADED_INTERPOLATED) {
-			compute_flow->release_texture(qf.flow_tex);
+			if (qf.flow_tex != 0) {
+				compute_flow->release_texture(qf.flow_tex);
+			}
 		}
 		if (qf.type == QueuedFrame::INTERPOLATED) {
 			interpolate->release_texture(qf.output_tex);
@@ -436,13 +443,30 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	glGenerateTextureMipmap(resources->gray_tex);
 	check_error();
 
-	// Compute the interpolated frame.
-	qf.flow_tex = compute_flow->exec(resources->gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
-	check_error();
+	GLuint flow_tex;
+	if (last_flow_tex != 0 && frame1 == last_frame1 && frame2 == last_frame2) {
+		// Reuse the flow from previous computation. This frequently happens
+		// if we slow down by more than 2x, so that there are multiple interpolated
+		// frames between each original.
+		flow_tex = last_flow_tex;
+		qf.flow_tex = 0;
+	} else {
+		// Cache miss, so release last_flow_tex.
+		qf.flow_tex = last_flow_tex;
+
+		// Compute the flow.
+		flow_tex = compute_flow->exec(resources->gray_tex, DISComputeFlow::FORWARD_AND_BACKWARD, DISComputeFlow::DO_NOT_RESIZE_FLOW);
+		check_error();
+
+		// Store the flow texture for possible reuse next frame.
+		last_flow_tex = flow_tex;
+		last_frame1 = frame1;
+		last_frame2 = frame2;
+	}
 
 	if (secondary_frame.pts != -1) {
 		// Fade. First kick off the interpolation.
-		tie(qf.output_tex, ignore) = interpolate_no_split->exec(resources->input_tex, resources->gray_tex, qf.flow_tex, global_flags.width, global_flags.height, alpha);
+		tie(qf.output_tex, ignore) = interpolate_no_split->exec(resources->input_tex, resources->gray_tex, flow_tex, global_flags.width, global_flags.height, alpha);
 		check_error();
 
 		// Now decode the image we are fading against.
@@ -457,7 +481,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 
 		interpolate_no_split->release_texture(qf.output_tex);
 	} else {
-		tie(qf.output_tex, qf.cbcr_tex) = interpolate->exec(resources->input_tex, resources->gray_tex, qf.flow_tex, global_flags.width, global_flags.height, alpha);
+		tie(qf.output_tex, qf.cbcr_tex) = interpolate->exec(resources->input_tex, resources->gray_tex, flow_tex, global_flags.width, global_flags.height, alpha);
 		check_error();
 
 		// Subsample and split Cb/Cr.
@@ -467,6 +491,9 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	// We could have released qf.flow_tex here, but to make sure we don't cause a stall
 	// when trying to reuse it for the next frame, we can just as well hold on to it
 	// and release it only when the readback is done.
+	//
+	// TODO: This is maybe less relevant now that qf.flow_tex contains the texture we used
+	// _last_ frame, not this one.
 
 	// Read it down (asynchronously) to the CPU.
 	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
@@ -624,7 +651,9 @@ void VideoStream::encode_thread_func()
 
 			// Now JPEG encode it, and send it on to the stream.
 			vector<uint8_t> jpeg = encode_jpeg(frame->y.get(), frame->cb.get(), frame->cr.get(), global_flags.width, global_flags.height);
-			compute_flow->release_texture(qf.flow_tex);
+			if (qf.flow_tex != 0) {
+				compute_flow->release_texture(qf.flow_tex);
+			}
 			if (qf.type != QueuedFrame::FADED_INTERPOLATED) {
 				interpolate->release_texture(qf.output_tex);
 				interpolate->release_texture(qf.cbcr_tex);
