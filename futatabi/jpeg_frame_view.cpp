@@ -4,6 +4,7 @@
 #include "flags.h"
 #include "jpeg_destroyer.h"
 #include "jpeglib_error_wrapper.h"
+#include "shared/metrics.h"
 #include "shared/post_to_main_thread.h"
 #include "video_stream.h"
 #include "ycbcr_converter.h"
@@ -72,6 +73,18 @@ struct PendingDecode {
 	shared_ptr<Frame> frame;
 };
 
+// There can be multiple JPEGFrameView instances, so make all the metrics static.
+once_flag jpeg_metrics_inited;
+atomic<int64_t> metric_jpeg_cache_used_bytes{0};  // Same value as cache_bytes_used.
+atomic<int64_t> metric_jpeg_cache_limit_bytes{size_t(CACHE_SIZE_MB) * 1024 * 1024};
+atomic<int64_t> metric_jpeg_cache_given_up_frames{0};
+atomic<int64_t> metric_jpeg_cache_hit_frames{0};
+atomic<int64_t> metric_jpeg_cache_miss_frames{0};
+atomic<int64_t> metric_jpeg_software_decode_frames{0};
+atomic<int64_t> metric_jpeg_software_fail_frames{0};
+atomic<int64_t> metric_jpeg_vaapi_decode_frames{0};
+atomic<int64_t> metric_jpeg_vaapi_fail_frames{0};
+
 }  // namespace
 
 thread JPEGFrameView::jpeg_decoder_thread;
@@ -90,9 +103,11 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 	if (vaapi_jpeg_decoding_usable) {
 		frame = decode_jpeg_vaapi(jpeg);
 		if (frame != nullptr) {
+			++metric_jpeg_vaapi_decode_frames;
 			return frame;
 		}
 		fprintf(stderr, "VA-API hardware decoding failed; falling back to software.\n");
+		++metric_jpeg_vaapi_fail_frames;
 	}
 
 	frame.reset(new Frame);
@@ -180,6 +195,7 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 		return get_black_frame();
 	}
 
+	++metric_jpeg_software_decode_frames;
 	return frame;
 }
 
@@ -208,6 +224,7 @@ void prune_cache()
 	for (auto it = cache.begin(); it != cache.end(); ) {
 		if (it->second.last_used <= lru_cutoff_point) {
 			cache_bytes_used -= frame_size(*it->second.frame);
+			metric_jpeg_cache_used_bytes = cache_bytes_used;
 			it = cache.erase(it);
 		} else {
 			++it;
@@ -222,20 +239,25 @@ shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk frame_spec, CacheMissBehavi
 		unique_lock<mutex> lock(cache_mu);
 		auto it = cache.find(frame_spec);
 		if (it != cache.end()) {
+			++metric_jpeg_cache_hit_frames;
 			it->second.last_used = event_counter++;
 			return it->second.frame;
 		}
 	}
 
 	if (cache_miss_behavior == RETURN_NULLPTR_IF_NOT_IN_CACHE) {
+		++metric_jpeg_cache_given_up_frames;
 		return nullptr;
 	}
+
+	++metric_jpeg_cache_miss_frames;
 
 	*did_decode = true;
 	shared_ptr<Frame> frame = decode_jpeg(frame_reader->read_frame(frame_spec));
 
 	unique_lock<mutex> lock(cache_mu);
 	cache_bytes_used += frame_size(*frame);
+	metric_jpeg_cache_used_bytes = cache_bytes_used;
 	cache[frame_spec] = LRUFrame{ frame, event_counter++ };
 
 	if (cache_bytes_used > size_t(CACHE_SIZE_MB) * 1024 * 1024) {
@@ -329,6 +351,17 @@ void JPEGFrameView::shutdown()
 JPEGFrameView::JPEGFrameView(QWidget *parent)
 	: QGLWidget(parent, global_share_widget)
 {
+	call_once(jpeg_metrics_inited, []{
+		global_metrics.add("jpeg_cache_used_bytes", &metric_jpeg_cache_used_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("jpeg_cache_limit_bytes", &metric_jpeg_cache_limit_bytes, Metrics::TYPE_GAUGE);
+		global_metrics.add("jpeg_cache_frames", {{ "action", "given_up" }}, &metric_jpeg_cache_given_up_frames);
+		global_metrics.add("jpeg_cache_frames", {{ "action", "hit" }}, &metric_jpeg_cache_hit_frames);
+		global_metrics.add("jpeg_cache_frames", {{ "action", "miss" }}, &metric_jpeg_cache_miss_frames);
+		global_metrics.add("jpeg_decode_frames", {{ "decoder", "software" }, { "result", "decode" }}, &metric_jpeg_software_decode_frames);
+		global_metrics.add("jpeg_decode_frames", {{ "decoder", "software" }, { "result", "fail" }}, &metric_jpeg_software_fail_frames);
+		global_metrics.add("jpeg_decode_frames", {{ "decoder", "vaapi" }, { "result", "decode" }}, &metric_jpeg_vaapi_decode_frames);
+		global_metrics.add("jpeg_decode_frames", {{ "decoder", "vaapi" }, { "result", "fail" }}, &metric_jpeg_vaapi_fail_frames);
+	});
 }
 
 void JPEGFrameView::setFrame(unsigned stream_idx, FrameOnDisk frame, FrameOnDisk secondary_frame, float fade_alpha)
@@ -485,5 +518,6 @@ shared_ptr<Frame> get_black_frame()
 		black_frame->pitch_y = global_flags.width;
 		black_frame->pitch_chroma = global_flags.width / 2;
 	});
+	++metric_jpeg_software_fail_frames;
 	return black_frame;
 }
