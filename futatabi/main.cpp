@@ -214,6 +214,7 @@ int main(int argc, char **argv)
 	avformat_network_init();
 	global_metrics.set_prefix("futatabi");
 	global_httpd = new HTTPD;
+	global_metrics.remove("num_connected_multicam_clients");
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
 
