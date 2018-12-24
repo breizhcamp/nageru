@@ -1817,7 +1817,7 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
 	{
 		lock_guard<mutex> lock(file_audio_encoder_mutex);
 		AVCodecParametersWithDeleter audio_codecpar = file_audio_encoder->get_codec_parameters();
-		file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, audio_codecpar.get(), get_color_space(global_flags.ycbcr_rec709_coefficients), Mux::WITH_AUDIO, TIMEBASE,
+		file_mux.reset(new Mux(avctx, frame_width, frame_height, Mux::CODEC_H264, video_extradata, audio_codecpar.get(), get_color_space(global_flags.ycbcr_rec709_coefficients), TIMEBASE,
 			std::bind(&DiskSpaceEstimator::report_append, disk_space_estimator, filename, _1),
 			Mux::WRITE_BACKGROUND,
 			{ &current_file_mux_metrics, &total_mux_metrics }));

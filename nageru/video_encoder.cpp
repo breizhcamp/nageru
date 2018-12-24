@@ -194,8 +194,7 @@ void VideoEncoder::open_output_stream()
 	}
 
 	stream_mux.reset(new Mux(avctx, width, height, video_codec, video_extradata, stream_audio_encoder->get_codec_parameters().get(),
-		get_color_space(global_flags.ycbcr_rec709_coefficients),
-		Mux::WITH_AUDIO, COARSE_TIMEBASE,
+		get_color_space(global_flags.ycbcr_rec709_coefficients), COARSE_TIMEBASE,
 		/*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, { &stream_mux_metrics }));
 	stream_mux_metrics.init({{ "destination", "http" }});
 }

@@ -47,7 +47,7 @@ struct PacketBefore {
 	const AVFormatContext * const ctx;
 };
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, WithAudio with_audio, int time_base, function<void(int64_t)> write_callback, WriteStrategy write_strategy, const vector<MuxMetrics *> &metrics)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, int time_base, function<void(int64_t)> write_callback, WriteStrategy write_strategy, const vector<MuxMetrics *> &metrics)
 	: write_strategy(write_strategy), avctx(avctx), write_callback(write_callback), metrics(metrics)
 {
 	avstream_video = avformat_new_stream(avctx, nullptr);
@@ -89,7 +89,7 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 		memcpy(avstream_video->codecpar->extradata, video_extradata.data(), video_extradata.size());
 	}
 
-	if (with_audio == WITH_AUDIO) {
+	if (audio_codecpar != nullptr) {
 		avstream_audio = avformat_new_stream(avctx, nullptr);
 		if (avstream_audio == nullptr) {
 			fprintf(stderr, "avformat_new_stream() failed\n");
@@ -101,7 +101,6 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 			exit(1);
 		}
 	} else {
-		assert(with_audio == WITHOUT_AUDIO);
 		avstream_audio = nullptr;
 	}
 

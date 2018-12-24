@@ -73,7 +73,7 @@ unique_ptr<Mux> create_mux(HTTPD *httpd, AVOutputFormat *oformat, X264Encoder *x
 
 	unique_ptr<Mux> mux;
 	mux.reset(new Mux(avctx, global_flags.width, global_flags.height, Mux::CODEC_H264, video_extradata, audio_encoder->get_codec_parameters().get(),
-		get_color_space(global_flags.ycbcr_rec709_coefficients), Mux::WITH_AUDIO, COARSE_TIMEBASE,
+		get_color_space(global_flags.ycbcr_rec709_coefficients), COARSE_TIMEBASE,
 	        /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, { &stream_mux_metrics }));
 	stream_mux_metrics.init({{ "destination", "http" }});
 	return mux;

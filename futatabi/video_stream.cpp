@@ -264,8 +264,7 @@ void VideoStream::start()
 
 	size_t width = global_flags.width, height = global_flags.height;  // Doesn't matter for MJPEG.
 	mux.reset(new Mux(avctx, width, height, Mux::CODEC_MJPEG, /*video_extradata=*/"", /*audio_codec_parameters=*/nullptr,
-		AVCOL_SPC_BT709, Mux::WITHOUT_AUDIO,
-		COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
+		AVCOL_SPC_BT709, COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
 
 	encode_thread = thread(&VideoStream::encode_thread_func, this);
 }
