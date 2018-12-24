@@ -71,6 +71,7 @@ vector<FrameOnDisk> frames[MAX_STREAMS];  // Under frame_mu.
 vector<string> frame_filenames;  // Under frame_mu.
 
 atomic<int64_t> metric_received_frames[MAX_STREAMS]{{0}};
+Summary metric_received_frame_size_bytes;
 
 namespace {
 
@@ -460,6 +461,7 @@ void record_thread_func()
 	for (unsigned i = 0; i < MAX_STREAMS; ++i) {
 		global_metrics.add("received_frames", {{ "stream", to_string(i) }}, &metric_received_frames[i]);
 	}
+	global_metrics.add("received_frame_size_bytes", &metric_received_frame_size_bytes);
 
 	if (global_flags.stream_source.empty() || global_flags.stream_source == "/dev/null") {
 		// Save the user from some repetitive messages.
@@ -499,6 +501,7 @@ void record_thread_func()
 			}
 
 			++metric_received_frames[pkt.stream_index];
+			metric_received_frame_size_bytes.count_event(pkt.size);
 
 			// Convert pts to our own timebase.
 			AVRational stream_timebase = format_ctx->streams[pkt.stream_index]->time_base;
