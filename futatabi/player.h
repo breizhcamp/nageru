@@ -86,6 +86,16 @@ private:
 
 	std::unique_ptr<VideoStream> video_stream;  // Can be nullptr.
 
+	std::atomic<int64_t> metric_dropped_interpolated_frame{0};
+	std::atomic<int64_t> metric_dropped_unconditional_frame{0};
+	std::atomic<int64_t> metric_faded_frame{0};
+	std::atomic<int64_t> metric_faded_snapped_frame{0};
+	std::atomic<int64_t> metric_original_frame{0};
+	std::atomic<int64_t> metric_original_snapped_frame{0};
+	std::atomic<int64_t> metric_refresh_frame{0};
+	std::atomic<int64_t> metric_interpolated_frame{0};
+	std::atomic<int64_t> metric_interpolated_faded_frame{0};
+
 	// under queue_state_mu. Part of this instead of VideoStream so that we own
 	// its lock and can sleep on it.
 	size_t num_queued_frames = 0;

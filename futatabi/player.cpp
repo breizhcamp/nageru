@@ -8,6 +8,7 @@
 #include "frame_on_disk.h"
 #include "shared/httpd.h"
 #include "jpeg_frame_view.h"
+#include "shared/metrics.h"
 #include "shared/mux.h"
 #include "shared/timebase.h"
 #include "video_stream.h"
@@ -76,6 +77,7 @@ wait_for_clip:
 
 		if (!clip_ready) {
 			if (video_stream != nullptr) {
+				++metric_refresh_frame;
 				video_stream->schedule_refresh_frame(steady_clock::now(), pts, /*display_func=*/nullptr, QueueSpotHolder());
 			}
 			continue;
@@ -125,6 +127,7 @@ got_clip:
 			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(200)) {
 				fprintf(stderr, "WARNING: %ld ms behind, dropping a frame (no matter the type).\n",
 					lrint(1e3 * duration<double>(time_behind).count()));
+				++metric_dropped_unconditional_frame;
 				continue;
 			}
 
@@ -242,11 +245,13 @@ got_clip:
 					display_func();
 				} else {
 					if (secondary_stream_idx == -1) {
+						++metric_original_frame;
 						video_stream->schedule_original_frame(
 							next_frame_start, pts, display_func, QueueSpotHolder(this),
 							frame_lower);
 					} else {
 						assert(secondary_frame.pts != -1);
+						++metric_faded_frame;
 						video_stream->schedule_faded_frame(next_frame_start, pts, display_func,
 							QueueSpotHolder(this), frame_lower,
 							secondary_frame, fade_alpha);
@@ -271,11 +276,13 @@ got_clip:
 						display_func();
 					} else {
 						if (secondary_stream_idx == -1) {
+							++metric_original_snapped_frame;
 							video_stream->schedule_original_frame(
 								next_frame_start, pts, display_func,
 								QueueSpotHolder(this), snap_frame);
 						} else {
 							assert(secondary_frame.pts != -1);
+							++metric_faded_snapped_frame;
 							video_stream->schedule_faded_frame(
 								next_frame_start, pts, display_func, QueueSpotHolder(this),
 								snap_frame, secondary_frame, fade_alpha);
@@ -318,6 +325,7 @@ got_clip:
 			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(100)) {
 				fprintf(stderr, "WARNING: %ld ms behind, dropping an interpolated frame.\n",
 					lrint(1e3 * duration<double>(time_behind).count()));
+				++metric_dropped_interpolated_frame;
 				continue;
 			}
 
@@ -335,6 +343,11 @@ got_clip:
 						destination->setFrame(frame);
 					}
 				};
+				if (secondary_stream_idx == -1) {
+					++metric_interpolated_frame;
+				} else {
+					++metric_interpolated_faded_frame;
+				}
 				video_stream->schedule_interpolated_frame(
 					next_frame_start, pts, display_func, QueueSpotHolder(this),
 					frame_lower, frame_upper, alpha,
@@ -410,6 +423,18 @@ Player::Player(JPEGFrameView *destination, Player::StreamOutput stream_output, A
 	: destination(destination)
 {
 	player_thread = thread(&Player::thread_func, this, stream_output, file_avctx);
+
+	if (stream_output == HTTPD_STREAM_OUTPUT) {
+		global_metrics.add("http_output_frames", {{ "type", "original" }, { "reason", "edge_frame_or_no_interpolation" }}, &metric_original_frame);
+		global_metrics.add("http_output_frames", {{ "type", "faded" }, { "reason", "edge_frame_or_no_interpolation" }}, &metric_faded_frame);
+		global_metrics.add("http_output_frames", {{ "type", "original" }, { "reason", "snapped" }}, &metric_original_snapped_frame);
+		global_metrics.add("http_output_frames", {{ "type", "faded" }, { "reason", "snapped" }}, &metric_faded_snapped_frame);
+		global_metrics.add("http_output_frames", {{ "type", "interpolated" }}, &metric_interpolated_frame);
+		global_metrics.add("http_output_frames", {{ "type", "interpolated_faded" }}, &metric_interpolated_faded_frame);
+		global_metrics.add("http_output_frames", {{ "type", "refresh" }}, &metric_refresh_frame);
+		global_metrics.add("http_dropped_frames", {{ "type", "interpolated" }}, &metric_dropped_interpolated_frame);
+		global_metrics.add("http_dropped_frames", {{ "type", "unconditional" }}, &metric_dropped_unconditional_frame);
+	}
 }
 
 Player::~Player()
