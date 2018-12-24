@@ -27,6 +27,7 @@ extern std::vector<std::string> frame_filenames;  // Under frame_mu.
 // for a single .frames file.)
 class FrameReader {
 public:
+	FrameReader();
 	~FrameReader();
 	std::string read_frame(FrameOnDisk frame);
 
