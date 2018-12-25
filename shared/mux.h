@@ -112,7 +112,7 @@ private:
 	std::vector<QueuedPacket> packet_queue;
 	std::condition_variable packet_queue_ready;
 
-	AVStream *avstream_video, *avstream_audio;
+	std::vector<AVStream *> streams;
 
 	std::function<void(int64_t)> write_callback;
 	std::vector<MuxMetrics *> metrics;

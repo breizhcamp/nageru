@@ -50,7 +50,7 @@ struct PacketBefore {
 Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, int time_base, function<void(int64_t)> write_callback, WriteStrategy write_strategy, const vector<MuxMetrics *> &metrics)
 	: write_strategy(write_strategy), avctx(avctx), write_callback(write_callback), metrics(metrics)
 {
-	avstream_video = avformat_new_stream(avctx, nullptr);
+	AVStream *avstream_video = avformat_new_stream(avctx, nullptr);
 	if (avstream_video == nullptr) {
 		fprintf(stderr, "avformat_new_stream() failed\n");
 		exit(1);
@@ -88,9 +88,10 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 		avstream_video->codecpar->extradata_size = video_extradata.size();
 		memcpy(avstream_video->codecpar->extradata, video_extradata.data(), video_extradata.size());
 	}
+	streams.push_back(avstream_video);
 
 	if (audio_codecpar != nullptr) {
-		avstream_audio = avformat_new_stream(avctx, nullptr);
+		AVStream *avstream_audio = avformat_new_stream(avctx, nullptr);
 		if (avstream_audio == nullptr) {
 			fprintf(stderr, "avformat_new_stream() failed\n");
 			exit(1);
@@ -100,8 +101,7 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 			fprintf(stderr, "avcodec_parameters_copy() failed\n");
 			exit(1);
 		}
-	} else {
-		avstream_audio = nullptr;
+		streams.push_back(avstream_audio);
 	}
 
 	AVDictionary *options = NULL;
@@ -157,17 +157,11 @@ void Mux::add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational t
 	if (stream_index_override != -1) {
 		pkt_copy.stream_index = stream_index_override;
 	}
-	if (pkt_copy.stream_index == 0) {
-		pkt_copy.pts = av_rescale_q(pts, timebase, avstream_video->time_base);
-		pkt_copy.dts = av_rescale_q(dts, timebase, avstream_video->time_base);
-		pkt_copy.duration = av_rescale_q(pkt.duration, timebase, avstream_video->time_base);
-	} else if (pkt_copy.stream_index == 1) {
-		pkt_copy.pts = av_rescale_q(pts, timebase, avstream_audio->time_base);
-		pkt_copy.dts = av_rescale_q(dts, timebase, avstream_audio->time_base);
-		pkt_copy.duration = av_rescale_q(pkt.duration, timebase, avstream_audio->time_base);
-	} else {
-		assert(false);
-	}
+	assert(size_t(pkt_copy.stream_index) < streams.size());
+	AVRational time_base = streams[pkt_copy.stream_index]->time_base;
+	pkt_copy.pts = av_rescale_q(pts, timebase, time_base);
+	pkt_copy.dts = av_rescale_q(dts, timebase, time_base);
+	pkt_copy.duration = av_rescale_q(pkt.duration, timebase, time_base);
 
 	{
 		lock_guard<mutex> lock(mu);
