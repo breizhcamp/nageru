@@ -199,9 +199,9 @@ got_clip:
 					new_clip_changed.wait_until(lock, next_frame_start, [this]{
 						return should_quit || new_clip_ready || override_stream_idx != -1;
 					});
-				if (should_quit) {
-					return;
-				}
+					if (should_quit) {
+						return;
+					}
 				} else {
 					// If the queue is full (which is really the state we'd like to be in),
 					// wait until there's room for one more frame (ie., one was output from
