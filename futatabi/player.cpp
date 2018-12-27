@@ -436,6 +436,8 @@ void Player::play(const vector<Clip> &clips)
 
 void Player::override_angle(unsigned stream_idx)
 {
+	int64_t last_pts;
+
 	// Corner case: If a new clip is waiting to be played, change its stream and then we're done.
 	{
 		unique_lock<mutex> lock(queue_state_mu);
@@ -452,14 +454,10 @@ void Player::override_angle(unsigned stream_idx)
 			new_clip_changed.notify_all();
 			return;
 		}
-	}
 
-	// OK, so we're standing still, presumably at the end of a clip.
-	// Look at the last frame played (if it exists), and show the closest
-	// thing we've got.
-	int64_t last_pts;
-	{
-		lock_guard<mutex> lock(queue_state_mu);
+		// OK, so we're standing still, presumably at the end of a clip.
+		// Look at the last frame played (if it exists), and show the closest
+		// thing we've got.
 		if (last_pts_played < 0) {
 			return;
 		}
