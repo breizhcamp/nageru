@@ -427,13 +427,11 @@ Player::~Player()
 
 void Player::play(const vector<Clip> &clips)
 {
-	{
-		lock_guard<mutex> lock(queue_state_mu);
-		new_clip_ready = true;
-		queued_clip_list = clips;
-		override_stream_idx = -1;
-		new_clip_changed.notify_all();
-	}
+	lock_guard<mutex> lock(queue_state_mu);
+	new_clip_ready = true;
+	queued_clip_list = clips;
+	override_stream_idx = -1;
+	new_clip_changed.notify_all();
 }
 
 void Player::override_angle(unsigned stream_idx)
