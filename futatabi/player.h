@@ -33,7 +33,7 @@ public:
 	~Player();
 
 	void play(const std::vector<Clip> &clips);
-	void override_angle(unsigned stream_idx);  // For the current clip only.
+	void override_angle(unsigned stream_idx);  // Assumes one-clip playlist only.
 
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
