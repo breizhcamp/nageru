@@ -237,17 +237,10 @@ void export_interpolated_clip(const string &filename, const vector<Clip> &clips)
 			done_promise.set_value();
 		}
 	});
-	player.set_next_clip_callback([&clip_idx, &clips]() -> pair<Clip, int> {
-		if (++clip_idx >= clips.size()) {
-			return make_pair(Clip(), -1);
-		} else {
-			return make_pair(clips[clip_idx], clip_idx);
-		}
-	});
 	player.set_progress_callback([&current_value, &clips, total_length] (const std::map<size_t, double> &player_progress) {
 		current_value = 1.0 - compute_time_left(clips, player_progress) / total_length;
 	});
-	player.play_clip(clips[0], clip_idx, clips[0].stream_idx);
+	player.play(clips);
 	while (done.wait_for(std::chrono::milliseconds(100)) != future_status::ready && !progress.wasCanceled()) {
 		progress.setValue(lrint(100000.0 * current_value));
 	}

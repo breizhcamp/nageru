@@ -189,7 +189,6 @@ MainWindow::MainWindow()
 			live_player_clip_done();
 		});
 	});
-	live_player->set_next_clip_callback(bind(&MainWindow::live_player_get_next_clip, this));
 	live_player->set_progress_callback([this](const map<size_t, double> &progress) {
 		post_to_main_thread([this, progress] {
 			live_player_clip_progress(progress);
@@ -337,7 +336,7 @@ void MainWindow::preview_clicked()
 		if (selected->hasSelection()) {
 			QModelIndex index = selected->currentIndex();
 			const Clip &clip = *playlist_clips->clip(index.row());
-			preview_player->play_clip(clip, index.row(), clip.stream_idx);
+			preview_player->play({clip});
 			return;
 		}
 	}
@@ -347,18 +346,18 @@ void MainWindow::preview_clicked()
 
 	QItemSelectionModel *selected = ui->clip_list->selectionModel();
 	if (!selected->hasSelection()) {
-		preview_player->play_clip(*cliplist_clips->back(), cliplist_clips->size() - 1, 0);
+		preview_player->play({*cliplist_clips->back()});
 		return;
 	}
 
 	QModelIndex index = selected->currentIndex();
-	unsigned stream_idx;
+	Clip clip = *cliplist_clips->clip(index.row());
 	if (cliplist_clips->is_camera_column(index.column())) {
-		stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
+		clip.stream_idx = index.column() - int(ClipList::Column::CAMERA_1);
 	} else {
-		stream_idx = ui->preview_display->get_stream_idx();
+		clip.stream_idx = ui->preview_display->get_stream_idx();
 	}
-	preview_player->play_clip(*cliplist_clips->clip(index.row()), index.row(), stream_idx);
+	preview_player->play({clip});
 }
 
 void MainWindow::preview_angle_clicked(unsigned stream_idx)
@@ -481,17 +480,23 @@ void MainWindow::play_clicked()
 		return;
 
 	QItemSelectionModel *selected = ui->playlist->selectionModel();
-	int row;
+	unsigned start_row;
 	if (!selected->hasSelection()) {
-		row = 0;
+		start_row = 0;
 	} else {
-		row = selected->selectedRows(0)[0].row();
+		start_row = selected->selectedRows(0)[0].row();
 	}
 
-	const Clip &clip = *playlist_clips->clip(row);
-	live_player->play_clip(clip, row, clip.stream_idx);
-	playlist_clips->set_progress({{ row, 0.0f }});
-	playlist_clips->set_currently_playing(row, 0.0f);
+	live_player_index_to_row.clear();
+
+	vector<Clip> clips;
+	for (unsigned row = start_row; row < playlist_clips->size(); ++row) {
+		live_player_index_to_row.emplace(clips.size(), row);
+		clips.push_back(*playlist_clips->clip(row));
+	}
+	live_player->play(clips);
+	playlist_clips->set_progress({{ start_row, 0.0f }});
+	playlist_clips->set_currently_playing(start_row, 0.0f);
 	playlist_selection_changed();
 
 	ui->stop_btn->setEnabled(true);
@@ -504,7 +509,8 @@ void MainWindow::stop_clicked()
 	fake_clip.pts_out = 0;
 	size_t last_row = playlist_clips->size() - 1;
 	playlist_clips->set_currently_playing(last_row, 0.0f);
-	live_player->play_clip(fake_clip, last_row, 0);
+	live_player_index_to_row.clear();
+	live_player->play({fake_clip});
 }
 
 void MainWindow::live_player_clip_done()
@@ -558,7 +564,13 @@ static string format_duration(double t)
 
 void MainWindow::live_player_clip_progress(const map<size_t, double> &progress)
 {
-	playlist_clips->set_progress(progress);
+	map<size_t, double> converted_progress;
+	for (const auto &it : progress) {
+		if (live_player_index_to_row.count(it.first)) {
+			converted_progress.emplace(live_player_index_to_row[it.first], it.second);
+		}
+	}
+	playlist_clips->set_progress(converted_progress);
 
 	vector<Clip> clips;
 	for (size_t row = 0; row < playlist_clips->size(); ++row) {
@@ -829,7 +841,7 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 	Clip fake_clip;
 	fake_clip.pts_in = pts;
 	fake_clip.pts_out = pts + 1;
-	preview_player->play_clip(fake_clip, 0, stream_idx);
+	preview_player->play({fake_clip});
 }
 
 void MainWindow::playlist_selection_changed()

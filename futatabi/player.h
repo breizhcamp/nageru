@@ -32,7 +32,7 @@ public:
 	Player(JPEGFrameView *destination, StreamOutput stream_output, AVFormatContext *file_avctx = nullptr);
 	~Player();
 
-	void play_clip(const Clip &clip, size_t clip_idx, unsigned stream_idx);
+	void play(const std::vector<Clip> &clips);
 	void override_angle(unsigned stream_idx);  // For the current clip only.
 
 	// Not thread-safe to set concurrently with playing.
@@ -42,12 +42,7 @@ public:
 
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
-	// The second parameter is the clip's position in the play list.
-	using next_clip_callback_func = std::function<std::pair<Clip, size_t>()>;
-	void set_next_clip_callback(next_clip_callback_func cb) { next_clip_callback = cb; }
-
-	// Not thread-safe to set concurrently with playing.
-	// Will be called back from the player thread.
+	// The keys in the given map are indexes in the vector given to play().
 	using progress_callback_func = std::function<void(const std::map<size_t, double> &progress)>;
 	void set_progress_callback(progress_callback_func cb) { progress_callback = cb; }
 
@@ -70,19 +65,15 @@ private:
 
 	JPEGFrameView *destination;
 	done_callback_func done_callback;
-	next_clip_callback_func next_clip_callback;
 	progress_callback_func progress_callback;
-
-	std::mutex mu;
-	Clip current_clip;  // Under mu. Can have pts_in = -1 for no clip.
-	size_t current_clip_idx;  // Under mu.
-	unsigned current_stream_idx;  // Under mu.
 
 	std::mutex queue_state_mu;
 	std::condition_variable new_clip_changed;
+	std::vector<Clip> queued_clip_list;   // Under queue_state_mu.
 	bool new_clip_ready = false;  // Under queue_state_mu.
 	bool playing = false;  // Under queue_state_mu.
 	int override_stream_idx = -1;  // Under queue_state_mu.
+	int64_t last_pts_played = -1;  // Under queue_state_mu. Used by previews only.
 
 	std::unique_ptr<VideoStream> video_stream;  // Can be nullptr.
 
