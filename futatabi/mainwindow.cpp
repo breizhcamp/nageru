@@ -516,11 +516,11 @@ void MainWindow::live_player_clip_done()
 		set_output_status("paused");
 		playlist_clips->set_progress({});
 		playlist_clips->set_currently_playing(-1, 0.0f);
+		ui->stop_btn->setEnabled(false);
 	} else {
 		playlist_clips->set_progress({ { row + 1, 0.0f } });
 		playlist_clips->set_currently_playing(row + 1, 0.0f);
 	}
-	ui->stop_btn->setEnabled(false);
 }
 
 pair<Clip, size_t> MainWindow::live_player_get_next_clip()
