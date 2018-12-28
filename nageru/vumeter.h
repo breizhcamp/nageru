@@ -25,7 +25,7 @@ public:
 	}
 
 	void set_level(float level_lufs_left, float level_lufs_right) {
-		std::unique_lock<std::mutex> lock(level_mutex);
+		std::lock_guard<std::mutex> lock(level_mutex);
 		this->level_lufs[0] = level_lufs_left;
 		this->level_lufs[1] = level_lufs_right;
 		QMetaObject::invokeMethod(this, "update", Qt::AutoConnection);
@@ -36,7 +36,7 @@ public:
 	}
 
 	void set_peak(float peak_lufs_left, float peak_lufs_right) {
-		std::unique_lock<std::mutex> lock(level_mutex);
+		std::lock_guard<std::mutex> lock(level_mutex);
 		this->peak_lufs[0] = peak_lufs_left;
 		this->peak_lufs[1] = peak_lufs_right;
 		QMetaObject::invokeMethod(this, "update", Qt::AutoConnection);

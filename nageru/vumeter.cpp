@@ -25,7 +25,7 @@ void VUMeter::paintEvent(QPaintEvent *event)
 
 	float level_lufs[2], peak_lufs[2];
 	{
-		unique_lock<mutex> lock(level_mutex);
+		lock_guard<mutex> lock(level_mutex);
 		level_lufs[0] = this->level_lufs[0];
 		level_lufs[1] = this->level_lufs[1];
 		peak_lufs[0] = this->peak_lufs[0];

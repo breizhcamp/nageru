@@ -41,7 +41,7 @@ void CompressionReductionMeter::paintEvent(QPaintEvent *event)
 
 	float level_db;
 	{
-		unique_lock<mutex> lock(level_mutex);
+		lock_guard<mutex> lock(level_mutex);
 		level_db = this->level_db;
 	}
 

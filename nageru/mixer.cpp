@@ -829,7 +829,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		// Still send on the information that we _had_ a frame, even though it's corrupted,
 		// so that pts can go up accordingly.
 		{
-			unique_lock<mutex> lock(card_mutex);
+			lock_guard<mutex> lock(card_mutex);
 			CaptureCard::NewFrame new_frame;
 			new_frame.frame = RefCountedFrame(FrameAllocator::Frame());
 			new_frame.length = frame_length;
@@ -953,7 +953,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		}
 
 		{
-			unique_lock<mutex> lock(card_mutex);
+			lock_guard<mutex> lock(card_mutex);
 			CaptureCard::NewFrame new_frame;
 			new_frame.frame = frame;
 			new_frame.length = frame_length;
@@ -1348,7 +1348,7 @@ void Mixer::schedule_audio_resampling_tasks(unsigned dropped_frames, int num_sam
 			// non-dropped frame; perhaps we should just discard that as well,
 			// since dropped frames are expected to be rare, and it might be
 			// better to just wait until we have a slightly more normal situation).
-			unique_lock<mutex> lock(audio_mutex);
+			lock_guard<mutex> lock(audio_mutex);
 			bool adjust_rate = !dropped_frame && !is_preroll;
 			audio_task_queue.push(AudioTask{pts_int, num_samples_per_frame, adjust_rate, frame_timestamp});
 			audio_task_queue_changed.notify_one();
@@ -1372,7 +1372,7 @@ void Mixer::render_one_frame(int64_t duration)
 
 	// Update Y'CbCr settings for all cards.
 	{
-		unique_lock<mutex> lock(card_mutex);
+		lock_guard<mutex> lock(card_mutex);
 		for (unsigned card_index = 0; card_index < num_cards; ++card_index) {
 			YCbCrInterpretation *interpretation = &ycbcr_interpretation[card_index];
 			input_state.ycbcr_coefficients_auto[card_index] = interpretation->ycbcr_coefficients_auto;
@@ -1578,13 +1578,13 @@ void Mixer::channel_clicked(int preview_num)
 
 YCbCrInterpretation Mixer::get_input_ycbcr_interpretation(unsigned card_index) const
 {
-	unique_lock<mutex> lock(card_mutex);
+	lock_guard<mutex> lock(card_mutex);
 	return ycbcr_interpretation[card_index];
 }
 
 void Mixer::set_input_ycbcr_interpretation(unsigned card_index, const YCbCrInterpretation &interpretation)
 {
-	unique_lock<mutex> lock(card_mutex);
+	lock_guard<mutex> lock(card_mutex);
 	ycbcr_interpretation[card_index] = interpretation;
 }
 
@@ -1608,7 +1608,7 @@ void Mixer::start_mode_scanning(unsigned card_index)
 map<uint32_t, VideoMode> Mixer::get_available_output_video_modes() const
 {
 	assert(desired_output_card_index != -1);
-	unique_lock<mutex> lock(card_mutex);
+	lock_guard<mutex> lock(card_mutex);
 	return cards[desired_output_card_index].output->get_available_video_modes();
 }
 
@@ -1646,7 +1646,7 @@ void Mixer::OutputChannel::output_frame(DisplayFrame &&frame)
 	// Store this frame for display. Remove the ready frame if any
 	// (it was seemingly never used).
 	{
-		unique_lock<mutex> lock(frame_mutex);
+		lock_guard<mutex> lock(frame_mutex);
 		if (has_ready_frame) {
 			parent->release_display_frame(&ready_frame);
 		}
@@ -1701,7 +1701,7 @@ void Mixer::OutputChannel::output_frame(DisplayFrame &&frame)
 
 bool Mixer::OutputChannel::get_display_frame(DisplayFrame *frame)
 {
-	unique_lock<mutex> lock(frame_mutex);
+	lock_guard<mutex> lock(frame_mutex);
 	if (!has_current_frame && !has_ready_frame) {
 		return false;
 	}
@@ -1726,13 +1726,13 @@ bool Mixer::OutputChannel::get_display_frame(DisplayFrame *frame)
 
 void Mixer::OutputChannel::add_frame_ready_callback(void *key, Mixer::new_frame_ready_callback_t callback)
 {
-	unique_lock<mutex> lock(frame_mutex);
+	lock_guard<mutex> lock(frame_mutex);
 	new_frame_ready_callbacks[key] = callback;
 }
 
 void Mixer::OutputChannel::remove_frame_ready_callback(void *key)
 {
-	unique_lock<mutex> lock(frame_mutex);
+	lock_guard<mutex> lock(frame_mutex);
 	new_frame_ready_callbacks.erase(key);
 }
 

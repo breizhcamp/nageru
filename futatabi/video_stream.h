@@ -99,7 +99,7 @@ private:
 		void operator() (InterpolatedFrameResources *ifr) const
 		{
 			if (ifr != nullptr) {
-				std::unique_lock<std::mutex> lock(ifr->owner->queue_lock);
+				std::lock_guard<std::mutex> lock(ifr->owner->queue_lock);
 				ifr->owner->interpolate_resources.emplace_back(ifr);
 			}
 		}

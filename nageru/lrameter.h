@@ -21,7 +21,7 @@ public:
 	LRAMeter(QWidget *parent);
 
 	void set_levels(float level_lufs, float range_low_lufs, float range_high_lufs) {
-		std::unique_lock<std::mutex> lock(level_mutex);
+		std::lock_guard<std::mutex> lock(level_mutex);
 		this->level_lufs = level_lufs;
 		this->range_low_lufs = range_low_lufs;
 		this->range_high_lufs = range_high_lufs;

@@ -19,7 +19,7 @@ public:
 	CorrelationMeter(QWidget *parent);
 
 	void set_correlation(float correlation) {
-		std::unique_lock<std::mutex> lock(correlation_mutex);
+		std::lock_guard<std::mutex> lock(correlation_mutex);
 		this->correlation = correlation;
 		QMetaObject::invokeMethod(this, "update", Qt::AutoConnection);
 	}

@@ -23,7 +23,7 @@ public:
 	CompressionReductionMeter(QWidget *parent);
 
 	void set_reduction_db(float level_db) {
-		std::unique_lock<std::mutex> lock(level_mutex);
+		std::lock_guard<std::mutex> lock(level_mutex);
 		this->level_db = level_db;
 		QMetaObject::invokeMethod(this, "update", Qt::AutoConnection);
 	}

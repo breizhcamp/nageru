@@ -317,7 +317,7 @@ void DeckLinkOutput::send_frame(GLuint y_tex, GLuint cbcr_tex, YCbCrLumaCoeffici
 	frame->duration = duration;
 
 	{
-		unique_lock<mutex> lock(frame_queue_mutex);
+		lock_guard<mutex> lock(frame_queue_mutex);
 		pending_video_frames.push(move(frame));
 	}
 	frame_queues_changed.notify_all();

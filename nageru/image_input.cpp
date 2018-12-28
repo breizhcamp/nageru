@@ -63,7 +63,7 @@ void ImageInput::set_gl_state(GLuint glsl_program_num, const string& prefix, uns
 	// so there's a fair amount of OpenGL memory waste anyway (the cache
 	// is mostly there to save startup time, not RAM).
 	{
-		unique_lock<mutex> lock(all_images_lock);
+		lock_guard<mutex> lock(all_images_lock);
 		if (all_images[pathname] != current_image) {
 			current_image = all_images[pathname];
 			set_pixel_data(current_image->pixels.get());
@@ -74,7 +74,7 @@ void ImageInput::set_gl_state(GLuint glsl_program_num, const string& prefix, uns
 
 shared_ptr<const ImageInput::Image> ImageInput::load_image(const string &filename, const string &pathname)
 {
-	unique_lock<mutex> lock(all_images_lock);  // Held also during loading.
+	lock_guard<mutex> lock(all_images_lock);  // Held also during loading.
 	if (all_images.count(pathname)) {
 		return all_images[pathname];
 	}
@@ -234,7 +234,7 @@ void ImageInput::update_thread_func(const std::string &filename, const std::stri
 			continue;
 		}
 		fprintf(stderr, "Loaded new version of %s from disk.\n", pathname.c_str());
-		unique_lock<mutex> lock(all_images_lock);
+		lock_guard<mutex> lock(all_images_lock);
 		all_images[pathname] = image;
 		last_modified = image->last_modified;
 	}
@@ -243,7 +243,7 @@ void ImageInput::update_thread_func(const std::string &filename, const std::stri
 void ImageInput::shutdown_updaters()
 {
 	{
-		unique_lock<mutex> lock(threads_should_quit_mu);
+		lock_guard<mutex> lock(threads_should_quit_mu);
 		threads_should_quit = true;
 		threads_should_quit_modified.notify_all();
 	}

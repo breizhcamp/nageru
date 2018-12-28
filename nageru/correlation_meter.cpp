@@ -47,7 +47,7 @@ void CorrelationMeter::paintEvent(QPaintEvent *event)
 
 	float correlation;
 	{
-		unique_lock<mutex> lock(correlation_mutex);
+		lock_guard<mutex> lock(correlation_mutex);
 		correlation = this->correlation;
 	}
 

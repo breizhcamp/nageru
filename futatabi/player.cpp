@@ -440,7 +440,7 @@ void Player::override_angle(unsigned stream_idx)
 
 	// Corner case: If a new clip is waiting to be played, change its stream and then we're done.
 	{
-		unique_lock<mutex> lock(queue_state_mu);
+		lock_guard<mutex> lock(queue_state_mu);
 		if (new_clip_ready) {
 			assert(queued_clip_list.size() == 1);
 			queued_clip_list[0].stream_idx = stream_idx;
@@ -474,13 +474,13 @@ void Player::override_angle(unsigned stream_idx)
 
 void Player::take_queue_spot()
 {
-	unique_lock<mutex> lock(queue_state_mu);
+	lock_guard<mutex> lock(queue_state_mu);
 	++num_queued_frames;
 }
 
 void Player::release_queue_spot()
 {
-	unique_lock<mutex> lock(queue_state_mu);
+	lock_guard<mutex> lock(queue_state_mu);
 	assert(num_queued_frames > 0);
 	--num_queued_frames;
 	new_clip_changed.notify_all();

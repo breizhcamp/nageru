@@ -30,7 +30,7 @@ void LRAMeter::paintEvent(QPaintEvent *event)
 	float range_low_lufs;
 	float range_high_lufs;
 	{
-		unique_lock<mutex> lock(level_mutex);
+		lock_guard<mutex> lock(level_mutex);
 		level_lufs = this->level_lufs;
 		range_low_lufs = this->range_low_lufs;
 		range_high_lufs = this->range_high_lufs;

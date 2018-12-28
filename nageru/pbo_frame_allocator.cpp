@@ -261,7 +261,7 @@ bmusb::FrameAllocator::Frame PBOFrameAllocator::alloc_frame()
 {
         Frame vf;
 
-	unique_lock<mutex> lock(freelist_mutex);  // Meh.
+	lock_guard<mutex> lock(freelist_mutex);  // Meh.
 	if (freelist.empty()) {
 		printf("Frame overrun (no more spare PBO frames), dropping frame!\n");
 	} else {
@@ -309,7 +309,7 @@ void PBOFrameAllocator::release_frame(Frame frame)
 	}
 #endif
 
-	unique_lock<mutex> lock(freelist_mutex);
+	lock_guard<mutex> lock(freelist_mutex);
 	freelist.push(frame);
 	//--sumsum;
 }

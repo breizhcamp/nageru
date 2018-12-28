@@ -282,7 +282,7 @@ void VideoStream::clear_queue()
 	deque<QueuedFrame> q;
 
 	{
-		unique_lock<mutex> lock(queue_lock);
+		lock_guard<mutex> lock(queue_lock);
 		q = move(frame_queue);
 	}
 
@@ -323,7 +323,7 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
 
-	unique_lock<mutex> lock(queue_lock);
+	lock_guard<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 }
@@ -342,7 +342,7 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	// separate pools around.)
 	BorrowedInterpolatedFrameResources resources;
 	{
-		unique_lock<mutex> lock(queue_lock);
+		lock_guard<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
 			return;
@@ -391,7 +391,7 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	qf.resources = move(resources);
 	qf.local_pts = local_pts;
 
-	unique_lock<mutex> lock(queue_lock);
+	lock_guard<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 }
@@ -411,7 +411,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	// Get the temporary OpenGL resources we need for doing the interpolation.
 	BorrowedInterpolatedFrameResources resources;
 	{
-		unique_lock<mutex> lock(queue_lock);
+		lock_guard<mutex> lock(queue_lock);
 		if (interpolate_resources.empty()) {
 			fprintf(stderr, "WARNING: Too many interpolated frames already in transit; dropping one.\n");
 			return;
@@ -517,7 +517,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	check_error();
 	qf.resources = move(resources);
 
-	unique_lock<mutex> lock(queue_lock);
+	lock_guard<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 }
@@ -532,7 +532,7 @@ void VideoStream::schedule_refresh_frame(steady_clock::time_point local_pts,
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
 
-	unique_lock<mutex> lock(queue_lock);
+	lock_guard<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
 	queue_changed.notify_all();
 }

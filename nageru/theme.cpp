@@ -100,7 +100,7 @@ class LuaRefWithDeleter {
 public:
 	LuaRefWithDeleter(mutex *m, lua_State *L, int ref) : m(m), L(L), ref(ref) {}
 	~LuaRefWithDeleter() {
-		unique_lock<mutex> lock(*m);
+		lock_guard<mutex> lock(*m);
 		luaL_unref(L, LUA_REGISTRYINDEX, ref);
 	}
 	int get() const { return ref; }
@@ -1221,7 +1221,7 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 {
 	Chain chain;
 
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	assert(lua_gettop(L) == 0);
 	lua_getglobal(L, "get_chain");  /* function to be called */
 	lua_pushnumber(L, num);
@@ -1252,7 +1252,7 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 	assert(lua_gettop(L) == 0);
 
 	chain.setup_chain = [this, funcref, input_state, effect_chain]{
-		unique_lock<mutex> lock(m);
+		lock_guard<mutex> lock(m);
 
 		assert(this->input_state == nullptr);
 		this->input_state = &input_state;
@@ -1297,7 +1297,7 @@ Theme::Chain Theme::get_chain(unsigned num, float t, unsigned width, unsigned he
 
 string Theme::get_channel_name(unsigned channel)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_getglobal(L, "channel_name");
 	lua_pushnumber(L, channel);
 	if (lua_pcall(L, 1, 1, 0) != 0) {
@@ -1318,7 +1318,7 @@ string Theme::get_channel_name(unsigned channel)
 
 int Theme::get_channel_signal(unsigned channel)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_getglobal(L, "channel_signal");
 	lua_pushnumber(L, channel);
 	if (lua_pcall(L, 1, 1, 0) != 0) {
@@ -1334,7 +1334,7 @@ int Theme::get_channel_signal(unsigned channel)
 
 std::string Theme::get_channel_color(unsigned channel)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_getglobal(L, "channel_color");
 	lua_pushnumber(L, channel);
 	if (lua_pcall(L, 1, 1, 0) != 0) {
@@ -1356,7 +1356,7 @@ std::string Theme::get_channel_color(unsigned channel)
 
 bool Theme::get_supports_set_wb(unsigned channel)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_getglobal(L, "supports_set_wb");
 	lua_pushnumber(L, channel);
 	if (lua_pcall(L, 1, 1, 0) != 0) {
@@ -1372,7 +1372,7 @@ bool Theme::get_supports_set_wb(unsigned channel)
 
 void Theme::set_wb(unsigned channel, double r, double g, double b)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_getglobal(L, "set_wb");
 	lua_pushnumber(L, channel);
 	lua_pushnumber(L, r);
@@ -1388,7 +1388,7 @@ void Theme::set_wb(unsigned channel, double r, double g, double b)
 
 vector<string> Theme::get_transition_names(float t)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_getglobal(L, "get_transitions");
 	lua_pushnumber(L, t);
 	if (lua_pcall(L, 1, 1, 0) != 0) {
@@ -1414,7 +1414,7 @@ int Theme::map_signal(int signal_num)
 		return -1 - signal_num;
 	}
 
-	unique_lock<mutex> lock(map_m);
+	lock_guard<mutex> lock(map_m);
 	if (signal_to_card_mapping.count(signal_num)) {
 		return signal_to_card_mapping[signal_num];
 	}
@@ -1444,14 +1444,14 @@ int Theme::map_signal(int signal_num)
 
 void Theme::set_signal_mapping(int signal_num, int card_num)
 {
-	unique_lock<mutex> lock(map_m);
+	lock_guard<mutex> lock(map_m);
 	assert(card_num < int(num_cards));
 	signal_to_card_mapping[signal_num] = card_num;
 }
 
 void Theme::transition_clicked(int transition_num, float t)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_getglobal(L, "transition_clicked");
 	lua_pushnumber(L, transition_num);
 	lua_pushnumber(L, t);
@@ -1465,7 +1465,7 @@ void Theme::transition_clicked(int transition_num, float t)
 
 void Theme::channel_clicked(int preview_num)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_getglobal(L, "channel_clicked");
 	lua_pushnumber(L, preview_num);
 
@@ -1507,7 +1507,7 @@ int Theme::set_theme_menu(lua_State *L)
 
 void Theme::theme_menu_entry_clicked(int lua_ref)
 {
-	unique_lock<mutex> lock(m);
+	lock_guard<mutex> lock(m);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, lua_ref);
 	if (lua_pcall(L, 0, 0, 0) != 0) {
 		fprintf(stderr, "error running menu callback: %s\n", lua_tostring(L, -1));

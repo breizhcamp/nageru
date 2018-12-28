@@ -1023,7 +1023,7 @@ void QuickSyncEncoderImpl::update_ReferenceFrames(int current_display_frame, int
     pic_param.CurrPic.frame_idx = current_ref_frame_num;
 
     CurrentCurrPic.flags = VA_PICTURE_H264_SHORT_TERM_REFERENCE;
-    unique_lock<mutex> lock(storage_task_queue_mutex);
+    lock_guard<mutex> lock(storage_task_queue_mutex);
 
     // Insert the new frame at the start of the reference queue.
     reference_frames.push_front(ReferenceFrame{ CurrentCurrPic, current_display_frame });
@@ -1434,7 +1434,7 @@ void QuickSyncEncoderImpl::save_codeddata(GLSurface *surf, storage_task task)
 // this is weird. but it seems to put a new frame onto the queue
 void QuickSyncEncoderImpl::storage_task_enqueue(storage_task task)
 {
-	unique_lock<mutex> lock(storage_task_queue_mutex);
+	lock_guard<mutex> lock(storage_task_queue_mutex);
 	storage_task_queue.push(move(task));
 	storage_task_queue_changed.notify_all();
 }
@@ -1468,7 +1468,7 @@ void QuickSyncEncoderImpl::storage_task_thread()
 
 		// Unlock the frame, and all its references.
 		{
-			unique_lock<mutex> lock(storage_task_queue_mutex);
+			lock_guard<mutex> lock(storage_task_queue_mutex);
 			release_gl_surface(display_order);
 
 			for (size_t frame_num : ref_display_frame_numbers) {
@@ -1706,7 +1706,7 @@ RefCountedGLsync QuickSyncEncoderImpl::end_frame()
 		GLenum type = global_flags.x264_bit_depth > 8 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
 		GLSurface *surf;
 		{
-			unique_lock<mutex> lock(storage_task_queue_mutex);
+			lock_guard<mutex> lock(storage_task_queue_mutex);
 			surf = surface_for_frame[current_storage_frame];
 			assert(surf != nullptr);
 		}
@@ -1745,7 +1745,7 @@ RefCountedGLsync QuickSyncEncoderImpl::end_frame()
 	check_error();
 
 	{
-		unique_lock<mutex> lock(frame_queue_mutex);
+		lock_guard<mutex> lock(frame_queue_mutex);
 		current_video_frame.fence = fence;
 		pending_video_frames.push(move(current_video_frame));
 		++current_storage_frame;
@@ -1761,13 +1761,13 @@ void QuickSyncEncoderImpl::shutdown()
 	}
 
 	{
-		unique_lock<mutex> lock(frame_queue_mutex);
+		lock_guard<mutex> lock(frame_queue_mutex);
 		encode_thread_should_quit = true;
 		frame_queue_nonempty.notify_all();
 	}
 	encode_thread.join();
 	{
-		unique_lock<mutex> lock(storage_task_queue_mutex);
+		lock_guard<mutex> lock(storage_task_queue_mutex);
 		storage_thread_should_quit = true;
 		frame_queue_nonempty.notify_all();
 		storage_task_queue_changed.notify_all();
@@ -1864,7 +1864,7 @@ void QuickSyncEncoderImpl::encode_thread_func()
 		pass_frame(frame, display_frame_num, frame.pts, frame.duration);
 
 		if (global_flags.x264_video_to_disk) {
-			unique_lock<mutex> lock(storage_task_queue_mutex);
+			lock_guard<mutex> lock(storage_task_queue_mutex);
 			release_gl_surface(display_frame_num);
 			continue;
 		}
@@ -1887,7 +1887,7 @@ void QuickSyncEncoderImpl::encode_thread_func()
 			if (frame_type == FRAME_IDR) {
 				// Release any reference frames from the previous GOP.
 				{
-					unique_lock<mutex> lock(storage_task_queue_mutex);
+					lock_guard<mutex> lock(storage_task_queue_mutex);
 					for (const ReferenceFrame &frame : reference_frames) {
 						release_gl_surface(frame.display_number);
 					}
@@ -1980,7 +1980,7 @@ void QuickSyncEncoderImpl::pass_frame(QuickSyncEncoderImpl::PendingFrame frame, 
 
 	GLSurface *surf;
 	{
-		unique_lock<mutex> lock(storage_task_queue_mutex);
+		lock_guard<mutex> lock(storage_task_queue_mutex);
 		surf = surface_for_frame[display_frame_num];
 		assert(surf != nullptr);
 	}
@@ -1999,7 +1999,7 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 
 	GLSurface *surf;
 	{
-		unique_lock<mutex> lock(storage_task_queue_mutex);
+		lock_guard<mutex> lock(storage_task_queue_mutex);
 		surf = surface_for_frame[display_frame_num];
 		assert(surf != nullptr);
 	}
@@ -2063,7 +2063,7 @@ void QuickSyncEncoderImpl::encode_frame(QuickSyncEncoderImpl::PendingFrame frame
 	// Lock the references for this frame; otherwise, they could be
 	// rendered to before this frame is done encoding.
 	{
-		unique_lock<mutex> lock(storage_task_queue_mutex);
+		lock_guard<mutex> lock(storage_task_queue_mutex);
 		for (const ReferenceFrame &frame : reference_frames) {
 			assert(surface_for_frame.count(frame.display_number));
 			++surface_for_frame[frame.display_number]->refcount;

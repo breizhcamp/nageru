@@ -29,7 +29,7 @@ void NageruCefApp::initialize_cef()
 
 void NageruCefApp::close_browser(CefRefPtr<CefBrowser> browser)
 {
-	unique_lock<mutex> lock(cef_mutex);
+	lock_guard<mutex> lock(cef_mutex);
 	browser->GetHost()->CloseBrowser(/*force_close=*/true);
 }
 

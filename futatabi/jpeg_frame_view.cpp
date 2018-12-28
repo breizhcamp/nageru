@@ -236,7 +236,7 @@ shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk frame_spec, CacheMissBehavi
 {
 	*did_decode = false;
 	{
-		unique_lock<mutex> lock(cache_mu);
+		lock_guard<mutex> lock(cache_mu);
 		auto it = cache.find(frame_spec);
 		if (it != cache.end()) {
 			++metric_jpeg_cache_hit_frames;
@@ -255,7 +255,7 @@ shared_ptr<Frame> decode_jpeg_with_cache(FrameOnDisk frame_spec, CacheMissBehavi
 	*did_decode = true;
 	shared_ptr<Frame> frame = decode_jpeg(frame_reader->read_frame(frame_spec));
 
-	unique_lock<mutex> lock(cache_mu);
+	lock_guard<mutex> lock(cache_mu);
 	cache_bytes_used += frame_size(*frame);
 	metric_jpeg_cache_used_bytes = cache_bytes_used;
 	cache[frame_spec] = LRUFrame{ frame, event_counter++ };
@@ -368,7 +368,7 @@ void JPEGFrameView::setFrame(unsigned stream_idx, FrameOnDisk frame, FrameOnDisk
 {
 	current_stream_idx = stream_idx;  // TODO: Does this interact with fades?
 
-	unique_lock<mutex> lock(cache_mu);
+	lock_guard<mutex> lock(cache_mu);
 	PendingDecode decode;
 	decode.primary = frame;
 	decode.secondary = secondary_frame;
@@ -380,7 +380,7 @@ void JPEGFrameView::setFrame(unsigned stream_idx, FrameOnDisk frame, FrameOnDisk
 
 void JPEGFrameView::setFrame(shared_ptr<Frame> frame)
 {
-	unique_lock<mutex> lock(cache_mu);
+	lock_guard<mutex> lock(cache_mu);
 	PendingDecode decode;
 	decode.frame = std::move(frame);
 	decode.destination = this;

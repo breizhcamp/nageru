@@ -208,51 +208,51 @@ public:
 
 	void set_gain_staging_db(unsigned bus_index, float gain_db)
 	{
-		std::unique_lock<std::mutex> lock(compressor_mutex);
+		std::lock_guard<std::mutex> lock(compressor_mutex);
 		level_compressor_enabled[bus_index] = false;
 		gain_staging_db[bus_index] = gain_db;
 	}
 
 	float get_gain_staging_db(unsigned bus_index) const
 	{
-		std::unique_lock<std::mutex> lock(compressor_mutex);
+		std::lock_guard<std::mutex> lock(compressor_mutex);
 		return gain_staging_db[bus_index];
 	}
 
 	void set_gain_staging_auto(unsigned bus_index, bool enabled)
 	{
-		std::unique_lock<std::mutex> lock(compressor_mutex);
+		std::lock_guard<std::mutex> lock(compressor_mutex);
 		level_compressor_enabled[bus_index] = enabled;
 	}
 
 	bool get_gain_staging_auto(unsigned bus_index) const
 	{
-		std::unique_lock<std::mutex> lock(compressor_mutex);
+		std::lock_guard<std::mutex> lock(compressor_mutex);
 		return level_compressor_enabled[bus_index];
 	}
 
 	void set_final_makeup_gain_db(float gain_db)
 	{
-		std::unique_lock<std::mutex> lock(compressor_mutex);
+		std::lock_guard<std::mutex> lock(compressor_mutex);
 		final_makeup_gain_auto = false;
 		final_makeup_gain = from_db(gain_db);
 	}
 
 	float get_final_makeup_gain_db()
 	{
-		std::unique_lock<std::mutex> lock(compressor_mutex);
+		std::lock_guard<std::mutex> lock(compressor_mutex);
 		return to_db(final_makeup_gain);
 	}
 
 	void set_final_makeup_gain_auto(bool enabled)
 	{
-		std::unique_lock<std::mutex> lock(compressor_mutex);
+		std::lock_guard<std::mutex> lock(compressor_mutex);
 		final_makeup_gain_auto = enabled;
 	}
 
 	bool get_final_makeup_gain_auto() const
 	{
-		std::unique_lock<std::mutex> lock(compressor_mutex);
+		std::lock_guard<std::mutex> lock(compressor_mutex);
 		return final_makeup_gain_auto;
 	}
 

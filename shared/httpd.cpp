@@ -61,7 +61,7 @@ void HTTPD::stop()
 
 void HTTPD::add_data(StreamType stream_type, const char *buf, size_t size, bool keyframe, int64_t time, AVRational timebase)
 {
-	unique_lock<mutex> lock(streams_mutex);
+	lock_guard<mutex> lock(streams_mutex);
 	for (Stream *stream : streams) {
 		if (stream->get_stream_type() == stream_type) {
 			stream->add_data(buf, size, keyframe ? Stream::DATA_TYPE_KEYFRAME : Stream::DATA_TYPE_OTHER, time, timebase);
@@ -133,7 +133,7 @@ int HTTPD::answer_to_connection(MHD_Connection *connection,
 	HTTPD::Stream *stream = new HTTPD::Stream(this, framing, stream_type);
 	stream->add_data(header[stream_type].data(), header[stream_type].size(), Stream::DATA_TYPE_HEADER, AV_NOPTS_VALUE, AVRational{ 1, 0 });
 	{
-		unique_lock<mutex> lock(streams_mutex);
+		lock_guard<mutex> lock(streams_mutex);
 		streams.insert(stream);
 	}
 	++metric_num_connected_clients;
@@ -164,7 +164,7 @@ void HTTPD::free_stream(void *cls)
 		--httpd->metric_num_connected_multicam_clients;
 	}
 	{
-		unique_lock<mutex> lock(httpd->streams_mutex);
+		lock_guard<mutex> lock(httpd->streams_mutex);
 		delete stream;
 		httpd->streams.erase(stream);
 	}
@@ -223,7 +223,7 @@ void HTTPD::Stream::add_data(const char *buf, size_t buf_size, HTTPD::Stream::Da
 		return;
 	}
 
-	unique_lock<mutex> lock(buffer_mutex);
+	lock_guard<mutex> lock(buffer_mutex);
 
 	if (framing == FRAMING_METACUBE) {
 		int flags = 0;
@@ -284,7 +284,7 @@ void HTTPD::Stream::add_data(const char *buf, size_t buf_size, HTTPD::Stream::Da
 
 void HTTPD::Stream::stop()
 {
-	unique_lock<mutex> lock(buffer_mutex);
+	lock_guard<mutex> lock(buffer_mutex);
 	should_quit = true;
 	has_buffered_data.notify_all();
 }
