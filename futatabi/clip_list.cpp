@@ -433,25 +433,6 @@ void ClipList::change_num_cameras(size_t num_cameras)
 	emit any_content_changed();
 }
 
-void PlayList::set_currently_playing(int index, double progress)
-{
-	int old_index = currently_playing_index;
-	int column = int(Column::PLAYING);
-	if (index != old_index) {
-		currently_playing_index = index;
-		play_progress = progress;
-		if (old_index != -1) {
-			emit dataChanged(this->index(old_index, column), this->index(old_index, column));
-		}
-		if (index != -1) {
-			emit dataChanged(this->index(index, column), this->index(index, column));
-		}
-	} else if (index != -1 && fabs(progress - play_progress) > 1e-3) {
-		play_progress = progress;
-		emit dataChanged(this->index(index, column), this->index(index, column));
-	}
-}
-
 void PlayList::set_progress(const map<size_t, double> &progress)
 {
 	const int column = int(Column::PLAYING);

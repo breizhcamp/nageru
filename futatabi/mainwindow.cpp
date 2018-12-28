@@ -186,7 +186,7 @@ MainWindow::MainWindow()
 	live_player.reset(new Player(ui->live_display, Player::HTTPD_STREAM_OUTPUT));
 	live_player->set_done_callback([this] {
 		post_to_main_thread([this] {
-			live_player_clip_done();
+			live_player_done();
 		});
 	});
 	live_player->set_progress_callback([this](const map<size_t, double> &progress, double time_remaining) {
@@ -493,7 +493,6 @@ void MainWindow::play_clicked()
 	}
 	live_player->play(clips);
 	playlist_clips->set_progress({ { start_row, 0.0f } });
-	playlist_clips->set_currently_playing(start_row, 0.0f);
 	playlist_selection_changed();
 
 	ui->stop_btn->setEnabled(true);
@@ -504,23 +503,14 @@ void MainWindow::stop_clicked()
 	Clip fake_clip;
 	fake_clip.pts_in = 0;
 	fake_clip.pts_out = 0;
-	size_t last_row = playlist_clips->size() - 1;
-	playlist_clips->set_currently_playing(last_row, 0.0f);
 	live_player->play(fake_clip);
 }
 
-void MainWindow::live_player_clip_done()
+void MainWindow::live_player_done()
 {
-	int row = playlist_clips->get_currently_playing();
-	if (row == -1 || row == int(playlist_clips->size()) - 1) {
-		set_output_status("paused");
-		playlist_clips->set_progress({});
-		playlist_clips->set_currently_playing(-1, 0.0f);
-		ui->stop_btn->setEnabled(false);
-	} else {
-		playlist_clips->set_progress({ { row + 1, 0.0f } });
-		playlist_clips->set_currently_playing(row + 1, 0.0f);
-	}
+	set_output_status("paused");
+	playlist_clips->set_progress({});
+	ui->stop_btn->setEnabled(false);
 }
 
 static string format_duration(double t)

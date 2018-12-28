@@ -137,10 +137,6 @@ public:
 	ClipProxy mutable_back() { return mutable_clip(size() - 1); }
 	const Clip *back() const { return clip(size() - 1); }
 
-	// TODO: Move these out of PlayList.
-	void set_currently_playing(int index, double progress);  // -1 = none.
-	int get_currently_playing() const { return currently_playing_index; }
-
 	void set_progress(const std::map<size_t, double> &progress);
 
 	ClipListProto serialize() const;
@@ -157,7 +153,6 @@ signals:
 
 private:
 	std::vector<Clip> clips;
-	int currently_playing_index = -1;
 	double play_progress = 0.0;
 	std::map<size_t, double> current_progress;
 	size_t num_cameras = 2;

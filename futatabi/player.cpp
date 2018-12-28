@@ -50,6 +50,9 @@ void Player::thread_func(AVFormatContext *file_avctx)
 
 	while (!should_quit) {
 		play_playlist_once();
+		if (done_callback != nullptr) {
+			done_callback();
+		}
 	}
 }
 
@@ -322,19 +325,12 @@ void Player::play_playlist_once()
 		if (should_quit) {
 			return;
 		}
-		if (done_callback != nullptr) {
-			done_callback();
-		}
 
 		// Start the next clip from the point where the fade went out.
 		if (next_clip != nullptr) {
 			origin = next_frame_start;
 			in_pts_origin = next_clip->pts_in + lrint(next_clip_fade_time * TIMEBASE * clip.speed);
 		}
-	}
-
-	if (done_callback != nullptr) {
-		done_callback();
 	}
 }
 

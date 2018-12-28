@@ -232,13 +232,10 @@ void export_interpolated_clip(const string &filename, const vector<Clip> &clips)
 	promise<void> done_promise;
 	future<void> done = done_promise.get_future();
 	std::atomic<double> current_value{ 0.0 };
-	size_t clip_idx = 0;
 
 	Player player(/*destination=*/nullptr, Player::FILE_STREAM_OUTPUT, closer.release());
-	player.set_done_callback([&done_promise, &clip_idx, &clips] {
-		if (clip_idx >= clips.size()) {
-			done_promise.set_value();
-		}
+	player.set_done_callback([&done_promise] {
+		done_promise.set_value();
 	});
 	player.set_progress_callback([&current_value, &clips, total_length](const std::map<size_t, double> &player_progress, double time_remaining) {
 		current_value = 1.0 - time_remaining / total_length;
