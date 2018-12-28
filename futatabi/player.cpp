@@ -335,7 +335,7 @@ void Player::play_playlist_once()
 
 void Player::display_single_frame(int primary_stream_idx, const FrameOnDisk &primary_frame, int secondary_stream_idx, const FrameOnDisk &secondary_frame, double fade_alpha, steady_clock::time_point frame_start, bool snapped)
 {
-		auto display_func = [this, primary_stream_idx, primary_frame, secondary_frame, fade_alpha]{
+	auto display_func = [this, primary_stream_idx, primary_frame, secondary_frame, fade_alpha]{
 		if (destination != nullptr) {
 			destination->setFrame(primary_stream_idx, primary_frame, secondary_frame, fade_alpha);
 		}
