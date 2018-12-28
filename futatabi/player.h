@@ -20,8 +20,6 @@ class VideoStream;
 class QSurface;
 class QSurfaceFormat;
 
-double compute_time_left(const std::vector<Clip> &clips, const std::map<size_t, double> &progress);
-
 class Player : public QueueInterface {
 public:
 	enum StreamOutput {
@@ -34,7 +32,7 @@ public:
 
 	struct ClipWithRow {
 		Clip clip;
-		unsigned row;  // Used for progress callback only.
+		size_t row;  // Used for progress callback only.
 	};
 	void play(const Clip &clip)
 	{
@@ -51,7 +49,7 @@ public:
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
 	// The keys in the given map are row members in the vector given to play().
-	using progress_callback_func = std::function<void(const std::map<size_t, double> &progress)>;
+	using progress_callback_func = std::function<void(const std::map<size_t, double> &progress, double time_remaining)>;
 	void set_progress_callback(progress_callback_func cb) { progress_callback = cb; }
 
 	// QueueInterface.
@@ -106,5 +104,12 @@ private:
 	int64_t pts = 0;
 	const StreamOutput stream_output;
 };
+
+double compute_time_left(const std::vector<Player::ClipWithRow> &clips, size_t currently_playing_idx, double progress_currently_playing);
+
+static inline double compute_total_time(const std::vector<Player::ClipWithRow> &clips)
+{
+	return compute_time_left(clips, 0, 0.0);
+}
 
 #endif  // !defined(_PLAYER_H)

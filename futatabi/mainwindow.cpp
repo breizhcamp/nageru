@@ -189,9 +189,9 @@ MainWindow::MainWindow()
 			live_player_clip_done();
 		});
 	});
-	live_player->set_progress_callback([this](const map<size_t, double> &progress) {
-		post_to_main_thread([this, progress] {
-			live_player_clip_progress(progress);
+	live_player->set_progress_callback([this](const map<size_t, double> &progress, double time_remaining) {
+		post_to_main_thread([this, progress, time_remaining] {
+			live_player_clip_progress(progress, time_remaining);
 		});
 	});
 	set_output_status("paused");
@@ -558,16 +558,10 @@ static string format_duration(double t)
 	return buf;
 }
 
-void MainWindow::live_player_clip_progress(const map<size_t, double> &progress)
+void MainWindow::live_player_clip_progress(const map<size_t, double> &progress, double time_remaining)
 {
 	playlist_clips->set_progress(progress);
-
-	vector<Clip> clips;
-	for (size_t row = 0; row < playlist_clips->size(); ++row) {
-		clips.push_back(*playlist_clips->clip(row));
-	}
-	double remaining = compute_time_left(clips, progress);
-	set_output_status(format_duration(remaining) + " left");
+	set_output_status(format_duration(time_remaining) + " left");
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
@@ -849,11 +843,11 @@ void MainWindow::playlist_selection_changed()
 	if (!any_selected) {
 		set_output_status("paused");
 	} else {
-		vector<Clip> clips;
-		for (size_t row = 0; row < playlist_clips->size(); ++row) {
-			clips.push_back(*playlist_clips->clip(row));
+		vector<Player::ClipWithRow> clips;
+		for (size_t row = selected->selectedRows().front().row(); row < playlist_clips->size(); ++row) {
+			clips.emplace_back(Player::ClipWithRow{ *playlist_clips->clip(row), row });
 		}
-		double remaining = compute_time_left(clips, { { selected->selectedRows().front().row(), 0.0 } });
+		double remaining = compute_total_time(clips);
 		set_output_status(format_duration(remaining) + " ready");
 	}
 }

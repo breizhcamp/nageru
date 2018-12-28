@@ -179,11 +179,17 @@ void Player::play_playlist_once()
 
 			if (progress_callback != nullptr) {
 				// NOTE: None of this will take into account any snapping done below.
-				map<size_t, double> progress{ { clip_list[clip_idx].row, calc_progress(clip, in_pts_for_progress) } };
+				double clip_progress = calc_progress(clip, in_pts_for_progress);
+				map<size_t, double> progress{ { clip_list[clip_idx].row, clip_progress } };
+				double time_remaining;
 				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
-					progress[clip_list[clip_idx + 1].row] = calc_progress(*next_clip, in_pts_secondary_for_progress);
+					double next_clip_progress = calc_progress(*next_clip, in_pts_secondary_for_progress);
+					progress[clip_list[clip_idx + 1].row] = next_clip_progress;
+					time_remaining = compute_time_left(clip_list, clip_idx + 1, next_clip_progress);
+				} else {
+					time_remaining = compute_time_left(clip_list, clip_idx, clip_progress);
 				}
-				progress_callback(progress);
+				progress_callback(progress, time_remaining);
 			}
 
 			FrameOnDisk frame_lower, frame_upper;
@@ -480,20 +486,17 @@ void Player::release_queue_spot()
 	new_clip_changed.notify_all();
 }
 
-double compute_time_left(const vector<Clip> &clips, const map<size_t, double> &progress)
+double compute_time_left(const vector<Player::ClipWithRow> &clips, size_t currently_playing_idx, double progress_currently_playing) 
 {
 	// Look at the last clip and then start counting from there.
-	assert(!progress.empty());
-	auto last_it = progress.end();
-	--last_it;
 	double remaining = 0.0;
 	double last_fade_time_seconds = 0.0;
-	for (size_t row = last_it->first; row < clips.size(); ++row) {
-		const Clip &clip = clips[row];
+	for (size_t row = currently_playing_idx; row < clips.size(); ++row) {
+		const Clip &clip = clips[row].clip;
 		double clip_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / clip.speed;
-		if (row == last_it->first) {
+		if (row == currently_playing_idx) {
 			// A clip we're playing: Subtract the part we've already played.
-			remaining = clip_length * (1.0 - last_it->second);
+			remaining = clip_length * (1.0 - progress_currently_playing);
 		} else {
 			// A clip we haven't played yet: Subtract the part that's overlapping
 			// with a previous clip (due to fade).
