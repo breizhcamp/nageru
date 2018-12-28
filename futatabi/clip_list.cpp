@@ -379,8 +379,13 @@ void PlayList::add_clip(const Clip &clip)
 
 void PlayList::duplicate_clips(size_t first, size_t last)
 {
-	beginInsertRows(QModelIndex(), first, last);
-	clips.insert(clips.begin() + first, clips.begin() + first, clips.begin() + last + 1);
+	beginInsertRows(QModelIndex(), last + 1, last + 1 + (last - first));
+
+	vector<ClipWithID> new_clips;
+	for (auto it = clips.begin() + first; it <= clips.begin() + last; ++it) {
+		new_clips.emplace_back(ClipWithID{ it->clip, clip_counter++ });  // Give them new IDs.
+	}
+	clips.insert(clips.begin() + last + 1, new_clips.begin(), new_clips.end());  // Note: The new elements are inserted after the old ones.
 	endInsertRows();
 	emit any_content_changed();
 }
