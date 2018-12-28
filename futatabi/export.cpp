@@ -224,6 +224,10 @@ void export_interpolated_clip(const string &filename, const vector<Clip> &clips)
 	progress.setValue(0);
 
 	double total_length = compute_time_left(clips, { { 0, 0.0 } });
+	vector<Player::ClipWithRow> clips_with_row;
+	for (const Clip &clip : clips) {
+		clips_with_row.emplace_back(Player::ClipWithRow{ clip, 0 });
+	}
 
 	promise<void> done_promise;
 	future<void> done = done_promise.get_future();
@@ -239,7 +243,7 @@ void export_interpolated_clip(const string &filename, const vector<Clip> &clips)
 	player.set_progress_callback([&current_value, &clips, total_length](const std::map<size_t, double> &player_progress) {
 		current_value = 1.0 - compute_time_left(clips, player_progress) / total_length;
 	});
-	player.play(clips);
+	player.play(clips_with_row);
 	while (done.wait_for(std::chrono::milliseconds(100)) != future_status::ready && !progress.wasCanceled()) {
 		progress.setValue(lrint(100000.0 * current_value));
 	}

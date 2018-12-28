@@ -32,7 +32,15 @@ public:
 	Player(JPEGFrameView *destination, StreamOutput stream_output, AVFormatContext *file_avctx = nullptr);
 	~Player();
 
-	void play(const std::vector<Clip> &clips);
+	struct ClipWithRow {
+		Clip clip;
+		unsigned row;  // Used for progress callback only.
+	};
+	void play(const Clip &clip)
+	{
+		play({ ClipWithRow{ clip, 0 } });
+	}
+	void play(const std::vector<ClipWithRow> &clips);
 	void override_angle(unsigned stream_idx);  // Assumes one-clip playlist only.
 
 	// Not thread-safe to set concurrently with playing.
@@ -42,7 +50,7 @@ public:
 
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
-	// The keys in the given map are indexes in the vector given to play().
+	// The keys in the given map are row members in the vector given to play().
 	using progress_callback_func = std::function<void(const std::map<size_t, double> &progress)>;
 	void set_progress_callback(progress_callback_func cb) { progress_callback = cb; }
 
@@ -71,7 +79,7 @@ private:
 
 	std::mutex queue_state_mu;
 	std::condition_variable new_clip_changed;
-	std::vector<Clip> queued_clip_list;  // Under queue_state_mu.
+	std::vector<ClipWithRow> queued_clip_list;  // Under queue_state_mu.
 	bool new_clip_ready = false;  // Under queue_state_mu.
 	bool playing = false;  // Under queue_state_mu.
 	int override_stream_idx = -1;  // Under queue_state_mu.

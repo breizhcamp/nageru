@@ -64,7 +64,7 @@ double calc_progress(const Clip &clip, int64_t pts)
 
 void Player::play_playlist_once()
 {
-	vector<Clip> clip_list;
+	vector<ClipWithRow> clip_list;
 	bool clip_ready;
 	steady_clock::time_point before_sleep = steady_clock::now();
 
@@ -99,10 +99,10 @@ void Player::play_playlist_once()
 	}
 
 	steady_clock::time_point origin = steady_clock::now();  // TODO: Add a 100 ms buffer for ramp-up?
-	int64_t in_pts_origin = clip_list[0].pts_in;
+	int64_t in_pts_origin = clip_list[0].clip.pts_in;
 	for (size_t clip_idx = 0; clip_idx < clip_list.size(); ++clip_idx) {
-		const Clip &clip = clip_list[clip_idx];
-		const Clip *next_clip = (clip_idx + 1 < clip_list.size()) ? &clip_list[clip_idx + 1] : nullptr;
+		const Clip &clip = clip_list[clip_idx].clip;
+		const Clip *next_clip = (clip_idx + 1 < clip_list.size()) ? &clip_list[clip_idx + 1].clip : nullptr;
 		int64_t out_pts_origin = pts;
 
 		double next_clip_fade_time = -1.0;
@@ -179,9 +179,9 @@ void Player::play_playlist_once()
 
 			if (progress_callback != nullptr) {
 				// NOTE: None of this will take into account any snapping done below.
-				map<size_t, double> progress{ { clip_idx, calc_progress(clip, in_pts_for_progress) } };
+				map<size_t, double> progress{ { clip_list[clip_idx].row, calc_progress(clip, in_pts_for_progress) } };
 				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
-					progress[clip_idx + 1] = calc_progress(*next_clip, in_pts_secondary_for_progress);
+					progress[clip_list[clip_idx + 1].row] = calc_progress(*next_clip, in_pts_secondary_for_progress);
 				}
 				progress_callback(progress);
 			}
@@ -419,7 +419,7 @@ Player::~Player()
 	player_thread.join();
 }
 
-void Player::play(const vector<Clip> &clips)
+void Player::play(const vector<Player::ClipWithRow> &clips)
 {
 	lock_guard<mutex> lock(queue_state_mu);
 	new_clip_ready = true;
@@ -437,7 +437,7 @@ void Player::override_angle(unsigned stream_idx)
 		lock_guard<mutex> lock(queue_state_mu);
 		if (new_clip_ready) {
 			assert(queued_clip_list.size() == 1);
-			queued_clip_list[0].stream_idx = stream_idx;
+			queued_clip_list[0].clip.stream_idx = stream_idx;
 			return;
 		}
 

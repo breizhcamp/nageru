@@ -43,7 +43,6 @@ private:
 
 	QLabel *disk_free_label;
 	std::unique_ptr<Player> preview_player, live_player;
-	std::map<size_t, size_t> live_player_index_to_row;
 	DB db;
 	unsigned num_cameras;
 
