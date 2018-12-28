@@ -234,28 +234,8 @@ void Player::play_playlist_once()
 			}
 
 			if (frame_lower.pts == frame_upper.pts || global_flags.interpolation_quality == 0) {
-				auto display_func = [this, primary_stream_idx, frame_lower, secondary_frame, fade_alpha]{
-					if (destination != nullptr) {
-						destination->setFrame(primary_stream_idx, frame_lower, secondary_frame, fade_alpha);
-					}
-				};
-				if (video_stream == nullptr) {
-					display_func();
-				} else {
-					if (secondary_stream_idx == -1) {
-						++metric_original_frame;
-						video_stream->schedule_original_frame(
-							next_frame_start, pts, display_func, QueueSpotHolder(this),
-							frame_lower);
-					} else {
-						assert(secondary_frame.pts != -1);
-						++metric_faded_frame;
-						video_stream->schedule_faded_frame(next_frame_start, pts, display_func,
-							QueueSpotHolder(this), frame_lower,
-							secondary_frame, fade_alpha);
-					}
-				}
-				last_pts_played = frame_lower.pts;
+				display_single_frame(primary_stream_idx, frame_lower, secondary_stream_idx,
+				                     secondary_frame, fade_alpha, next_frame_start, /*snapped=*/false);
 				continue;
 			}
 
@@ -266,30 +246,10 @@ void Player::play_playlist_once()
 			bool snapped = false;
 			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
 				if (fabs(snap_frame.pts - in_pts) < pts_snap_tolerance) {
-					auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
-						if (destination != nullptr) {
-							destination->setFrame(primary_stream_idx, snap_frame, secondary_frame, fade_alpha);
-						}
-					};
-					if (video_stream == nullptr) {
-						display_func();
-					} else {
-						if (secondary_stream_idx == -1) {
-							++metric_original_snapped_frame;
-							video_stream->schedule_original_frame(
-								next_frame_start, pts, display_func,
-								QueueSpotHolder(this), snap_frame);
-						} else {
-							assert(secondary_frame.pts != -1);
-							++metric_faded_snapped_frame;
-							video_stream->schedule_faded_frame(
-								next_frame_start, pts, display_func, QueueSpotHolder(this),
-								snap_frame, secondary_frame, fade_alpha);
-						}
-					}
+					display_single_frame(primary_stream_idx, snap_frame, secondary_stream_idx,
+							     secondary_frame, fade_alpha, next_frame_start, /*snapped=*/true);
 					in_pts_origin += snap_frame.pts - in_pts;
 					snapped = true;
-					last_pts_played = snap_frame.pts;
 					break;
 				}
 			}
@@ -375,6 +335,40 @@ void Player::play_playlist_once()
 	if (done_callback != nullptr) {
 		done_callback();
 	}
+}
+
+void Player::display_single_frame(int primary_stream_idx, const FrameOnDisk &primary_frame, int secondary_stream_idx, const FrameOnDisk &secondary_frame, double fade_alpha, steady_clock::time_point frame_start, bool snapped)
+{
+		auto display_func = [this, primary_stream_idx, primary_frame, secondary_frame, fade_alpha]{
+		if (destination != nullptr) {
+			destination->setFrame(primary_stream_idx, primary_frame, secondary_frame, fade_alpha);
+		}
+	};
+	if (video_stream == nullptr) {
+		display_func();
+	} else {
+		if (secondary_stream_idx == -1) {
+			if (snapped) {
+				++metric_original_snapped_frame;
+			} else {
+				++metric_original_frame;
+			}
+			video_stream->schedule_original_frame(
+				frame_start, pts, display_func, QueueSpotHolder(this),
+				primary_frame);
+		} else {
+			assert(secondary_frame.pts != -1);
+			if (snapped) {
+				++metric_faded_snapped_frame;
+			} else {
+				++metric_faded_frame;
+			}
+			video_stream->schedule_faded_frame(frame_start, pts, display_func,
+				QueueSpotHolder(this), primary_frame,
+				secondary_frame, fade_alpha);
+		}
+	}
+	last_pts_played = primary_frame.pts;
 }
 
 // Find the frame immediately before and after this point.

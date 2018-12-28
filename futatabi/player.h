@@ -53,6 +53,7 @@ public:
 private:
 	void thread_func(AVFormatContext *file_avctx);
 	void play_playlist_once();
+	void display_single_frame(int primary_stream_idx, const FrameOnDisk &primary_frame, int secondary_stream_idx, const FrameOnDisk &secondary_frame, double fade_alpha, std::chrono::steady_clock::time_point frame_start, bool snapped);
 	void open_output_stream();
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
