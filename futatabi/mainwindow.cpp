@@ -493,6 +493,7 @@ void MainWindow::play_clicked()
 	}
 	live_player->play(clips);
 	playlist_clips->set_progress({ { start_row, 0.0f } });
+	ui->playlist->selectionModel()->clear();
 	playlist_selection_changed();
 
 	ui->stop_btn->setEnabled(true);
@@ -509,7 +510,7 @@ void MainWindow::stop_clicked()
 
 void MainWindow::live_player_done()
 {
-	set_output_status("paused");
+	playlist_selection_changed();
 	playlist_clips->set_progress({});
 	ui->stop_btn->setEnabled(false);
 }
