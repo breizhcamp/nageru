@@ -103,7 +103,7 @@ private:
 	void play_clicked();
 	void stop_clicked();
 	void live_player_done();
-	void live_player_clip_progress(const std::map<size_t, double> &progress, double time_remaining);
+	void live_player_clip_progress(const std::map<uint64_t, double> &progress, double time_remaining);
 	void set_output_status(const std::string &status);
 	void playlist_duplicate();
 	void playlist_remove();

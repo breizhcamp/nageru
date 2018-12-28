@@ -189,7 +189,7 @@ MainWindow::MainWindow()
 			live_player_done();
 		});
 	});
-	live_player->set_progress_callback([this](const map<size_t, double> &progress, double time_remaining) {
+	live_player->set_progress_callback([this](const map<uint64_t, double> &progress, double time_remaining) {
 		post_to_main_thread([this, progress, time_remaining] {
 			live_player_clip_progress(progress, time_remaining);
 		});
@@ -487,9 +487,9 @@ void MainWindow::play_clicked()
 		start_row = selected->selectedRows(0)[0].row();
 	}
 
-	vector<Player::ClipWithRow> clips;
+	vector<ClipWithID> clips;
 	for (unsigned row = start_row; row < playlist_clips->size(); ++row) {
-		clips.emplace_back(Player::ClipWithRow{ *playlist_clips->clip(row), row });
+		clips.emplace_back(*playlist_clips->clip_with_id(row));
 	}
 	live_player->play(clips);
 	playlist_clips->set_progress({ { start_row, 0.0f } });
@@ -503,6 +503,7 @@ void MainWindow::stop_clicked()
 	Clip fake_clip;
 	fake_clip.pts_in = 0;
 	fake_clip.pts_out = 0;
+	playlist_clips->set_progress({});
 	live_player->play(fake_clip);
 }
 
@@ -528,7 +529,7 @@ static string format_duration(double t)
 	return buf;
 }
 
-void MainWindow::live_player_clip_progress(const map<size_t, double> &progress, double time_remaining)
+void MainWindow::live_player_clip_progress(const map<uint64_t, double> &progress, double time_remaining)
 {
 	playlist_clips->set_progress(progress);
 	set_output_status(format_duration(time_remaining) + " left");
@@ -813,9 +814,9 @@ void MainWindow::playlist_selection_changed()
 	if (!any_selected) {
 		set_output_status("paused");
 	} else {
-		vector<Player::ClipWithRow> clips;
+		vector<ClipWithID> clips;
 		for (size_t row = selected->selectedRows().front().row(); row < playlist_clips->size(); ++row) {
-			clips.emplace_back(Player::ClipWithRow{ *playlist_clips->clip(row), row });
+			clips.emplace_back(*playlist_clips->clip_with_id(row));
 		}
 		double remaining = compute_total_time(clips);
 		set_output_status(format_duration(remaining) + " ready");

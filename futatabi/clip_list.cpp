@@ -141,7 +141,7 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const
 	}
 	if (role == Qt::BackgroundRole) {
 		if (Column(column) == Column::PLAYING) {
-			auto it = current_progress.find(row);
+			auto it = current_progress.find(clips[row].id);
 			if (it != current_progress.end()) {
 				double play_progress = it->second;
 
@@ -167,37 +167,37 @@ QVariant PlayList::data(const QModelIndex &parent, int role) const
 
 	switch (Column(column)) {
 	case Column::PLAYING:
-		return current_progress.count(row) ? "→" : "";
+		return current_progress.count(clips[row].id) ? "→" : "";
 	case Column::IN:
-		return QString::fromStdString(pts_to_string(clips[row].pts_in));
+		return QString::fromStdString(pts_to_string(clips[row].clip.pts_in));
 	case Column::OUT:
-		if (clips[row].pts_out >= 0) {
-			return QString::fromStdString(pts_to_string(clips[row].pts_out));
+		if (clips[row].clip.pts_out >= 0) {
+			return QString::fromStdString(pts_to_string(clips[row].clip.pts_out));
 		} else {
 			return QVariant();
 		}
 	case Column::DURATION:
-		if (clips[row].pts_out >= 0) {
-			return QString::fromStdString(duration_to_string(clips[row].pts_out - clips[row].pts_in));
+		if (clips[row].clip.pts_out >= 0) {
+			return QString::fromStdString(duration_to_string(clips[row].clip.pts_out - clips[row].clip.pts_in));
 		} else {
 			return QVariant();
 		}
 	case Column::CAMERA:
-		return qlonglong(clips[row].stream_idx + 1);
+		return qlonglong(clips[row].clip.stream_idx + 1);
 	case Column::DESCRIPTION:
-		return QString::fromStdString(clips[row].descriptions[clips[row].stream_idx]);
+		return QString::fromStdString(clips[row].clip.descriptions[clips[row].clip.stream_idx]);
 	case Column::FADE_TIME: {
 		stringstream ss;
 		ss.imbue(locale("C"));
 		ss.precision(3);
-		ss << fixed << clips[row].fade_time_seconds;
+		ss << fixed << clips[row].clip.fade_time_seconds;
 		return QString::fromStdString(ss.str());
 	}
 	case Column::SPEED: {
 		stringstream ss;
 		ss.imbue(locale("C"));
 		ss.precision(3);
-		ss << fixed << clips[row].speed;
+		ss << fixed << clips[row].clip.speed;
 		return QString::fromStdString(ss.str());
 	}
 	default:
@@ -323,7 +323,7 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 
 	switch (Column(column)) {
 	case Column::DESCRIPTION:
-		clips[row].descriptions[clips[row].stream_idx] = value.toString().toStdString();
+		clips[row].clip.descriptions[clips[row].clip.stream_idx] = value.toString().toStdString();
 		emit_data_changed(row);
 		return true;
 	case Column::CAMERA: {
@@ -332,7 +332,7 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 		if (!ok || camera_idx < 1 || camera_idx > int(num_cameras)) {
 			return false;
 		}
-		clips[row].stream_idx = camera_idx - 1;
+		clips[row].clip.stream_idx = camera_idx - 1;
 		emit_data_changed(row);
 		return true;
 	}
@@ -342,7 +342,7 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 		if (!ok || !(val >= 0.0)) {
 			return false;
 		}
-		clips[row].fade_time_seconds = val;
+		clips[row].clip.fade_time_seconds = val;
 		emit_data_changed(row);
 		return true;
 	}
@@ -352,7 +352,7 @@ bool PlayList::setData(const QModelIndex &index, const QVariant &value, int role
 		if (!ok || !(val >= 0.001)) {
 			return false;
 		}
-		clips[row].speed = val;
+		clips[row].clip.speed = val;
 		emit_data_changed(row);
 		return true;
 	}
@@ -372,7 +372,7 @@ void ClipList::add_clip(const Clip &clip)
 void PlayList::add_clip(const Clip &clip)
 {
 	beginInsertRows(QModelIndex(), clips.size(), clips.size());
-	clips.push_back(clip);
+	clips.emplace_back(ClipWithID{ clip, clip_counter++ });
 	endInsertRows();
 	emit any_content_changed();
 }
@@ -433,21 +433,17 @@ void ClipList::change_num_cameras(size_t num_cameras)
 	emit any_content_changed();
 }
 
-void PlayList::set_progress(const map<size_t, double> &progress)
+void PlayList::set_progress(const map<uint64_t, double> &progress)
 {
 	const int column = int(Column::PLAYING);
-	map<size_t, double> old_progress = move(this->current_progress);
+	map<uint64_t, double> old_progress = move(this->current_progress);
 	this->current_progress = progress;
 
-	for (auto it : old_progress) {
-		size_t index = it.first;
-		if (current_progress.count(index) == 0) {
-			emit dataChanged(this->index(index, column), this->index(index, column));
+	for (size_t row = 0; row < clips.size(); ++row) {
+		uint64_t id = clips[row].id;
+		if (current_progress.count(id) || old_progress.count(id)) {
+			emit dataChanged(this->index(row, column), this->index(row, column));
 		}
-	}
-	for (auto it : current_progress) {
-		size_t index = it.first;
-		emit dataChanged(this->index(index, column), this->index(index, column));
 	}
 }
 
@@ -504,15 +500,15 @@ ClipListProto ClipList::serialize() const
 PlayList::PlayList(const ClipListProto &serialized)
 {
 	for (const ClipProto &clip_proto : serialized.clip()) {
-		clips.push_back(deserialize_clip(clip_proto));
+		clips.emplace_back(ClipWithID{ deserialize_clip(clip_proto), clip_counter++ });
 	}
 }
 
 ClipListProto PlayList::serialize() const
 {
 	ClipListProto ret;
-	for (const Clip &clip : clips) {
-		serialize_clip(clip, ret.add_clip());
+	for (const ClipWithID &clip : clips) {
+		serialize_clip(clip.clip, ret.add_clip());
 	}
 	return ret;
 }

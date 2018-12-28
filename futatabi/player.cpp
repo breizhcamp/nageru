@@ -67,7 +67,7 @@ double calc_progress(const Clip &clip, int64_t pts)
 
 void Player::play_playlist_once()
 {
-	vector<ClipWithRow> clip_list;
+	vector<ClipWithID> clip_list;
 	bool clip_ready;
 	steady_clock::time_point before_sleep = steady_clock::now();
 
@@ -183,11 +183,11 @@ void Player::play_playlist_once()
 			if (progress_callback != nullptr) {
 				// NOTE: None of this will take into account any snapping done below.
 				double clip_progress = calc_progress(clip, in_pts_for_progress);
-				map<size_t, double> progress{ { clip_list[clip_idx].row, clip_progress } };
+				map<uint64_t, double> progress{ { clip_list[clip_idx].id, clip_progress } };
 				double time_remaining;
 				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
 					double next_clip_progress = calc_progress(*next_clip, in_pts_secondary_for_progress);
-					progress[clip_list[clip_idx + 1].row] = next_clip_progress;
+					progress[clip_list[clip_idx + 1].id] = next_clip_progress;
 					time_remaining = compute_time_left(clip_list, clip_idx + 1, next_clip_progress);
 				} else {
 					time_remaining = compute_time_left(clip_list, clip_idx, clip_progress);
@@ -421,7 +421,7 @@ Player::~Player()
 	player_thread.join();
 }
 
-void Player::play(const vector<Player::ClipWithRow> &clips)
+void Player::play(const vector<ClipWithID> &clips)
 {
 	lock_guard<mutex> lock(queue_state_mu);
 	new_clip_ready = true;
@@ -482,7 +482,7 @@ void Player::release_queue_spot()
 	new_clip_changed.notify_all();
 }
 
-double compute_time_left(const vector<Player::ClipWithRow> &clips, size_t currently_playing_idx, double progress_currently_playing) 
+double compute_time_left(const vector<ClipWithID> &clips, size_t currently_playing_idx, double progress_currently_playing) 
 {
 	// Look at the last clip and then start counting from there.
 	double remaining = 0.0;

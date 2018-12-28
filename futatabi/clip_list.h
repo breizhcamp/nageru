@@ -19,6 +19,10 @@ struct Clip {
 	double fade_time_seconds = 0.5;
 	double speed = 0.5;
 };
+struct ClipWithID {
+	Clip clip;
+	uint64_t id;  // Used for progress callback only. Immutable.
+};
 
 class DataChangedReceiver {
 public:
@@ -131,13 +135,14 @@ public:
 	size_t size() const { return clips.size(); }
 	bool empty() const { return clips.empty(); }
 
-	ClipProxy mutable_clip(size_t index) { return ClipProxy(clips[index], this, index); }
-	const Clip *clip(size_t index) const { return &clips[index]; }
+	ClipProxy mutable_clip(size_t index) { return ClipProxy(clips[index].clip, this, index); }
+	const Clip *clip(size_t index) const { return &clips[index].clip; }
+	const ClipWithID *clip_with_id(size_t index) const { return &clips[index]; }
 
 	ClipProxy mutable_back() { return mutable_clip(size() - 1); }
 	const Clip *back() const { return clip(size() - 1); }
 
-	void set_progress(const std::map<size_t, double> &progress);
+	void set_progress(const std::map<uint64_t, double> &progress);
 
 	ClipListProto serialize() const;
 
@@ -152,10 +157,11 @@ signals:
 	void any_content_changed();
 
 private:
-	std::vector<Clip> clips;
+	std::vector<ClipWithID> clips;
 	double play_progress = 0.0;
-	std::map<size_t, double> current_progress;
+	std::map<uint64_t, double> current_progress;
 	size_t num_cameras = 2;
+	uint64_t clip_counter = 1000000;  // Used for generating IDs. Starting at a high number to avoid any kind of bugs treating IDs as rows.
 };
 
 #endif  // !defined (_CLIP_LIST_H)

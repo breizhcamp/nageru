@@ -30,15 +30,11 @@ public:
 	Player(JPEGFrameView *destination, StreamOutput stream_output, AVFormatContext *file_avctx = nullptr);
 	~Player();
 
-	struct ClipWithRow {
-		Clip clip;
-		size_t row;  // Used for progress callback only.
-	};
 	void play(const Clip &clip)
 	{
-		play({ ClipWithRow{ clip, 0 } });
+		play({ ClipWithID{ clip, 0 } });
 	}
-	void play(const std::vector<ClipWithRow> &clips);
+	void play(const std::vector<ClipWithID> &clips);
 	void override_angle(unsigned stream_idx);  // Assumes one-clip playlist only.
 
 	// Not thread-safe to set concurrently with playing.
@@ -49,7 +45,7 @@ public:
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
 	// The keys in the given map are row members in the vector given to play().
-	using progress_callback_func = std::function<void(const std::map<size_t, double> &progress, double time_remaining)>;
+	using progress_callback_func = std::function<void(const std::map<uint64_t, double> &progress, double time_remaining)>;
 	void set_progress_callback(progress_callback_func cb) { progress_callback = cb; }
 
 	// QueueInterface.
@@ -77,7 +73,7 @@ private:
 
 	std::mutex queue_state_mu;
 	std::condition_variable new_clip_changed;
-	std::vector<ClipWithRow> queued_clip_list;  // Under queue_state_mu.
+	std::vector<ClipWithID> queued_clip_list;  // Under queue_state_mu.
 	bool new_clip_ready = false;  // Under queue_state_mu.
 	bool playing = false;  // Under queue_state_mu.
 	int override_stream_idx = -1;  // Under queue_state_mu.
@@ -105,9 +101,9 @@ private:
 	const StreamOutput stream_output;
 };
 
-double compute_time_left(const std::vector<Player::ClipWithRow> &clips, size_t currently_playing_idx, double progress_currently_playing);
+double compute_time_left(const std::vector<ClipWithID> &clips, size_t currently_playing_idx, double progress_currently_playing);
 
-static inline double compute_total_time(const std::vector<Player::ClipWithRow> &clips)
+static inline double compute_total_time(const std::vector<ClipWithID> &clips)
 {
 	return compute_time_left(clips, 0, 0.0);
 }
