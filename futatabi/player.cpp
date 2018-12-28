@@ -53,6 +53,15 @@ void Player::thread_func(AVFormatContext *file_avctx)
 	}
 }
 
+namespace {
+
+double calc_progress(const Clip &clip, int64_t pts)
+{
+	return double(pts - clip.pts_in) / (clip.pts_out - clip.pts_in);
+}
+
+}  // namespace
+
 void Player::play_playlist_once()
 {
 	vector<Clip> clip_list;
@@ -171,14 +180,9 @@ void Player::play_playlist_once()
 
 			if (progress_callback != nullptr) {
 				// NOTE: None of this will take into account any snapping done below.
-				double played_this_clip = double(in_pts_for_progress - clip.pts_in) / TIMEBASE / clip.speed;
-				double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / clip.speed;
-				map<size_t, double> progress{{ clip_idx, played_this_clip / total_length }};
-
+				map<size_t, double> progress{{ clip_idx, calc_progress(clip, in_pts_for_progress) }};
 				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
-					double played_next_clip = double(in_pts_secondary_for_progress - next_clip->pts_in) / TIMEBASE / next_clip->speed;
-					double total_next_length = double(next_clip->pts_out - next_clip->pts_in) / TIMEBASE / next_clip->speed;
-					progress[clip_idx + 1] = played_next_clip / total_next_length;
+					progress[clip_idx + 1] = calc_progress(*next_clip, in_pts_secondary_for_progress);
 				}
 				progress_callback(progress);
 			}
