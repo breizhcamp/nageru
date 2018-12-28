@@ -37,6 +37,22 @@ public:
 	void play(const std::vector<ClipWithID> &clips);
 	void override_angle(unsigned stream_idx);  // Assumes one-clip playlist only.
 
+	// Replace the part of the playlist that we haven't started playing yet
+	// (ie., from the point immediately after the last current playing clip
+	// and to the end) with the given one.
+	//
+	// E.g., if we have the playlist A, B, C, D, E, F, we're currently in a fade
+	// from B to C and run splice_play() with the list G, C, H, I, the resulting
+	// list will be A, B, C, H, I. (If the new list doesn't contain B nor C,
+	// there will be some heuristics.) Note that we always compare on ID only;
+	// changes will be ignored for the purposes of setting the split point,
+	// although the newly-spliced entries will of course get the new in/out points
+	// etc., which is the main reason for going through this exercise in the first
+	// place.
+	//
+	// If nothing is playing, the call will be ignored.
+	void splice_play(const std::vector<ClipWithID> &clips);
+
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
 	using done_callback_func = std::function<void()>;
@@ -78,6 +94,9 @@ private:
 	bool playing = false;  // Under queue_state_mu.
 	int override_stream_idx = -1;  // Under queue_state_mu.
 	int64_t last_pts_played = -1;  // Under queue_state_mu. Used by previews only.
+
+	bool splice_ready = false;  // Under queue_state_mu.
+	std::vector<ClipWithID> to_splice_clip_list;  // Under queue_state_mu.
 
 	std::unique_ptr<VideoStream> video_stream;  // Can be nullptr.
 

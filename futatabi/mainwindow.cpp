@@ -431,6 +431,14 @@ void MainWindow::defer_timer_expired()
 
 void MainWindow::content_changed()
 {
+	// If we are playing, update the part of the playlist that's not playing yet.
+	vector<ClipWithID> clips;
+	for (unsigned row = 0; row < playlist_clips->size(); ++row) {
+		clips.emplace_back(*playlist_clips->clip_with_id(row));
+	}
+	live_player->splice_play(clips);
+
+	// Serialize the state.
 	if (defer_timeout->isActive() &&
 	    (!currently_deferring_model_changes || deferred_change_id != current_change_id)) {
 		// There's some deferred event waiting, but this event is unrelated.

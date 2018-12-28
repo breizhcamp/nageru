@@ -63,6 +63,52 @@ double calc_progress(const Clip &clip, int64_t pts)
 	return double(pts - clip.pts_in) / (clip.pts_out - clip.pts_in);
 }
 
+void do_splice(const vector<ClipWithID> &new_list, size_t playing_index1, ssize_t playing_index2, vector<ClipWithID> *old_list)
+{
+	assert(playing_index2 == -1 || size_t(playing_index2) == playing_index1 + 1);
+
+	// First see if we can do the simple thing; find an element in the new
+	// list that we are already playing, which will serve as our splice point.
+	int splice_start_new_list = -1;
+	for (size_t clip_idx = 0; clip_idx < new_list.size(); ++clip_idx) {
+		if (new_list[clip_idx].id == (*old_list)[playing_index1].id) {
+			splice_start_new_list = clip_idx + 1;
+		} else if (playing_index2 != -1 && new_list[clip_idx].id == (*old_list)[playing_index2].id) {
+			splice_start_new_list = clip_idx + 1;
+		}
+	}
+	if (splice_start_new_list == -1) {
+		// OK, so the playing items are no longer in the new list. Most likely,
+		// that means we deleted some range that included them. But the ones
+		// before should stay put -- and we don't want to play them. So find
+		// the ones that we've already played, and ignore them. Hopefully,
+		// they're contiguous; the last one that's not seen will be our cut point.
+		//
+		// Keeping track of the playlist range explicitly in the UI would remove
+		// the need for these heuristics, but it would probably also mean we'd
+		// have to lock the playing clip, which sounds annoying.
+		unordered_map<uint64_t, size_t> played_ids;
+		for (size_t clip_idx = 0; clip_idx < playing_index1; ++old_list) {
+			played_ids.emplace((*old_list)[clip_idx].id, clip_idx);
+		}
+		for (size_t clip_idx = 0; clip_idx < new_list.size(); ++clip_idx) {
+			if (played_ids.count(new_list[clip_idx].id)) {
+				splice_start_new_list = clip_idx + 1;
+			}
+		}
+
+		if (splice_start_new_list == -1) {
+			// OK, we didn't find any matches; the lists are totally distinct.
+			// So probably the entire thing was deleted; leave it alone.
+			return;
+		}
+	}
+
+	size_t splice_start_old_list = ((playing_index2 == -1) ? playing_index1 : playing_index2) + 1;
+	old_list->erase(old_list->begin() + splice_start_old_list, old_list->end());
+	old_list->insert(old_list->end(), new_list.begin() + splice_start_new_list, new_list.end());
+}
+
 }  // namespace
 
 void Player::play_playlist_once()
@@ -87,6 +133,7 @@ void Player::play_playlist_once()
 			clip_list = move(queued_clip_list);
 			queued_clip_list.clear();
 			assert(!clip_list.empty());
+			assert(!splice_ready);  // This corner case should have been handled in splice_play().
 		}
 	}
 
@@ -104,18 +151,18 @@ void Player::play_playlist_once()
 	steady_clock::time_point origin = steady_clock::now();  // TODO: Add a 100 ms buffer for ramp-up?
 	int64_t in_pts_origin = clip_list[0].clip.pts_in;
 	for (size_t clip_idx = 0; clip_idx < clip_list.size(); ++clip_idx) {
-		const Clip &clip = clip_list[clip_idx].clip;
+		const Clip *clip = &clip_list[clip_idx].clip;
 		const Clip *next_clip = (clip_idx + 1 < clip_list.size()) ? &clip_list[clip_idx + 1].clip : nullptr;
 		int64_t out_pts_origin = pts;
 
 		double next_clip_fade_time = -1.0;
 		if (next_clip != nullptr) {
-			double duration_this_clip = double(clip.pts_out - in_pts_origin) / TIMEBASE / clip.speed;
-			double duration_next_clip = double(next_clip->pts_out - next_clip->pts_in) / TIMEBASE / clip.speed;
-			next_clip_fade_time = min(min(duration_this_clip, duration_next_clip), clip.fade_time_seconds);
+			double duration_this_clip = double(clip->pts_out - in_pts_origin) / TIMEBASE / clip->speed;
+			double duration_next_clip = double(next_clip->pts_out - next_clip->pts_in) / TIMEBASE / clip->speed;
+			next_clip_fade_time = min(min(duration_this_clip, duration_next_clip), clip->fade_time_seconds);
 		}
 
-		int stream_idx = clip.stream_idx;
+		int stream_idx = clip->stream_idx;
 
 		// Start playing exactly at a frame.
 		// TODO: Snap secondary (fade-to) clips in the same fashion
@@ -135,11 +182,37 @@ void Player::play_playlist_once()
 			double out_pts = out_pts_origin + TIMEBASE * frameno / global_flags.output_framerate;
 			next_frame_start =
 				origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
-			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * clip.speed / global_flags.output_framerate);
+			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * clip->speed / global_flags.output_framerate);
 			pts = lrint(out_pts);
 
-			if (in_pts >= clip.pts_out) {
+			if (in_pts >= clip->pts_out) {
 				break;
+			}
+
+			{
+				lock_guard<mutex> lock(queue_state_mu);
+				if (splice_ready) {
+					fprintf(stderr, "splicing\n");
+					if (next_clip == nullptr) {
+						do_splice(to_splice_clip_list, clip_idx, -1, &clip_list);
+					} else {
+						do_splice(to_splice_clip_list, clip_idx, clip_idx + 1, &clip_list);
+					}
+					to_splice_clip_list.clear();
+					splice_ready = false;
+
+					// Refresh the clip pointer, since the clip list may have been reallocated.
+					clip = &clip_list[clip_idx].clip;
+
+					// Recompute next_clip and any needed fade times, since the next clip may have changed
+					// (or we may have gone from no new clip to having one, or the other way).
+					next_clip = (clip_idx + 1 < clip_list.size()) ? &clip_list[clip_idx + 1].clip : nullptr;
+					if (next_clip != nullptr) {
+						double duration_this_clip = double(clip->pts_out - in_pts) / TIMEBASE / clip->speed;
+						double duration_next_clip = double(next_clip->pts_out - next_clip->pts_in) / TIMEBASE / clip->speed;
+						next_clip_fade_time = min(min(duration_this_clip, duration_next_clip), clip->fade_time_seconds);
+					}
+				}
 			}
 
 			steady_clock::duration time_behind = steady_clock::now() - next_frame_start;
@@ -157,11 +230,11 @@ void Player::play_playlist_once()
 			FrameOnDisk secondary_frame;
 			int secondary_stream_idx = -1;
 			float fade_alpha = 0.0f;
-			double time_left_this_clip = double(clip.pts_out - in_pts) / TIMEBASE / clip.speed;
+			double time_left_this_clip = double(clip->pts_out - in_pts) / TIMEBASE / clip->speed;
 			if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
-				// We're in a fade to the next clip.
+				// We're in a fade to the next clip->
 				secondary_stream_idx = next_clip->stream_idx;
-				int64_t in_pts_secondary = lrint(next_clip->pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * clip.speed);
+				int64_t in_pts_secondary = lrint(next_clip->pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * clip->speed);
 				in_pts_secondary_for_progress = in_pts_secondary;
 				fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
 
@@ -182,7 +255,7 @@ void Player::play_playlist_once()
 
 			if (progress_callback != nullptr) {
 				// NOTE: None of this will take into account any snapping done below.
-				double clip_progress = calc_progress(clip, in_pts_for_progress);
+				double clip_progress = calc_progress(*clip, in_pts_for_progress);
 				map<uint64_t, double> progress{ { clip_list[clip_idx].id, clip_progress } };
 				double time_remaining;
 				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
@@ -329,7 +402,7 @@ void Player::play_playlist_once()
 		// Start the next clip from the point where the fade went out.
 		if (next_clip != nullptr) {
 			origin = next_frame_start;
-			in_pts_origin = next_clip->pts_in + lrint(next_clip_fade_time * TIMEBASE * clip.speed);
+			in_pts_origin = next_clip->pts_in + lrint(next_clip_fade_time * TIMEBASE * clip->speed);
 		}
 	}
 }
@@ -426,8 +499,22 @@ void Player::play(const vector<ClipWithID> &clips)
 	lock_guard<mutex> lock(queue_state_mu);
 	new_clip_ready = true;
 	queued_clip_list = clips;
+	splice_ready = false;
 	override_stream_idx = -1;
 	new_clip_changed.notify_all();
+}
+
+void Player::splice_play(const vector<ClipWithID> &clips)
+{
+        lock_guard<mutex> lock(queue_state_mu);
+	if (new_clip_ready) {
+		queued_clip_list = clips;
+		assert(!splice_ready);
+		return;
+	}
+
+	splice_ready = true;
+	to_splice_clip_list = clips;  // Overwrite any queued but not executed splice.
 }
 
 void Player::override_angle(unsigned stream_idx)
