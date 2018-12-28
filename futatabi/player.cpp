@@ -1,13 +1,13 @@
 #include "player.h"
 
 #include "clip_list.h"
-#include "shared/context.h"
 #include "defs.h"
-#include "shared/ffmpeg_raii.h"
 #include "flags.h"
 #include "frame_on_disk.h"
-#include "shared/httpd.h"
 #include "jpeg_frame_view.h"
+#include "shared/context.h"
+#include "shared/ffmpeg_raii.h"
+#include "shared/httpd.h"
 #include "shared/metrics.h"
 #include "shared/mux.h"
 #include "shared/timebase.h"
@@ -142,11 +142,10 @@ void Player::play_playlist_once()
 			steady_clock::duration time_behind = steady_clock::now() - next_frame_start;
 			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(200)) {
 				fprintf(stderr, "WARNING: %ld ms behind, dropping a frame (no matter the type).\n",
-					lrint(1e3 * duration<double>(time_behind).count()));
+				        lrint(1e3 * duration<double>(time_behind).count()));
 				++metric_dropped_unconditional_frame;
 				continue;
 			}
-
 
 			// pts not affected by the swapping below.
 			int64_t in_pts_for_progress = in_pts, in_pts_secondary_for_progress = -1;
@@ -180,7 +179,7 @@ void Player::play_playlist_once()
 
 			if (progress_callback != nullptr) {
 				// NOTE: None of this will take into account any snapping done below.
-				map<size_t, double> progress{{ clip_idx, calc_progress(clip, in_pts_for_progress) }};
+				map<size_t, double> progress{ { clip_idx, calc_progress(clip, in_pts_for_progress) } };
 				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
 					progress[clip_idx + 1] = calc_progress(*next_clip, in_pts_secondary_for_progress);
 				}
@@ -198,7 +197,7 @@ void Player::play_playlist_once()
 				unique_lock<mutex> lock(queue_state_mu);
 				if (video_stream == nullptr) {
 					// No queue, just wait until the right time and then show the frame.
-					new_clip_changed.wait_until(lock, next_frame_start, [this]{
+					new_clip_changed.wait_until(lock, next_frame_start, [this] {
 						return should_quit || new_clip_ready || override_stream_idx != -1;
 					});
 					if (should_quit) {
@@ -211,7 +210,7 @@ void Player::play_playlist_once()
 					//
 					// In this case, we don't sleep until next_frame_start; the displaying is
 					// done by the queue.
-					new_clip_changed.wait(lock, [this]{
+					new_clip_changed.wait(lock, [this] {
 						if (num_queued_frames < max_queued_frames) {
 							return true;
 						}
@@ -253,7 +252,7 @@ void Player::play_playlist_once()
 			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
 				if (fabs(snap_frame.pts - in_pts) < pts_snap_tolerance) {
 					display_single_frame(primary_stream_idx, snap_frame, secondary_stream_idx,
-							     secondary_frame, fade_alpha, next_frame_start, /*snapped=*/true);
+					                     secondary_frame, fade_alpha, next_frame_start, /*snapped=*/true);
 					in_pts_origin += snap_frame.pts - in_pts;
 					snapped = true;
 					break;
@@ -279,7 +278,7 @@ void Player::play_playlist_once()
 			// decorrelated with no common factor, of course (e.g. 12.345 → 34.567, which we should
 			// really never see in practice).
 			for (double fraction : { 1.0 / 2.0, 1.0 / 3.0, 2.0 / 3.0, 1.0 / 4.0, 3.0 / 4.0,
-						 1.0 / 5.0, 2.0 / 5.0, 3.0 / 5.0, 4.0 / 5.0 }) {
+			                         1.0 / 5.0, 2.0 / 5.0, 3.0 / 5.0, 4.0 / 5.0 }) {
 				double subsnap_pts = frame_lower.pts + fraction * (frame_upper.pts - frame_lower.pts);
 				if (fabs(subsnap_pts - in_pts) < pts_snap_tolerance) {
 					in_pts_origin += lrint(subsnap_pts) - in_pts;
@@ -290,7 +289,7 @@ void Player::play_playlist_once()
 
 			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(100)) {
 				fprintf(stderr, "WARNING: %ld ms behind, dropping an interpolated frame.\n",
-					lrint(1e3 * duration<double>(time_behind).count()));
+				        lrint(1e3 * duration<double>(time_behind).count()));
 				++metric_dropped_interpolated_frame;
 				continue;
 			}
@@ -335,7 +334,7 @@ void Player::play_playlist_once()
 
 void Player::display_single_frame(int primary_stream_idx, const FrameOnDisk &primary_frame, int secondary_stream_idx, const FrameOnDisk &secondary_frame, double fade_alpha, steady_clock::time_point frame_start, bool snapped)
 {
-	auto display_func = [this, primary_stream_idx, primary_frame, secondary_frame, fade_alpha]{
+	auto display_func = [this, primary_stream_idx, primary_frame, secondary_frame, fade_alpha] {
 		if (destination != nullptr) {
 			destination->setFrame(primary_stream_idx, primary_frame, secondary_frame, fade_alpha);
 		}
@@ -362,8 +361,8 @@ void Player::display_single_frame(int primary_stream_idx, const FrameOnDisk &pri
 				++metric_faded_frame;
 			}
 			video_stream->schedule_faded_frame(frame_start, pts, display_func,
-				QueueSpotHolder(this), primary_frame,
-				secondary_frame, fade_alpha);
+			                                   QueueSpotHolder(this), primary_frame,
+			                                   secondary_frame, fade_alpha);
 		}
 	}
 	last_pts_played = primary_frame.pts;
@@ -398,15 +397,15 @@ Player::Player(JPEGFrameView *destination, Player::StreamOutput stream_output, A
 	player_thread = thread(&Player::thread_func, this, file_avctx);
 
 	if (stream_output == HTTPD_STREAM_OUTPUT) {
-		global_metrics.add("http_output_frames", {{ "type", "original" }, { "reason", "edge_frame_or_no_interpolation" }}, &metric_original_frame);
-		global_metrics.add("http_output_frames", {{ "type", "faded" }, { "reason", "edge_frame_or_no_interpolation" }}, &metric_faded_frame);
-		global_metrics.add("http_output_frames", {{ "type", "original" }, { "reason", "snapped" }}, &metric_original_snapped_frame);
-		global_metrics.add("http_output_frames", {{ "type", "faded" }, { "reason", "snapped" }}, &metric_faded_snapped_frame);
-		global_metrics.add("http_output_frames", {{ "type", "interpolated" }}, &metric_interpolated_frame);
-		global_metrics.add("http_output_frames", {{ "type", "interpolated_faded" }}, &metric_interpolated_faded_frame);
-		global_metrics.add("http_output_frames", {{ "type", "refresh" }}, &metric_refresh_frame);
-		global_metrics.add("http_dropped_frames", {{ "type", "interpolated" }}, &metric_dropped_interpolated_frame);
-		global_metrics.add("http_dropped_frames", {{ "type", "unconditional" }}, &metric_dropped_unconditional_frame);
+		global_metrics.add("http_output_frames", { { "type", "original" }, { "reason", "edge_frame_or_no_interpolation" } }, &metric_original_frame);
+		global_metrics.add("http_output_frames", { { "type", "faded" }, { "reason", "edge_frame_or_no_interpolation" } }, &metric_faded_frame);
+		global_metrics.add("http_output_frames", { { "type", "original" }, { "reason", "snapped" } }, &metric_original_snapped_frame);
+		global_metrics.add("http_output_frames", { { "type", "faded" }, { "reason", "snapped" } }, &metric_faded_snapped_frame);
+		global_metrics.add("http_output_frames", { { "type", "interpolated" } }, &metric_interpolated_frame);
+		global_metrics.add("http_output_frames", { { "type", "interpolated_faded" } }, &metric_interpolated_faded_frame);
+		global_metrics.add("http_output_frames", { { "type", "refresh" } }, &metric_refresh_frame);
+		global_metrics.add("http_dropped_frames", { { "type", "interpolated" } }, &metric_dropped_interpolated_frame);
+		global_metrics.add("http_dropped_frames", { { "type", "unconditional" } }, &metric_dropped_unconditional_frame);
 	}
 }
 

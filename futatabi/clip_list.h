@@ -5,8 +5,8 @@
 #include "state.pb.h"
 
 #include <QAbstractTableModel>
-#include <stdint.h>
 #include <map>
+#include <stdint.h>
 #include <string>
 #include <vector>
 

@@ -6,14 +6,14 @@ extern "C" {
 }
 
 #include "chroma_subsampler.h"
-#include "shared/context.h"
 #include "flags.h"
 #include "flow.h"
-#include "shared/httpd.h"
 #include "jpeg_frame_view.h"
 #include "movit/util.h"
-#include "shared/mux.h"
 #include "player.h"
+#include "shared/context.h"
+#include "shared/httpd.h"
+#include "shared/mux.h"
 #include "util.h"
 #include "ycbcr_converter.h"
 
@@ -264,7 +264,7 @@ void VideoStream::start()
 
 	size_t width = global_flags.width, height = global_flags.height;  // Doesn't matter for MJPEG.
 	mux.reset(new Mux(avctx, width, height, Mux::CODEC_MJPEG, /*video_extradata=*/"", /*audio_codec_parameters=*/nullptr,
-		AVCOL_SPC_BT709, COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
+	                  AVCOL_SPC_BT709, COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
 
 	encode_thread = thread(&VideoStream::encode_thread_func, this);
 }
@@ -585,7 +585,7 @@ void VideoStream::encode_thread_func()
 			unique_lock<mutex> lock(queue_lock);
 
 			// Wait until we have a frame to play.
-			queue_changed.wait(lock, [this]{
+			queue_changed.wait(lock, [this] {
 				return !frame_queue.empty() || should_quit;
 			});
 			if (should_quit) {
@@ -599,7 +599,7 @@ void VideoStream::encode_thread_func()
 			if (output_fast_forward) {
 				aborted = frame_queue.empty() || frame_queue.front().local_pts != frame_start;
 			} else {
-				aborted = queue_changed.wait_until(lock, frame_start, [this, frame_start]{
+				aborted = queue_changed.wait_until(lock, frame_start, [this, frame_start] {
 					return frame_queue.empty() || frame_queue.front().local_pts != frame_start;
 				});
 			}

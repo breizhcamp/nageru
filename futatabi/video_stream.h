@@ -11,8 +11,8 @@ extern "C" {
 
 #include "frame_on_disk.h"
 #include "jpeg_frame_view.h"
-#include "shared/ref_counted_gl_sync.h"
 #include "queue_spot_holder.h"
+#include "shared/ref_counted_gl_sync.h"
 
 #include <atomic>
 #include <chrono>
@@ -54,11 +54,11 @@ public:
 	                          FrameOnDisk frame1, FrameOnDisk frame2,
 	                          float fade_alpha);
 	void schedule_interpolated_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
-	                          std::function<void(std::shared_ptr<Frame>)> &&display_func,
-	                          QueueSpotHolder &&queue_spot_holder,
-	                          FrameOnDisk frame1, FrameOnDisk frame2,
-	                          float alpha, FrameOnDisk secondary_frame = {},  // Empty = no secondary (fade) frame.
-	                          float fade_alpha = 0.0f);
+	                                 std::function<void(std::shared_ptr<Frame>)> &&display_func,
+	                                 QueueSpotHolder &&queue_spot_holder,
+	                                 FrameOnDisk frame1, FrameOnDisk frame2,
+	                                 float alpha, FrameOnDisk secondary_frame = {},  // Empty = no secondary (fade) frame.
+	                                 float fade_alpha = 0.0f);
 	void schedule_refresh_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
 	                            std::function<void()> &&display_func,
 	                            QueueSpotHolder &&queue_spot_holder);
@@ -68,7 +68,7 @@ private:
 
 	void encode_thread_func();
 	std::thread encode_thread;
-	std::atomic<bool> should_quit{false};
+	std::atomic<bool> should_quit{ false };
 
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
@@ -96,7 +96,7 @@ private:
 	static constexpr size_t num_interpolate_slots = 15;  // Should be larger than Player::max_queued_frames, or we risk mass-dropping frames.
 
 	struct IFRReleaser {
-		void operator() (InterpolatedFrameResources *ifr) const
+		void operator()(InterpolatedFrameResources *ifr) const
 		{
 			if (ifr != nullptr) {
 				std::lock_guard<std::mutex> lock(ifr->owner->queue_lock);

@@ -177,7 +177,7 @@ struct RGBAType {
 	static constexpr int num_channels = 4;
 };
 
-template <class Type>
+template<class Type>
 void finish_one_read(GLuint width, GLuint height)
 {
 	using T = typename Type::type;
@@ -203,7 +203,7 @@ void finish_one_read(GLuint width, GLuint height)
 	}
 }
 
-template <class Type>
+template<class Type>
 void schedule_read(GLuint tex, GLuint width, GLuint height, const char *filename0, const char *filename1, const char *flow_filename, const char *ppm_filename)
 {
 	using T = typename Type::type;
@@ -233,7 +233,7 @@ void compute_flow_only(int argc, char **argv, int optind)
 
 	if (width1 != width2 || height1 != height2) {
 		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
-			width1, height1, width2, height2);
+		        width1, height1, width2, height2);
 		exit(1);
 	}
 
@@ -297,7 +297,7 @@ void compute_flow_only(int argc, char **argv, int optind)
 		GLuint tex0 = load_texture(filename0, &width, &height, WITHOUT_MIPMAPS);
 		if (width != width1 || height != height1) {
 			fprintf(stderr, "%s: Image dimensions don't match (%dx%d versus %dx%d)\n",
-				filename0, width, height, width1, height1);
+			        filename0, width, height, width1, height1);
 			exit(1);
 		}
 		glCopyImageSubData(tex0, GL_TEXTURE_2D, 0, 0, 0, 0, image_tex, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, width1, height1, 1);
@@ -306,7 +306,7 @@ void compute_flow_only(int argc, char **argv, int optind)
 		GLuint tex1 = load_texture(filename1, &width, &height, WITHOUT_MIPMAPS);
 		if (width != width1 || height != height1) {
 			fprintf(stderr, "%s: Image dimensions don't match (%dx%d versus %dx%d)\n",
-				filename1, width, height, width1, height1);
+			        filename1, width, height, width1, height1);
 			exit(1);
 		}
 		glCopyImageSubData(tex1, GL_TEXTURE_2D, 0, 0, 0, 0, image_tex, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 1, width1, height1, 1);
@@ -346,7 +346,7 @@ void interpolate_image(int argc, char **argv, int optind)
 
 	if (width1 != width2 || height1 != height2) {
 		fprintf(stderr, "Image dimensions don't match (%dx%d versus %dx%d)\n",
-			width1, height1, width2, height2);
+		        width1, height1, width2, height2);
 		exit(1);
 	}
 
@@ -428,7 +428,7 @@ int main(int argc, char **argv)
 
 	enable_timing = true;
 
-	for ( ;; ) {
+	for (;;) {
 		int option_index = 0;
 		int c = getopt_long(argc, argv, "s:i:g:", long_options, &option_index);
 
@@ -480,10 +480,10 @@ int main(int argc, char **argv)
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
 	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 	window = SDL_CreateWindow("OpenGL window",
-		SDL_WINDOWPOS_UNDEFINED,
-		SDL_WINDOWPOS_UNDEFINED,
-		64, 64,
-		SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+	                          SDL_WINDOWPOS_UNDEFINED,
+	                          SDL_WINDOWPOS_UNDEFINED,
+	                          64, 64,
+	                          SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
 	SDL_GLContext context = SDL_GL_CreateContext(window);
 	assert(context != nullptr);
 

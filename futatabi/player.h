@@ -63,7 +63,7 @@ private:
 	bool find_surrounding_frames(int64_t pts, int stream_idx, FrameOnDisk *frame_lower, FrameOnDisk *frame_upper);
 
 	std::thread player_thread;
-	std::atomic<bool> should_quit{false};
+	std::atomic<bool> should_quit{ false };
 
 	JPEGFrameView *destination;
 	done_callback_func done_callback;
@@ -71,7 +71,7 @@ private:
 
 	std::mutex queue_state_mu;
 	std::condition_variable new_clip_changed;
-	std::vector<Clip> queued_clip_list;   // Under queue_state_mu.
+	std::vector<Clip> queued_clip_list;  // Under queue_state_mu.
 	bool new_clip_ready = false;  // Under queue_state_mu.
 	bool playing = false;  // Under queue_state_mu.
 	int override_stream_idx = -1;  // Under queue_state_mu.
@@ -79,15 +79,15 @@ private:
 
 	std::unique_ptr<VideoStream> video_stream;  // Can be nullptr.
 
-	std::atomic<int64_t> metric_dropped_interpolated_frame{0};
-	std::atomic<int64_t> metric_dropped_unconditional_frame{0};
-	std::atomic<int64_t> metric_faded_frame{0};
-	std::atomic<int64_t> metric_faded_snapped_frame{0};
-	std::atomic<int64_t> metric_original_frame{0};
-	std::atomic<int64_t> metric_original_snapped_frame{0};
-	std::atomic<int64_t> metric_refresh_frame{0};
-	std::atomic<int64_t> metric_interpolated_frame{0};
-	std::atomic<int64_t> metric_interpolated_faded_frame{0};
+	std::atomic<int64_t> metric_dropped_interpolated_frame{ 0 };
+	std::atomic<int64_t> metric_dropped_unconditional_frame{ 0 };
+	std::atomic<int64_t> metric_faded_frame{ 0 };
+	std::atomic<int64_t> metric_faded_snapped_frame{ 0 };
+	std::atomic<int64_t> metric_original_frame{ 0 };
+	std::atomic<int64_t> metric_original_snapped_frame{ 0 };
+	std::atomic<int64_t> metric_refresh_frame{ 0 };
+	std::atomic<int64_t> metric_interpolated_frame{ 0 };
+	std::atomic<int64_t> metric_interpolated_faded_frame{ 0 };
 
 	// under queue_state_mu. Part of this instead of VideoStream so that we own
 	// its lock and can sleep on it.

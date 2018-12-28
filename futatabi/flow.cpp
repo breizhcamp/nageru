@@ -4,8 +4,8 @@
 
 #include "embedded_files.h"
 #include "gpu_timers.h"
-#include "util.h"
 #include "shared/read_file.h"
+#include "util.h"
 
 #include <algorithm>
 #include <assert.h>
@@ -43,7 +43,7 @@ GLuint vertex_vbo;
 int find_num_levels(int width, int height)
 {
 	int levels = 1;
-	for (int w = width, h = height; w > 1 || h > 1; ) {
+	for (int w = width, h = height; w > 1 || h > 1;) {
 		w >>= 1;
 		h >>= 1;
 		++levels;
@@ -98,7 +98,7 @@ GLuint link_program(GLuint vs_obj, GLuint fs_obj)
 	GLint success;
 	glGetProgramiv(program, GL_LINK_STATUS, &success);
 	if (success == GL_FALSE) {
-		GLchar error_log[1024] = {0};
+		GLchar error_log[1024] = { 0 };
 		glGetProgramInfoLog(program, 1024, nullptr, error_log);
 		fprintf(stderr, "Error linking program: %s\n", error_log);
 		exit(1);
@@ -269,8 +269,8 @@ void Densify::exec(GLuint tex_view, GLuint flow_tex, GLuint dense_flow_tex, int 
 	bind_sampler(densify_program, uniform_flow_tex, 1, flow_tex, nearest_sampler);
 
 	glProgramUniform2f(densify_program, uniform_patch_size,
-		float(op.patch_size_pixels) / level_width,
-		float(op.patch_size_pixels) / level_height);
+	                   float(op.patch_size_pixels) / level_width,
+	                   float(op.patch_size_pixels) / level_height);
 
 	glViewport(0, 0, level_width, level_height);
 	glEnable(GL_BLEND);
@@ -919,7 +919,8 @@ Interpolate::Interpolate(const OperatingPoint &op, bool split_ycbcr_output)
 	: flow_level(op.finest_level),
 	  split_ycbcr_output(split_ycbcr_output),
 	  splat(op),
-	  blend(split_ycbcr_output) {
+	  blend(split_ycbcr_output)
+{
 	// Set up the vertex data that will be shared between all passes.
 	float vertices[] = {
 		0.0f, 1.0f,

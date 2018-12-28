@@ -33,9 +33,8 @@ using namespace std;
 namespace {
 
 // Just an arbitrary order for std::map.
-struct FrameOnDiskLexicalOrder
-{
-	bool operator() (const FrameOnDisk &a, const FrameOnDisk &b) const
+struct FrameOnDiskLexicalOrder {
+	bool operator()(const FrameOnDisk &a, const FrameOnDisk &b) const
 	{
 		if (a.pts != b.pts)
 			return a.pts < b.pts;
@@ -75,15 +74,15 @@ struct PendingDecode {
 
 // There can be multiple JPEGFrameView instances, so make all the metrics static.
 once_flag jpeg_metrics_inited;
-atomic<int64_t> metric_jpeg_cache_used_bytes{0};  // Same value as cache_bytes_used.
-atomic<int64_t> metric_jpeg_cache_limit_bytes{size_t(CACHE_SIZE_MB) * 1024 * 1024};
-atomic<int64_t> metric_jpeg_cache_given_up_frames{0};
-atomic<int64_t> metric_jpeg_cache_hit_frames{0};
-atomic<int64_t> metric_jpeg_cache_miss_frames{0};
-atomic<int64_t> metric_jpeg_software_decode_frames{0};
-atomic<int64_t> metric_jpeg_software_fail_frames{0};
-atomic<int64_t> metric_jpeg_vaapi_decode_frames{0};
-atomic<int64_t> metric_jpeg_vaapi_fail_frames{0};
+atomic<int64_t> metric_jpeg_cache_used_bytes{ 0 };  // Same value as cache_bytes_used.
+atomic<int64_t> metric_jpeg_cache_limit_bytes{ size_t(CACHE_SIZE_MB) * 1024 * 1024 };
+atomic<int64_t> metric_jpeg_cache_given_up_frames{ 0 };
+atomic<int64_t> metric_jpeg_cache_hit_frames{ 0 };
+atomic<int64_t> metric_jpeg_cache_miss_frames{ 0 };
+atomic<int64_t> metric_jpeg_software_decode_frames{ 0 };
+atomic<int64_t> metric_jpeg_software_fail_frames{ 0 };
+atomic<int64_t> metric_jpeg_vaapi_decode_frames{ 0 };
+atomic<int64_t> metric_jpeg_vaapi_fail_frames{ 0 };
 
 }  // namespace
 
@@ -93,7 +92,7 @@ map<FrameOnDisk, LRUFrame, FrameOnDiskLexicalOrder> cache;  // Under cache_mu.
 size_t cache_bytes_used = 0;  // Under cache_mu.
 condition_variable any_pending_decodes;
 deque<PendingDecode> pending_decodes;  // Under cache_mu.
-atomic<size_t> event_counter{0};
+atomic<size_t> event_counter{ 0 };
 extern QGLWidget *global_share_widget;
 extern atomic<bool> should_quit;
 
@@ -114,24 +113,24 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 
 	jpeg_decompress_struct dinfo;
 	JPEGWrapErrorManager error_mgr(&dinfo);
-	if (!error_mgr.run([&dinfo]{ jpeg_create_decompress(&dinfo); })) {
+	if (!error_mgr.run([&dinfo] { jpeg_create_decompress(&dinfo); })) {
 		return get_black_frame();
 	}
 	JPEGDestroyer destroy_dinfo(&dinfo);
 
-	if (!error_mgr.run([&dinfo, &jpeg]{
-		jpeg_mem_src(&dinfo, reinterpret_cast<const unsigned char *>(jpeg.data()), jpeg.size());
-		jpeg_read_header(&dinfo, true);
-	})) {
+	if (!error_mgr.run([&dinfo, &jpeg] {
+		    jpeg_mem_src(&dinfo, reinterpret_cast<const unsigned char *>(jpeg.data()), jpeg.size());
+		    jpeg_read_header(&dinfo, true);
+	    })) {
 		return get_black_frame();
 	}
 
 	if (dinfo.num_components != 3) {
 		fprintf(stderr, "Not a color JPEG. (%d components, Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
-			dinfo.num_components,
-			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
-			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
-			dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
+		        dinfo.num_components,
+		        dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
+		        dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
+		        dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
 		return get_black_frame();
 	}
 	if (dinfo.comp_info[0].h_samp_factor != dinfo.max_h_samp_factor ||
@@ -141,16 +140,16 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 	    (dinfo.max_h_samp_factor % dinfo.comp_info[1].h_samp_factor) != 0 ||
 	    (dinfo.max_v_samp_factor % dinfo.comp_info[1].v_samp_factor) != 0) {  // No 2:3 subsampling or other weirdness.
 		fprintf(stderr, "Unsupported subsampling scheme. (Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
-			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
-			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
-			dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
+		        dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
+		        dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
+		        dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
 		exit(1);
 	}
 	dinfo.raw_data_out = true;
 
-	if (!error_mgr.run([&dinfo]{
-		jpeg_start_decompress(&dinfo);
-	})) {
+	if (!error_mgr.run([&dinfo] {
+		    jpeg_start_decompress(&dinfo);
+	    })) {
 		return get_black_frame();
 	}
 
@@ -177,21 +176,21 @@ shared_ptr<Frame> decode_jpeg(const string &jpeg)
 	frame->pitch_chroma = chroma_width_blocks * DCTSIZE;
 
 	if (!error_mgr.run([&dinfo, &frame, v_mcu_size, mcu_height_blocks] {
-		JSAMPROW yptr[v_mcu_size], cbptr[v_mcu_size], crptr[v_mcu_size];
-		JSAMPARRAY data[3] = { yptr, cbptr, crptr };
-		for (unsigned y = 0; y < mcu_height_blocks; ++y) {
-			// NOTE: The last elements of cbptr/crptr will be unused for vertically subsampled chroma.
-			for (unsigned yy = 0; yy < v_mcu_size; ++yy) {
-				yptr[yy] = frame->y.get() + (y * DCTSIZE * dinfo.max_v_samp_factor + yy) * frame->pitch_y;
-				cbptr[yy] = frame->cb.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
-				crptr[yy] = frame->cr.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
-			}
+		    JSAMPROW yptr[v_mcu_size], cbptr[v_mcu_size], crptr[v_mcu_size];
+		    JSAMPARRAY data[3] = { yptr, cbptr, crptr };
+		    for (unsigned y = 0; y < mcu_height_blocks; ++y) {
+			    // NOTE: The last elements of cbptr/crptr will be unused for vertically subsampled chroma.
+			    for (unsigned yy = 0; yy < v_mcu_size; ++yy) {
+				    yptr[yy] = frame->y.get() + (y * DCTSIZE * dinfo.max_v_samp_factor + yy) * frame->pitch_y;
+				    cbptr[yy] = frame->cb.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
+				    crptr[yy] = frame->cr.get() + (y * DCTSIZE * dinfo.comp_info[1].v_samp_factor + yy) * frame->pitch_chroma;
+			    }
 
-			jpeg_read_raw_data(&dinfo, data, v_mcu_size);
-		}
+			    jpeg_read_raw_data(&dinfo, data, v_mcu_size);
+		    }
 
-		(void)jpeg_finish_decompress(&dinfo);
-	})) {
+		    (void)jpeg_finish_decompress(&dinfo);
+	    })) {
 		return get_black_frame();
 	}
 
@@ -203,7 +202,8 @@ void prune_cache()
 {
 	// Assumes cache_mu is held.
 	int64_t bytes_still_to_remove = cache_bytes_used - (size_t(CACHE_SIZE_MB) * 1024 * 1024) * 9 / 10;
-	if (bytes_still_to_remove <= 0) return;
+	if (bytes_still_to_remove <= 0)
+		return;
 
 	vector<pair<size_t, size_t>> lru_timestamps_and_size;
 	for (const auto &key_and_value : cache) {
@@ -218,10 +218,11 @@ void prune_cache()
 	for (const pair<size_t, size_t> &it : lru_timestamps_and_size) {
 		lru_cutoff_point = it.first;
 		bytes_still_to_remove -= it.second;
-		if (bytes_still_to_remove <= 0) break;
+		if (bytes_still_to_remove <= 0)
+			break;
 	}
 
-	for (auto it = cache.begin(); it != cache.end(); ) {
+	for (auto it = cache.begin(); it != cache.end();) {
 		if (it->second.last_used <= lru_cutoff_point) {
 			cache_bytes_used -= frame_size(*it->second.frame);
 			metric_jpeg_cache_used_bytes = cache_bytes_used;
@@ -323,7 +324,7 @@ void JPEGFrameView::jpeg_decoder_thread_func()
 				++num_decoded;
 				if (num_decoded % 1000 == 0) {
 					fprintf(stderr, "Decoded %zu images, dropped %zu (%.2f%% dropped)\n",
-						num_decoded, num_dropped, (100.0 * num_dropped) / (num_decoded + num_dropped));
+					        num_decoded, num_dropped, (100.0 * num_dropped) / (num_decoded + num_dropped));
 				}
 			}
 			if (subframe_idx == 0) {
@@ -351,16 +352,16 @@ void JPEGFrameView::shutdown()
 JPEGFrameView::JPEGFrameView(QWidget *parent)
 	: QGLWidget(parent, global_share_widget)
 {
-	call_once(jpeg_metrics_inited, []{
+	call_once(jpeg_metrics_inited, [] {
 		global_metrics.add("jpeg_cache_used_bytes", &metric_jpeg_cache_used_bytes, Metrics::TYPE_GAUGE);
 		global_metrics.add("jpeg_cache_limit_bytes", &metric_jpeg_cache_limit_bytes, Metrics::TYPE_GAUGE);
-		global_metrics.add("jpeg_cache_frames", {{ "action", "given_up" }}, &metric_jpeg_cache_given_up_frames);
-		global_metrics.add("jpeg_cache_frames", {{ "action", "hit" }}, &metric_jpeg_cache_hit_frames);
-		global_metrics.add("jpeg_cache_frames", {{ "action", "miss" }}, &metric_jpeg_cache_miss_frames);
-		global_metrics.add("jpeg_decode_frames", {{ "decoder", "software" }, { "result", "decode" }}, &metric_jpeg_software_decode_frames);
-		global_metrics.add("jpeg_decode_frames", {{ "decoder", "software" }, { "result", "fail" }}, &metric_jpeg_software_fail_frames);
-		global_metrics.add("jpeg_decode_frames", {{ "decoder", "vaapi" }, { "result", "decode" }}, &metric_jpeg_vaapi_decode_frames);
-		global_metrics.add("jpeg_decode_frames", {{ "decoder", "vaapi" }, { "result", "fail" }}, &metric_jpeg_vaapi_fail_frames);
+		global_metrics.add("jpeg_cache_frames", { { "action", "given_up" } }, &metric_jpeg_cache_given_up_frames);
+		global_metrics.add("jpeg_cache_frames", { { "action", "hit" } }, &metric_jpeg_cache_hit_frames);
+		global_metrics.add("jpeg_cache_frames", { { "action", "miss" } }, &metric_jpeg_cache_miss_frames);
+		global_metrics.add("jpeg_decode_frames", { { "decoder", "software" }, { "result", "decode" } }, &metric_jpeg_software_decode_frames);
+		global_metrics.add("jpeg_decode_frames", { { "decoder", "software" }, { "result", "fail" } }, &metric_jpeg_software_fail_frames);
+		global_metrics.add("jpeg_decode_frames", { { "decoder", "vaapi" }, { "result", "decode" } }, &metric_jpeg_vaapi_decode_frames);
+		global_metrics.add("jpeg_decode_frames", { { "decoder", "vaapi" }, { "result", "fail" } }, &metric_jpeg_vaapi_fail_frames);
 	});
 }
 

@@ -1,9 +1,9 @@
 #ifndef _FLAGS_H
 #define _FLAGS_H
 
-#include <string>
-
 #include "defs.h"
+
+#include <string>
 
 struct Flags {
 	int width = 1280, height = 720;
@@ -26,6 +26,6 @@ extern Flags global_flags;
 extern int flow_initialized_interpolation_quality;
 
 void usage();
-void parse_flags(int argc, char * const argv[]);
+void parse_flags(int argc, char *const argv[]);
 
 #endif  // !defined(_FLAGS_H)

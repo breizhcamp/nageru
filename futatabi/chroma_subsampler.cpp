@@ -1,9 +1,9 @@
 #include "chroma_subsampler.h"
 
+#include "embedded_files.h"
+
 #include <movit/util.h>
 #include <string>
-
-#include "embedded_files.h"
 
 #define BUFFER_OFFSET(i) ((char *)nullptr + (i))
 

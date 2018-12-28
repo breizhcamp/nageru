@@ -1,12 +1,12 @@
-#include <fcntl.h>
-#include <unistd.h>
+#include "frame_on_disk.h"
+
+#include "shared/metrics.h"
 
 #include <atomic>
 #include <chrono>
+#include <fcntl.h>
 #include <mutex>
-
-#include "frame_on_disk.h"
-#include "shared/metrics.h"
+#include <unistd.h>
 
 using namespace std;
 using namespace std::chrono;
@@ -16,10 +16,10 @@ namespace {
 // There can be multiple FrameReader classes, so make all the metrics static.
 once_flag frame_metrics_inited;
 
-atomic<int64_t> metric_frame_opened_files{0};
-atomic<int64_t> metric_frame_closed_files{0};
-atomic<int64_t> metric_frame_read_bytes{0};
-atomic<int64_t> metric_frame_read_frames{0};
+atomic<int64_t> metric_frame_opened_files{ 0 };
+atomic<int64_t> metric_frame_closed_files{ 0 };
+atomic<int64_t> metric_frame_read_bytes{ 0 };
+atomic<int64_t> metric_frame_read_frames{ 0 };
 
 Summary metric_frame_read_time_seconds;
 
@@ -27,13 +27,13 @@ Summary metric_frame_read_time_seconds;
 
 FrameReader::FrameReader()
 {
-	call_once(frame_metrics_inited, []{
+	call_once(frame_metrics_inited, [] {
 		global_metrics.add("frame_opened_files", &metric_frame_opened_files);
 		global_metrics.add("frame_closed_files", &metric_frame_closed_files);
 		global_metrics.add("frame_read_bytes", &metric_frame_read_bytes);
 		global_metrics.add("frame_read_frames", &metric_frame_read_frames);
 
-		vector<double> quantiles{0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99};
+		vector<double> quantiles{ 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99 };
 		metric_frame_read_time_seconds.init(quantiles, 60.0);
 		global_metrics.add("frame_read_time_seconds", &metric_frame_read_time_seconds);
 	});

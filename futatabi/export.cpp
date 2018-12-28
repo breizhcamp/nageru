@@ -1,6 +1,7 @@
+#include "export.h"
+
 #include "clip_list.h"
 #include "defs.h"
-#include "export.h"
 #include "flags.h"
 #include "frame_on_disk.h"
 #include "player.h"
@@ -9,11 +10,9 @@
 
 #include <QMessageBox>
 #include <QProgressDialog>
-
 #include <future>
-#include <vector>
-
 #include <unistd.h>
+#include <vector>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -100,14 +99,14 @@ void export_multitrack_clip(const string &filename, const Clip &clip)
 
 	// Create the streams. Note that some of them could be without frames
 	// (we try to maintain the stream indexes in the export).
-	vector<AVStream *> video_streams; 
+	vector<AVStream *> video_streams;
 	for (unsigned stream_idx = 0; stream_idx <= last_stream_idx; ++stream_idx) {
 		AVStream *avstream_video = avformat_new_stream(avctx, nullptr);
 		if (avstream_video == nullptr) {
 			fprintf(stderr, "avformat_new_stream() failed\n");
 			exit(1);
 		}
-		avstream_video->time_base = AVRational{1, TIMEBASE};
+		avstream_video->time_base = AVRational{ 1, TIMEBASE };
 		avstream_video->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
 		avstream_video->codecpar->codec_id = AV_CODEC_ID_MJPEG;
 		avstream_video->codecpar->width = global_flags.width;  // Might be wrong, but doesn't matter all that much.
@@ -165,8 +164,8 @@ void export_multitrack_clip(const string &filename, const Clip &clip)
 			}
 		}
 		string jpeg = readers[first_frame_stream_idx].read_frame(first_frame);
-		int64_t scaled_pts = av_rescale_q(first_frame.pts, AVRational{1, TIMEBASE},
-			video_streams[first_frame_stream_idx]->time_base);
+		int64_t scaled_pts = av_rescale_q(first_frame.pts, AVRational{ 1, TIMEBASE },
+		                                  video_streams[first_frame_stream_idx]->time_base);
 		buffered_jpegs.emplace_back(BufferedJPEG{ scaled_pts, first_frame_stream_idx, std::move(jpeg) });
 		if (buffered_jpegs.size() >= 1000) {
 			if (!write_buffered_jpegs(avctx, buffered_jpegs)) {
@@ -183,7 +182,7 @@ void export_multitrack_clip(const string &filename, const Clip &clip)
 		if (progress.wasCanceled()) {
 			unlink(filename.c_str());
 			return;
-                }
+		}
 	}
 
 	if (!write_buffered_jpegs(avctx, buffered_jpegs)) {
@@ -224,11 +223,11 @@ void export_interpolated_clip(const string &filename, const vector<Clip> &clips)
 	progress.setMaximum(100000);
 	progress.setValue(0);
 
-	double total_length = compute_time_left(clips, {{0, 0.0}});
+	double total_length = compute_time_left(clips, { { 0, 0.0 } });
 
 	promise<void> done_promise;
 	future<void> done = done_promise.get_future();
-	std::atomic<double> current_value{0.0};
+	std::atomic<double> current_value{ 0.0 };
 	size_t clip_idx = 0;
 
 	Player player(/*destination=*/nullptr, Player::FILE_STREAM_OUTPUT, closer.release());
@@ -237,7 +236,7 @@ void export_interpolated_clip(const string &filename, const vector<Clip> &clips)
 			done_promise.set_value();
 		}
 	});
-	player.set_progress_callback([&current_value, &clips, total_length] (const std::map<size_t, double> &player_progress) {
+	player.set_progress_callback([&current_value, &clips, total_length](const std::map<size_t, double> &player_progress) {
 		current_value = 1.0 - compute_time_left(clips, player_progress) / total_length;
 	});
 	player.play(clips);

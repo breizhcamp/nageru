@@ -13,23 +13,30 @@ public:
 
 class QueueSpotHolder {
 public:
-	QueueSpotHolder() : queue(nullptr) {}
+	QueueSpotHolder()
+		: queue(nullptr) {}
 
-	explicit QueueSpotHolder(QueueInterface *queue) : queue(queue) {
+	explicit QueueSpotHolder(QueueInterface *queue)
+		: queue(queue)
+	{
 		queue->take_queue_spot();
 	}
 
-	QueueSpotHolder(QueueSpotHolder &&other) : queue(other.queue) {
+	QueueSpotHolder(QueueSpotHolder &&other)
+		: queue(other.queue)
+	{
 		other.queue = nullptr;
 	}
 
-	QueueSpotHolder &operator=(QueueSpotHolder &&other) {
+	QueueSpotHolder &operator=(QueueSpotHolder &&other)
+	{
 		queue = other.queue;
 		other.queue = nullptr;
 		return *this;
 	}
 
-	~QueueSpotHolder() {
+	~QueueSpotHolder()
+	{
 		if (queue != nullptr) {
 			queue->release_queue_spot();
 		}
@@ -40,7 +47,7 @@ public:
 	QueueSpotHolder &operator=(QueueSpotHolder &) = delete;
 
 private:
-	QueueInterface *queue;	
+	QueueInterface *queue;
 };
 
-#endif // !defined(_QUEUE_SPOT_HOLDER)
+#endif  // !defined(_QUEUE_SPOT_HOLDER)

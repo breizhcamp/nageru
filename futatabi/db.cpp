@@ -17,19 +17,23 @@ DB::DB(const string &filename)
 
 	sqlite3_exec(db, R"(
 		CREATE TABLE IF NOT EXISTS state (state BLOB);
-	)", nullptr, nullptr, nullptr);  // Ignore errors.
+	)",
+	             nullptr, nullptr, nullptr);  // Ignore errors.
 
 	sqlite3_exec(db, R"(
 		CREATE TABLE IF NOT EXISTS settings (settings BLOB);
-	)", nullptr, nullptr, nullptr);  // Ignore errors.
+	)",
+	             nullptr, nullptr, nullptr);  // Ignore errors.
 
 	sqlite3_exec(db, R"(
 		DROP TABLE file;
-	)", nullptr, nullptr, nullptr);  // Ignore errors.
+	)",
+	             nullptr, nullptr, nullptr);  // Ignore errors.
 
 	sqlite3_exec(db, R"(
 		DROP TABLE frame;
-	)", nullptr, nullptr, nullptr);  // Ignore errors.
+	)",
+	             nullptr, nullptr, nullptr);  // Ignore errors.
 
 	sqlite3_exec(db, R"(
 		CREATE TABLE IF NOT EXISTS filev2 (
@@ -38,7 +42,8 @@ DB::DB(const string &filename)
 			size BIGINT NOT NULL,
 			frames BLOB NOT NULL
 		);
-	)", nullptr, nullptr, nullptr);  // Ignore errors.
+	)",
+	             nullptr, nullptr, nullptr);  // Ignore errors.
 
 	sqlite3_exec(db, "PRAGMA journal_mode=WAL", nullptr, nullptr, nullptr);  // Ignore errors.
 	sqlite3_exec(db, "PRAGMA synchronous=NORMAL", nullptr, nullptr, nullptr);  // Ignore errors.
@@ -342,7 +347,8 @@ void DB::clean_unused_frame_files(const vector<string> &used_filenames)
 
 	ret = sqlite3_exec(db, R"(
 		CREATE TEMPORARY TABLE used_filenames ( filename VARCHAR NOT NULL PRIMARY KEY )
-	)", nullptr, nullptr, nullptr);
+	)",
+	                   nullptr, nullptr, nullptr);
 
 	if (ret != SQLITE_OK) {
 		fprintf(stderr, "CREATE TEMPORARY TABLE: %s\n", sqlite3_errmsg(db));
@@ -381,7 +387,8 @@ void DB::clean_unused_frame_files(const vector<string> &used_filenames)
 
 	ret = sqlite3_exec(db, R"(
 		DELETE FROM filev2 WHERE filename NOT IN ( SELECT filename FROM used_filenames )
-	)", nullptr, nullptr, nullptr);
+	)",
+	                   nullptr, nullptr, nullptr);
 
 	if (ret != SQLITE_OK) {
 		fprintf(stderr, "DELETE: %s\n", sqlite3_errmsg(db));
@@ -390,7 +397,8 @@ void DB::clean_unused_frame_files(const vector<string> &used_filenames)
 
 	ret = sqlite3_exec(db, R"(
 		DROP TABLE used_filenames
-	)", nullptr, nullptr, nullptr);
+	)",
+	                   nullptr, nullptr, nullptr);
 
 	if (ret != SQLITE_OK) {
 		fprintf(stderr, "DROP TABLE: %s\n", sqlite3_errmsg(db));

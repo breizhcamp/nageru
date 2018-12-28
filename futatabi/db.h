@@ -1,13 +1,12 @@
 #ifndef DB_H
 #define DB_H 1
 
+#include "frame_on_disk.h"
 #include "state.pb.h"
 
 #include <sqlite3.h>
 #include <string>
 #include <vector>
-
-#include "frame_on_disk.h"
 
 class DB {
 public:

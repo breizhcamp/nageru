@@ -90,20 +90,24 @@ public:
 	void render_to(const std::array<GLuint, num_elements> &textures);
 
 	// Convenience wrappers.
-	void render_to(GLuint texture0) {
-		render_to({{texture0}});
+	void render_to(GLuint texture0)
+	{
+		render_to({ { texture0 } });
 	}
 
-	void render_to(GLuint texture0, GLuint texture1) {
-		render_to({{texture0, texture1}});
+	void render_to(GLuint texture0, GLuint texture1)
+	{
+		render_to({ { texture0, texture1 } });
 	}
 
-	void render_to(GLuint texture0, GLuint texture1, GLuint texture2) {
-		render_to({{texture0, texture1, texture2}});
+	void render_to(GLuint texture0, GLuint texture1, GLuint texture2)
+	{
+		render_to({ { texture0, texture1, texture2 } });
 	}
 
-	void render_to(GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3) {
-		render_to({{texture0, texture1, texture2, texture3}});
+	void render_to(GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3)
+	{
+		render_to({ { texture0, texture1, texture2, texture3 } });
 	}
 
 private:
@@ -118,20 +122,24 @@ public:
 	void render_to(GLuint depth_rb, const std::array<GLuint, num_elements> &textures);
 
 	// Convenience wrappers.
-	void render_to(GLuint depth_rb, GLuint texture0) {
-		render_to(depth_rb, {{texture0}});
+	void render_to(GLuint depth_rb, GLuint texture0)
+	{
+		render_to(depth_rb, { { texture0 } });
 	}
 
-	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1) {
-		render_to(depth_rb, {{texture0, texture1}});
+	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1)
+	{
+		render_to(depth_rb, { { texture0, texture1 } });
 	}
 
-	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1, GLuint texture2) {
-		render_to(depth_rb, {{texture0, texture1, texture2}});
+	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1, GLuint texture2)
+	{
+		render_to(depth_rb, { { texture0, texture1, texture2 } });
 	}
 
-	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3) {
-		render_to(depth_rb, {{texture0, texture1, texture2, texture3}});
+	void render_to(GLuint depth_rb, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3)
+	{
+		render_to(depth_rb, { { texture0, texture1, texture2, texture3 } });
 	}
 
 private:

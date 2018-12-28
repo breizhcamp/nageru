@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <utility>
 
 using namespace std;
@@ -43,7 +42,7 @@ void usage()
 	fprintf(stderr, "      --tally-url URL             URL to get tally color from (polled every 100 ms)\n");
 }
 
-void parse_flags(int argc, char * const argv[])
+void parse_flags(int argc, char *const argv[])
 {
 	static const option long_options[] = {
 		{ "help", no_argument, 0, OPTION_HELP },
@@ -58,7 +57,7 @@ void parse_flags(int argc, char * const argv[])
 		{ "cue-point-padding", required_argument, 0, OPTION_CUE_POINT_PADDING },
 		{ 0, 0, 0, 0 }
 	};
-	for ( ;; ) {
+	for (;;) {
 		int option_index = 0;
 		int c = getopt_long(argc, argv, "w:h:r:q:d:", long_options, &option_index);
 

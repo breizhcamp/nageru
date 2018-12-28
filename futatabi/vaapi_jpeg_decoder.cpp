@@ -38,17 +38,17 @@ struct VAResources {
 static list<VAResources> va_resources_freelist;
 static mutex va_resources_mutex;
 
-#define CHECK_VASTATUS(va_status, func)                                 \
-    if (va_status != VA_STATUS_SUCCESS) {                               \
-        fprintf(stderr, "%s:%d (%s) failed with %d\n", __func__, __LINE__, func, va_status); \
-        exit(1);                                                        \
-    }
+#define CHECK_VASTATUS(va_status, func) \
+	if (va_status != VA_STATUS_SUCCESS) { \
+		fprintf(stderr, "%s:%d (%s) failed with %d\n", __func__, __LINE__, func, va_status); \
+		exit(1); \
+	}
 
-#define CHECK_VASTATUS_RET(va_status, func)                             \
-    if (va_status != VA_STATUS_SUCCESS) {                               \
-        fprintf(stderr, "%s:%d (%s) failed with %d\n", __func__, __LINE__, func, va_status); \
-        return nullptr;                                                 \
-    }
+#define CHECK_VASTATUS_RET(va_status, func) \
+	if (va_status != VA_STATUS_SUCCESS) { \
+		fprintf(stderr, "%s:%d (%s) failed with %d\n", __func__, __LINE__, func, va_status); \
+		return nullptr; \
+	}
 
 // From libjpeg (although it's of course identical between implementations).
 static const int jpeg_natural_order[DCTSIZE2] = {
@@ -81,8 +81,8 @@ VAResources get_va_resources(unsigned width, unsigned height)
 	ret.height = height;
 
 	VAStatus va_status = vaCreateSurfaces(va_dpy->va_dpy, VA_RT_FORMAT_YUV422,
-		width, height,
-		&ret.surface, 1, nullptr, 0);
+	                                      width, height,
+	                                      &ret.surface, 1, nullptr, 0);
 	CHECK_VASTATUS(va_status, "vaCreateSurfaces");
 
 	va_status = vaCreateContext(va_dpy->va_dpy, config_id, width, height, 0, &ret.surface, 1, &ret.context);
@@ -246,14 +246,14 @@ string get_usable_va_display()
 	glob_t g;
 	int err = glob("/dev/dri/renderD*", 0, nullptr, &g);
 	if (err != 0) {
-	        fprintf(stderr, "Couldn't list render nodes (%s) when trying to autodetect a replacement.\n", strerror(errno));
+		fprintf(stderr, "Couldn't list render nodes (%s) when trying to autodetect a replacement.\n", strerror(errno));
 	} else {
 		for (size_t i = 0; i < g.gl_pathc; ++i) {
 			string path = g.gl_pathv[i];
 			va_dpy = try_open_va(path, nullptr);
 			if (va_dpy != nullptr) {
 				fprintf(stderr, "Autodetected %s as a suitable replacement; using it.\n",
-					path.c_str());
+				        path.c_str());
 				globfree(&g);
 				if (need_env_reset) {
 					unsetenv("LIBVA_MESSAGING_LEVEL");
@@ -285,7 +285,7 @@ void init_jpeg_vaapi()
 	VAConfigAttrib attr = { VAConfigAttribRTFormat, VA_RT_FORMAT_YUV422 };
 
 	VAStatus va_status = vaCreateConfig(va_dpy->va_dpy, VAProfileJPEGBaseline, VAEntrypointVLD,
-		&attr, 1, &config_id);
+	                                    &attr, 1, &config_id);
 	CHECK_VASTATUS(va_status, "vaCreateConfig");
 
 	int num_formats = vaMaxNumImageFormats(va_dpy->va_dpy);
@@ -317,7 +317,8 @@ public:
 	VABufferDestroyer(VADisplay dpy, VABufferID buf)
 		: dpy(dpy), buf(buf) {}
 
-	~VABufferDestroyer() {
+	~VABufferDestroyer()
+	{
 		VAStatus va_status = vaDestroyBuffer(dpy, buf);
 		CHECK_VASTATUS(va_status, "vaDestroyBuffer");
 	}
@@ -343,10 +344,10 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &jpeg)
 
 	if (dinfo.num_components != 3) {
 		fprintf(stderr, "Not a color JPEG. (%d components, Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
-			dinfo.num_components,
-			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
-			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
-			dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
+		        dinfo.num_components,
+		        dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
+		        dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
+		        dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
 		return nullptr;
 	}
 	if (dinfo.comp_info[0].h_samp_factor != 2 ||
@@ -355,9 +356,9 @@ shared_ptr<Frame> decode_jpeg_vaapi(const string &jpeg)
 	    dinfo.comp_info[2].h_samp_factor != 1 ||
 	    dinfo.comp_info[2].v_samp_factor != dinfo.comp_info[0].v_samp_factor) {
 		fprintf(stderr, "Not 4:2:2. (Y=%dx%d, Cb=%dx%d, Cr=%dx%d)\n",
-			dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
-			dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
-			dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
+		        dinfo.comp_info[0].h_samp_factor, dinfo.comp_info[0].v_samp_factor,
+		        dinfo.comp_info[1].h_samp_factor, dinfo.comp_info[1].v_samp_factor,
+		        dinfo.comp_info[2].h_samp_factor, dinfo.comp_info[2].v_samp_factor);
 		return nullptr;
 	}
 

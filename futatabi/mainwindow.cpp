@@ -1,12 +1,12 @@
 #include "mainwindow.h"
 
-#include "shared/aboutdialog.h"
 #include "clip_list.h"
 #include "export.h"
-#include "shared/disk_space_estimator.h"
 #include "flags.h"
 #include "frame_on_disk.h"
 #include "player.h"
+#include "shared/aboutdialog.h"
+#include "shared/disk_space_estimator.h"
 #include "shared/post_to_main_thread.h"
 #include "shared/timebase.h"
 #include "ui_mainwindow.h"
@@ -175,17 +175,17 @@ MainWindow::MainWindow()
 	});
 
 	// TODO: support drag-and-drop.
-	connect(ui->playlist_move_up_btn, &QPushButton::clicked, [this]{ playlist_move(-1); });
-	connect(ui->playlist_move_down_btn, &QPushButton::clicked, [this]{ playlist_move(1); });
+	connect(ui->playlist_move_up_btn, &QPushButton::clicked, [this] { playlist_move(-1); });
+	connect(ui->playlist_move_down_btn, &QPushButton::clicked, [this] { playlist_move(1); });
 
 	connect(ui->playlist->selectionModel(), &QItemSelectionModel::selectionChanged,
-		this, &MainWindow::playlist_selection_changed);
+	        this, &MainWindow::playlist_selection_changed);
 	playlist_selection_changed();  // First time set-up.
 
 	preview_player.reset(new Player(ui->preview_display, Player::NO_STREAM_OUTPUT));
 	live_player.reset(new Player(ui->live_display, Player::HTTPD_STREAM_OUTPUT));
-	live_player->set_done_callback([this]{
-		post_to_main_thread([this]{
+	live_player->set_done_callback([this] {
+		post_to_main_thread([this] {
 			live_player_clip_done();
 		});
 	});
@@ -202,7 +202,7 @@ MainWindow::MainWindow()
 	ui->undo_action->setEnabled(true);
 
 	connect(ui->clip_list->selectionModel(), &QItemSelectionModel::currentChanged,
-		this, &MainWindow::clip_list_selection_changed);
+	        this, &MainWindow::clip_list_selection_changed);
 
 	// Find out how many cameras we have in the existing frames;
 	// if none, we start with two cameras.
@@ -255,7 +255,7 @@ void MainWindow::change_num_cameras()
 		QShortcut *shortcut = new QShortcut(QKeySequence(Qt::Key_1 + i), this);
 		connect(shortcut, &QShortcut::activated, preview_btn, &QPushButton::click);
 
-		connect(preview_btn, &QPushButton::clicked, [this, i]{ preview_angle_clicked(i); });
+		connect(preview_btn, &QPushButton::clicked, [this, i] { preview_angle_clicked(i); });
 	}
 
 	cliplist_clips->change_num_cameras(num_cameras);
@@ -336,7 +336,7 @@ void MainWindow::preview_clicked()
 		if (selected->hasSelection()) {
 			QModelIndex index = selected->currentIndex();
 			const Clip &clip = *playlist_clips->clip(index.row());
-			preview_player->play({clip});
+			preview_player->play({ clip });
 			return;
 		}
 	}
@@ -346,7 +346,7 @@ void MainWindow::preview_clicked()
 
 	QItemSelectionModel *selected = ui->clip_list->selectionModel();
 	if (!selected->hasSelection()) {
-		preview_player->play({*cliplist_clips->back()});
+		preview_player->play({ *cliplist_clips->back() });
 		return;
 	}
 
@@ -357,7 +357,7 @@ void MainWindow::preview_clicked()
 	} else {
 		clip.stream_idx = ui->preview_display->get_stream_idx();
 	}
-	preview_player->play({clip});
+	preview_player->play({ clip });
 }
 
 void MainWindow::preview_angle_clicked(unsigned stream_idx)
@@ -495,7 +495,7 @@ void MainWindow::play_clicked()
 		clips.push_back(*playlist_clips->clip(row));
 	}
 	live_player->play(clips);
-	playlist_clips->set_progress({{ start_row, 0.0f }});
+	playlist_clips->set_progress({ { start_row, 0.0f } });
 	playlist_clips->set_currently_playing(start_row, 0.0f);
 	playlist_selection_changed();
 
@@ -510,7 +510,7 @@ void MainWindow::stop_clicked()
 	size_t last_row = playlist_clips->size() - 1;
 	playlist_clips->set_currently_playing(last_row, 0.0f);
 	live_player_index_to_row.clear();
-	live_player->play({fake_clip});
+	live_player->play({ fake_clip });
 }
 
 void MainWindow::live_player_clip_done()
@@ -521,7 +521,7 @@ void MainWindow::live_player_clip_done()
 		playlist_clips->set_progress({});
 		playlist_clips->set_currently_playing(-1, 0.0f);
 	} else {
-		playlist_clips->set_progress({{ row + 1, 0.0f }});
+		playlist_clips->set_progress({ { row + 1, 0.0f } });
 		playlist_clips->set_currently_playing(row + 1, 0.0f);
 	}
 	ui->stop_btn->setEnabled(false);
@@ -759,7 +759,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		}
 		int column = destination->columnAt(wheel->x());
 		int row = destination->rowAt(wheel->y());
-		if (column == -1 || row == -1) return false;
+		if (column == -1 || row == -1)
+			return false;
 
 		// Only adjust pts with the wheel if the given row is selected.
 		if (!destination->hasFocus() ||
@@ -770,8 +771,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		currently_deferring_model_changes = true;
 		{
 			current_change_id = (watched == ui->clip_list->viewport()) ? "cliplist:" : "playlist:";
-			ClipProxy clip = (watched == ui->clip_list->viewport()) ?
-				cliplist_clips->mutable_clip(row) : playlist_clips->mutable_clip(row);
+			ClipProxy clip = (watched == ui->clip_list->viewport()) ? cliplist_clips->mutable_clip(row) : playlist_clips->mutable_clip(row);
 			if (watched == ui->playlist->viewport()) {
 				stream_idx = clip->stream_idx;
 			}
@@ -841,7 +841,7 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 	Clip fake_clip;
 	fake_clip.pts_in = pts;
 	fake_clip.pts_out = pts + 1;
-	preview_player->play({fake_clip});
+	preview_player->play({ fake_clip });
 }
 
 void MainWindow::playlist_selection_changed()
@@ -863,7 +863,7 @@ void MainWindow::playlist_selection_changed()
 		for (size_t row = 0; row < playlist_clips->size(); ++row) {
 			clips.push_back(*playlist_clips->clip(row));
 		}
-		double remaining = compute_time_left(clips, {{selected->selectedRows().front().row(), 0.0}});
+		double remaining = compute_time_left(clips, { { selected->selectedRows().front().row(), 0.0 } });
 		set_output_status(format_duration(remaining) + " ready");
 	}
 }
@@ -1040,7 +1040,8 @@ void MainWindow::quality_toggled(int quality, bool checked)
 		msgbox.setText(QString::fromStdString(
 			"The interpolation quality for the main output cannot be changed at runtime, "
 			"except being turned completely off; it will take effect for exported files "
-			"only until next restart. The live output quality thus remains at " + to_string(flow_initialized_interpolation_quality) + "."));
+			"only until next restart. The live output quality thus remains at " +
+			to_string(flow_initialized_interpolation_quality) + "."));
 		msgbox.exec();
 	}
 
@@ -1075,9 +1076,10 @@ void MainWindow::set_output_status(const string &status)
 	queue_status = status;
 }
 
-pair<string, string> MainWindow::get_queue_status() const {
+pair<string, string> MainWindow::get_queue_status() const
+{
 	lock_guard<mutex> lock(queue_status_mu);
-	return {queue_status, "text/plain"};
+	return { queue_status, "text/plain" };
 }
 
 void MainWindow::display_frame(unsigned stream_idx, const FrameOnDisk &frame)
@@ -1087,7 +1089,7 @@ void MainWindow::display_frame(unsigned stream_idx, const FrameOnDisk &frame)
 		return;
 	}
 	if (stream_idx >= num_cameras) {
-		post_to_main_thread_and_wait([this, stream_idx]{
+		post_to_main_thread_and_wait([this, stream_idx] {
 			num_cameras = stream_idx + 1;
 			change_num_cameras();
 		});
@@ -1095,7 +1097,7 @@ void MainWindow::display_frame(unsigned stream_idx, const FrameOnDisk &frame)
 	displays[stream_idx].display->setFrame(stream_idx, frame);
 }
 
-template <class Model>
+template<class Model>
 void MainWindow::replace_model(QTableView *view, Model **model, Model *new_model)
 {
 	QItemSelectionModel *old_selection_model = view->selectionModel();
@@ -1117,7 +1119,7 @@ void MainWindow::tally_received()
 	unsigned time_to_next_tally_ms;
 	if (http_reply->error()) {
 		fprintf(stderr, "HTTP get of '%s' failed: %s\n", global_flags.tally_url.c_str(),
-			http_reply->errorString().toStdString().c_str());
+		        http_reply->errorString().toStdString().c_str());
 		ui->live_frame->setStyleSheet("");
 		time_to_next_tally_ms = 1000;
 	} else {

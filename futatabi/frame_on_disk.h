@@ -1,21 +1,20 @@
 #ifndef _FRAME_ON_DISK_H
 #define _FRAME_ON_DISK_H 1
 
+#include "defs.h"
+
 #include <algorithm>
 #include <mutex>
+#include <stdint.h>
 #include <string>
 #include <vector>
 
-#include <stdint.h>
-
-#include "defs.h"
-
 extern std::mutex frame_mu;
 struct FrameOnDisk {
-        int64_t pts = -1;  // -1 means empty.
-        off_t offset;
-        unsigned filename_idx;
-        uint32_t size;  // Not using size_t saves a few bytes; we can have so many frames.
+	int64_t pts = -1;  // -1 means empty.
+	off_t offset;
+	unsigned filename_idx;
+	uint32_t size;  // Not using size_t saves a few bytes; we can have so many frames.
 };
 extern std::vector<FrameOnDisk> frames[MAX_STREAMS];  // Under frame_mu.
 extern std::vector<std::string> frame_filenames;  // Under frame_mu.
@@ -49,14 +48,14 @@ inline std::vector<FrameOnDisk>::iterator
 find_last_frame_before(std::vector<FrameOnDisk> &frames, int64_t pts_origin)
 {
 	return std::lower_bound(frames.begin(), frames.end(), pts_origin,
-		[](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
+	                        [](const FrameOnDisk &frame, int64_t pts) { return frame.pts < pts; });
 }
 
 inline std::vector<FrameOnDisk>::iterator
 find_first_frame_at_or_after(std::vector<FrameOnDisk> &frames, int64_t pts_origin)
 {
 	return std::upper_bound(frames.begin(), frames.end(), pts_origin - 1,
-		[](int64_t pts, const FrameOnDisk &frame) { return pts < frame.pts; });
+	                        [](int64_t pts, const FrameOnDisk &frame) { return pts < frame.pts; });
 }
 
 #endif  // !defined(_FRAME_ON_DISK_H)

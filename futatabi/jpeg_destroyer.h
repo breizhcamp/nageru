@@ -8,7 +8,8 @@ public:
 	JPEGDestroyer(jpeg_decompress_struct *dinfo)
 		: dinfo(dinfo) {}
 
-	~JPEGDestroyer() {
+	~JPEGDestroyer()
+	{
 		jpeg_destroy_decompress(dinfo);
 	}
 

@@ -84,10 +84,10 @@ YCbCrConverter::YCbCrConverter(YCbCrConverter::OutputMode output_mode, ResourceP
 			fade_chain.chain.reset(new EffectChain(global_flags.width, global_flags.height, resource_pool));
 			fade_chain.input[0] = (movit::YCbCrInput *)fade_chain.chain->add_input(
 				new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height,
-					first_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
+				               first_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
 			fade_chain.input[1] = (movit::YCbCrInput *)fade_chain.chain->add_input(
 				new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height,
-					second_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
+				               second_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
 			fade_chain.mix_effect = (movit::MixEffect *)fade_chain.chain->add_effect(
 				new MixEffect, fade_chain.input[0], fade_chain.input[1]);
 			setup_outputs(output_mode, inout_format, ycbcr_output_format, fade_chain.chain.get());
@@ -105,12 +105,12 @@ YCbCrConverter::YCbCrConverter(YCbCrConverter::OutputMode output_mode, ResourceP
 		ycbcr_format.chroma_subsampling_x = 1;
 		fade_chain.input[0] = (movit::YCbCrInput *)fade_chain.chain->add_input(
 			new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height,
-				YCBCR_INPUT_INTERLEAVED));
+			               YCBCR_INPUT_INTERLEAVED));
 
 		ycbcr_format.chroma_subsampling_x = 2;
 		fade_chain.input[1] = (movit::YCbCrInput *)fade_chain.chain->add_input(
 			new YCbCrInput(inout_format, ycbcr_format, global_flags.width, global_flags.height,
-				second_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
+			               second_input_is_semiplanar ? YCBCR_INPUT_SPLIT_Y_AND_CBCR : YCBCR_INPUT_PLANAR));
 
 		fade_chain.mix_effect = (movit::MixEffect *)fade_chain.chain->add_effect(
 			new MixEffect, fade_chain.input[0], fade_chain.input[1]);

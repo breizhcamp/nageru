@@ -5,15 +5,15 @@
 #include "db.h"
 #include "state.pb.h"
 
-#include <deque>
-#include <memory>
-#include <mutex>
 #include <QLabel>
 #include <QMainWindow>
 #include <QNetworkAccessManager>
+#include <deque>
+#include <memory>
+#include <mutex>
 #include <stdbool.h>
-#include <sys/types.h>
 #include <string>
+#include <sys/types.h>
 #include <utility>
 
 namespace Ui {
@@ -53,7 +53,8 @@ private:
 	int64_t scrub_pts_origin;
 
 	// Which element (e.g. pts_in on clip 4) we are scrubbing.
-	enum ScrubType { SCRUBBING_CLIP_LIST, SCRUBBING_PLAYLIST } scrub_type;
+	enum ScrubType { SCRUBBING_CLIP_LIST,
+	                 SCRUBBING_PLAYLIST } scrub_type;
 	int scrub_row;
 	int scrub_column;
 
@@ -115,7 +116,8 @@ private:
 	void state_changed(const StateProto &state);  // Called post-filtering.
 	void save_settings();
 
-	enum Rounding { FIRST_AT_OR_AFTER, LAST_BEFORE };
+	enum Rounding { FIRST_AT_OR_AFTER,
+	                LAST_BEFORE };
 	void preview_single_frame(int64_t pts, unsigned stream_idx, Rounding rounding);
 
 	// Also covers when the playlist itself changes.
@@ -139,7 +141,7 @@ private:
 
 	void highlight_camera_input(int stream_idx);
 
-	template <class Model>
+	template<class Model>
 	void replace_model(QTableView *view, Model **model, Model *new_model);
 
 	void start_tally();

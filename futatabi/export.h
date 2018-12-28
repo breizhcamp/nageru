@@ -1,6 +1,8 @@
 #ifndef _EXPORT_H
 #define _EXPORT_H 1
 
+#include "clip_list.h"
+
 #include <string>
 #include <vector>
 

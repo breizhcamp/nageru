@@ -1,5 +1,5 @@
-#include <assert.h>
 #include <arpa/inet.h>
+#include <assert.h>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -21,27 +21,27 @@ extern "C" {
 }
 
 #include "clip_list.h"
-#include "shared/context.h"
 #include "defs.h"
-#include "shared/disk_space_estimator.h"
-#include "shared/ffmpeg_raii.h"
 #include "flags.h"
-#include "frame_on_disk.h"
 #include "frame.pb.h"
-#include "shared/httpd.h"
+#include "frame_on_disk.h"
 #include "mainwindow.h"
 #include "player.h"
+#include "shared/context.h"
+#include "shared/disk_space_estimator.h"
+#include "shared/ffmpeg_raii.h"
+#include "shared/httpd.h"
+#include "shared/metrics.h"
 #include "shared/post_to_main_thread.h"
 #include "shared/ref_counted_gl_sync.h"
 #include "shared/timebase.h"
-#include "shared/metrics.h"
 #include "ui_mainwindow.h"
 #include "vaapi_jpeg_decoder.h"
 
 #include <QApplication>
 #include <QGLFormat>
-#include <QSurfaceFormat>
 #include <QProgressDialog>
+#include <QSurfaceFormat>
 #include <movit/init.h>
 #include <movit/util.h>
 
@@ -52,7 +52,7 @@ constexpr char frame_magic[] = "Ftbifrm0";
 constexpr size_t frame_magic_len = 8;
 
 mutex RefCountedGLsync::fence_lock;
-atomic<bool> should_quit{false};
+atomic<bool> should_quit{ false };
 
 int64_t start_pts = -1;
 
@@ -70,7 +70,7 @@ mutex frame_mu;
 vector<FrameOnDisk> frames[MAX_STREAMS];  // Under frame_mu.
 vector<string> frame_filenames;  // Under frame_mu.
 
-atomic<int64_t> metric_received_frames[MAX_STREAMS]{{0}};
+atomic<int64_t> metric_received_frames[MAX_STREAMS]{ { 0 } };
 Summary metric_received_frame_size_bytes;
 
 namespace {
@@ -80,7 +80,7 @@ FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t
 	if (open_frame_files.count(stream_idx) == 0) {
 		char filename[256];
 		snprintf(filename, sizeof(filename), "%s/frames/cam%d-pts%09ld.frames",
-			global_flags.working_directory.c_str(), stream_idx, pts);
+		         global_flags.working_directory.c_str(), stream_idx, pts);
 		FILE *fp = fopen(filename, "wb");
 		if (fp == nullptr) {
 			perror(filename);
@@ -182,7 +182,7 @@ FrameOnDisk write_frame(int stream_idx, int64_t pts, const uint8_t *data, size_t
 	return frame;
 }
 
-} // namespace
+}  // namespace
 
 HTTPD *global_httpd;
 
@@ -320,9 +320,9 @@ void load_frame_file(const char *filename, const string &basename, unsigned file
 		// OK, found the magic. Try to parse the frame header.
 		magic_offset = 0;
 
-		if (skipped_bytes > 0)  {
+		if (skipped_bytes > 0) {
 			fprintf(stderr, "WARNING: %s: Skipped %zu garbage bytes in the middle.\n",
-				filename, skipped_bytes);
+			        filename, skipped_bytes);
 			skipped_bytes = 0;
 		}
 
@@ -369,7 +369,7 @@ void load_frame_file(const char *filename, const string &basename, unsigned file
 
 	if (skipped_bytes > 0) {
 		fprintf(stderr, "WARNING: %s: Skipped %zu garbage bytes at the end.\n",
-			filename, skipped_bytes);
+		        filename, skipped_bytes);
 	}
 
 	off_t size = ftell(fp);
@@ -401,7 +401,7 @@ void load_existing_frames()
 	}
 
 	vector<string> frame_basenames;
-	for ( ;; ) {
+	for (;;) {
 		errno = 0;
 		dirent *de = readdir(dir);
 		if (de == nullptr) {
@@ -451,7 +451,7 @@ void load_existing_frames()
 
 	for (int stream_idx = 0; stream_idx < MAX_STREAMS; ++stream_idx) {
 		sort(frames[stream_idx].begin(), frames[stream_idx].end(),
-			[](const auto &a, const auto &b) { return a.pts < b.pts; });
+		     [](const auto &a, const auto &b) { return a.pts < b.pts; });
 	}
 
 	db.clean_unused_frame_files(frame_basenames);
@@ -460,7 +460,7 @@ void load_existing_frames()
 void record_thread_func()
 {
 	for (unsigned i = 0; i < MAX_STREAMS; ++i) {
-		global_metrics.add("received_frames", {{ "stream", to_string(i) }}, &metric_received_frames[i]);
+		global_metrics.add("received_frames", { { "stream", to_string(i) } }, &metric_received_frames[i]);
 	}
 	global_metrics.add("received_frame_size_bytes", &metric_received_frame_size_bytes);
 
@@ -486,7 +486,7 @@ void record_thread_func()
 
 		while (!should_quit.load()) {
 			AVPacket pkt;
-			unique_ptr<AVPacket, decltype(av_packet_unref)*> pkt_cleanup(
+			unique_ptr<AVPacket, decltype(av_packet_unref) *> pkt_cleanup(
 				&pkt, av_packet_unref);
 			av_init_packet(&pkt);
 			pkt.data = nullptr;
