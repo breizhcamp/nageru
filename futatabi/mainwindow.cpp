@@ -514,6 +514,7 @@ void MainWindow::stop_clicked()
 	fake_clip.pts_out = 0;
 	playlist_clips->set_progress({});
 	live_player->play(fake_clip);
+	ui->stop_btn->setEnabled(false);
 }
 
 void MainWindow::live_player_done()

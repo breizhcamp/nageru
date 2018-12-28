@@ -50,9 +50,6 @@ void Player::thread_func(AVFormatContext *file_avctx)
 
 	while (!should_quit) {
 		play_playlist_once();
-		if (done_callback != nullptr) {
-			done_callback();
-		}
 	}
 }
 
@@ -404,6 +401,10 @@ void Player::play_playlist_once()
 			origin = next_frame_start;
 			in_pts_origin = next_clip->pts_in + lrint(next_clip_fade_time * TIMEBASE * clip->speed);
 		}
+	}
+
+	if (done_callback != nullptr) {
+		done_callback();
 	}
 }
 
