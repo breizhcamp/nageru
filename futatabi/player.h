@@ -51,7 +51,8 @@ public:
 	void release_queue_spot() override;
 
 private:
-	void thread_func(StreamOutput stream_output, AVFormatContext *file_avctx);
+	void thread_func(AVFormatContext *file_avctx);
+	void play_playlist_once();
 	void open_output_stream();
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
@@ -91,6 +92,10 @@ private:
 	// its lock and can sleep on it.
 	size_t num_queued_frames = 0;
 	static constexpr size_t max_queued_frames = 10;
+
+	// State private to the player thread.
+	int64_t pts = 0;
+	const StreamOutput stream_output;
 };
 
 #endif  // !defined(_PLAYER_H)

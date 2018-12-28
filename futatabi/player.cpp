@@ -27,7 +27,7 @@ using namespace std::chrono;
 
 extern HTTPD *global_httpd;
 
-void Player::thread_func(Player::StreamOutput stream_output, AVFormatContext *file_avctx)
+void Player::thread_func(AVFormatContext *file_avctx)
 {
 	pthread_setname_np(pthread_self(), "Player");
 
@@ -48,329 +48,332 @@ void Player::thread_func(Player::StreamOutput stream_output, AVFormatContext *fi
 
 	check_error();
 
-	int64_t pts = 0;
 	while (!should_quit) {
-wait_for_clip:
-		vector<Clip> clip_list;
-		bool clip_ready;
-		steady_clock::time_point before_sleep = steady_clock::now();
+		play_playlist_once();
+	}
+}
 
-		// Wait until we're supposed to play something.
+void Player::play_playlist_once()
+{
+	vector<Clip> clip_list;
+	bool clip_ready;
+	steady_clock::time_point before_sleep = steady_clock::now();
+
+	// Wait until we're supposed to play something.
+	{
+		unique_lock<mutex> lock(queue_state_mu);
+		playing = false;
+		clip_ready = new_clip_changed.wait_for(lock, milliseconds(100), [this] {
+			return should_quit || new_clip_ready;
+		});
+		if (should_quit) {
+			return;
+		}
+		if (clip_ready) {
+			new_clip_ready = false;
+			playing = true;
+			clip_list = move(queued_clip_list);
+			queued_clip_list.clear();
+			assert(!clip_list.empty());
+		}
+	}
+
+	steady_clock::duration time_slept = steady_clock::now() - before_sleep;
+	pts += duration_cast<duration<size_t, TimebaseRatio>>(time_slept).count();
+
+	if (!clip_ready) {
+		if (video_stream != nullptr) {
+			++metric_refresh_frame;
+			video_stream->schedule_refresh_frame(steady_clock::now(), pts, /*display_func=*/nullptr, QueueSpotHolder());
+		}
+		return;
+	}
+
+	steady_clock::time_point origin = steady_clock::now();  // TODO: Add a 100 ms buffer for ramp-up?
+	int64_t in_pts_origin = clip_list[0].pts_in;
+	for (size_t clip_idx = 0; clip_idx < clip_list.size(); ++clip_idx) {
+		const Clip &clip = clip_list[clip_idx];
+		const Clip *next_clip = (clip_idx + 1 < clip_list.size()) ? &clip_list[clip_idx + 1] : nullptr;
+		int64_t out_pts_origin = pts;
+
+		double next_clip_fade_time = -1.0;
+		if (next_clip != nullptr) {
+			double duration_this_clip = double(clip.pts_out - in_pts_origin) / TIMEBASE / clip.speed;
+			double duration_next_clip = double(next_clip->pts_out - next_clip->pts_in) / TIMEBASE / clip.speed;
+			next_clip_fade_time = min(min(duration_this_clip, duration_next_clip), clip.fade_time_seconds);
+		}
+
+		int stream_idx = clip.stream_idx;
+
+		// Start playing exactly at a frame.
+		// TODO: Snap secondary (fade-to) clips in the same fashion
+		// so that we don't get jank here).
 		{
-			unique_lock<mutex> lock(queue_state_mu);
-			playing = false;
-			clip_ready = new_clip_changed.wait_for(lock, milliseconds(100), [this] {
-				return should_quit || new_clip_ready;
-			});
-			if (should_quit) {
-				return;
-			}
-			if (clip_ready) {
-				new_clip_ready = false;
-				playing = true;
-				clip_list = move(queued_clip_list);
-				queued_clip_list.clear();
-				assert(!clip_list.empty());
+			lock_guard<mutex> lock(frame_mu);
+
+			// Find the first frame such that frame.pts <= in_pts.
+			auto it = find_last_frame_before(frames[stream_idx], in_pts_origin);
+			if (it != frames[stream_idx].end()) {
+				in_pts_origin = it->pts;
 			}
 		}
 
-		steady_clock::duration time_slept = steady_clock::now() - before_sleep;
-		pts += duration_cast<duration<size_t, TimebaseRatio>>(time_slept).count();
+		steady_clock::time_point next_frame_start;
+		for (int frameno = 0; !should_quit; ++frameno) {  // Ends when the clip ends.
+			double out_pts = out_pts_origin + TIMEBASE * frameno / global_flags.output_framerate;
+			next_frame_start =
+				origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
+			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * clip.speed / global_flags.output_framerate);
+			pts = lrint(out_pts);
 
-		if (!clip_ready) {
-			if (video_stream != nullptr) {
-				++metric_refresh_frame;
-				video_stream->schedule_refresh_frame(steady_clock::now(), pts, /*display_func=*/nullptr, QueueSpotHolder());
-			}
-			continue;
-		}
-
-		steady_clock::time_point origin = steady_clock::now();  // TODO: Add a 100 ms buffer for ramp-up?
-		int64_t in_pts_origin = clip_list[0].pts_in;
-		for (size_t clip_idx = 0; clip_idx < clip_list.size(); ++clip_idx) {
-			const Clip &clip = clip_list[clip_idx];
-			const Clip *next_clip = (clip_idx + 1 < clip_list.size()) ? &clip_list[clip_idx + 1] : nullptr;
-			int64_t out_pts_origin = pts;
-
-			double next_clip_fade_time = -1.0;
-			if (next_clip != nullptr) {
-				double duration_this_clip = double(clip.pts_out - in_pts_origin) / TIMEBASE / clip.speed;
-				double duration_next_clip = double(next_clip->pts_out - next_clip->pts_in) / TIMEBASE / clip.speed;
-				next_clip_fade_time = min(min(duration_this_clip, duration_next_clip), clip.fade_time_seconds);
+			if (in_pts >= clip.pts_out) {
+				break;
 			}
 
-			int stream_idx = clip.stream_idx;
-
-			// Start playing exactly at a frame.
-			// TODO: Snap secondary (fade-to) clips in the same fashion
-			// so that we don't get jank here).
-			{
-				lock_guard<mutex> lock(frame_mu);
-
-				// Find the first frame such that frame.pts <= in_pts.
-				auto it = find_last_frame_before(frames[stream_idx], in_pts_origin);
-				if (it != frames[stream_idx].end()) {
-					in_pts_origin = it->pts;
-				}
+			steady_clock::duration time_behind = steady_clock::now() - next_frame_start;
+			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(200)) {
+				fprintf(stderr, "WARNING: %ld ms behind, dropping a frame (no matter the type).\n",
+					lrint(1e3 * duration<double>(time_behind).count()));
+				++metric_dropped_unconditional_frame;
+				continue;
 			}
 
-			steady_clock::time_point next_frame_start;
-			for (int frameno = 0; !should_quit; ++frameno) {  // Ends when the clip ends.
-				double out_pts = out_pts_origin + TIMEBASE * frameno / global_flags.output_framerate;
-				next_frame_start =
-					origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
-				int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * clip.speed / global_flags.output_framerate);
-				pts = lrint(out_pts);
 
-				if (in_pts >= clip.pts_out) {
-					break;
-				}
+			// pts not affected by the swapping below.
+			int64_t in_pts_for_progress = in_pts, in_pts_secondary_for_progress = -1;
 
-				steady_clock::duration time_behind = steady_clock::now() - next_frame_start;
-				if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(200)) {
-					fprintf(stderr, "WARNING: %ld ms behind, dropping a frame (no matter the type).\n",
-						lrint(1e3 * duration<double>(time_behind).count()));
-					++metric_dropped_unconditional_frame;
-					continue;
-				}
+			int primary_stream_idx = stream_idx;
+			FrameOnDisk secondary_frame;
+			int secondary_stream_idx = -1;
+			float fade_alpha = 0.0f;
+			double time_left_this_clip = double(clip.pts_out - in_pts) / TIMEBASE / clip.speed;
+			if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
+				// We're in a fade to the next clip.
+				secondary_stream_idx = next_clip->stream_idx;
+				int64_t in_pts_secondary = lrint(next_clip->pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * clip.speed);
+				in_pts_secondary_for_progress = in_pts_secondary;
+				fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
 
-
-				// pts not affected by the swapping below.
-				int64_t in_pts_for_progress = in_pts, in_pts_secondary_for_progress = -1;
-
-				int primary_stream_idx = stream_idx;
-				FrameOnDisk secondary_frame;
-				int secondary_stream_idx = -1;
-				float fade_alpha = 0.0f;
-				double time_left_this_clip = double(clip.pts_out - in_pts) / TIMEBASE / clip.speed;
-				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
-					// We're in a fade to the next clip.
-					secondary_stream_idx = next_clip->stream_idx;
-					int64_t in_pts_secondary = lrint(next_clip->pts_in + (next_clip_fade_time - time_left_this_clip) * TIMEBASE * clip.speed);
-					in_pts_secondary_for_progress = in_pts_secondary;
-					fade_alpha = 1.0f - time_left_this_clip / next_clip_fade_time;
-
-					// If more than half-way through the fade, interpolate the next clip
-					// instead of the current one, since it's more visible.
-					if (fade_alpha >= 0.5f) {
-						swap(primary_stream_idx, secondary_stream_idx);
-						swap(in_pts, in_pts_secondary);
-						fade_alpha = 1.0f - fade_alpha;
-					}
-
-					FrameOnDisk frame_lower, frame_upper;
-					bool ok = find_surrounding_frames(in_pts_secondary, secondary_stream_idx, &frame_lower, &frame_upper);
-					if (ok) {
-						secondary_frame = frame_lower;
-					}
-				}
-
-				if (progress_callback != nullptr) {
-					// NOTE: None of this will take into account any snapping done below.
-					double played_this_clip = double(in_pts_for_progress - clip.pts_in) / TIMEBASE / clip.speed;
-					double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / clip.speed;
-					map<size_t, double> progress{{ clip_idx, played_this_clip / total_length }};
-
-					if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
-						double played_next_clip = double(in_pts_secondary_for_progress - next_clip->pts_in) / TIMEBASE / next_clip->speed;
-						double total_next_length = double(next_clip->pts_out - next_clip->pts_in) / TIMEBASE / next_clip->speed;
-						progress[clip_idx + 1] = played_next_clip / total_next_length;
-					}
-					progress_callback(progress);
+				// If more than half-way through the fade, interpolate the next clip
+				// instead of the current one, since it's more visible.
+				if (fade_alpha >= 0.5f) {
+					swap(primary_stream_idx, secondary_stream_idx);
+					swap(in_pts, in_pts_secondary);
+					fade_alpha = 1.0f - fade_alpha;
 				}
 
 				FrameOnDisk frame_lower, frame_upper;
-				bool ok = find_surrounding_frames(in_pts, primary_stream_idx, &frame_lower, &frame_upper);
-				if (!ok) {
-					break;
+				bool ok = find_surrounding_frames(in_pts_secondary, secondary_stream_idx, &frame_lower, &frame_upper);
+				if (ok) {
+					secondary_frame = frame_lower;
 				}
+			}
 
-				// Wait until we should, or (given buffering) can, output the frame.
-				{
-					unique_lock<mutex> lock(queue_state_mu);
-					if (video_stream == nullptr) {
-						// No queue, just wait until the right time and then show the frame.
-						new_clip_changed.wait_until(lock, next_frame_start, [this]{
-							return should_quit || new_clip_ready || override_stream_idx != -1;
-						});
-						if (should_quit) {
-							return;
-						}
-					} else {
-						// If the queue is full (which is really the state we'd like to be in),
-						// wait until there's room for one more frame (ie., one was output from
-						// VideoStream), or until or until there's a new clip we're supposed to play.
-						//
-						// In this case, we don't sleep until next_frame_start; the displaying is
-						// done by the queue.
-						new_clip_changed.wait(lock, [this]{
-							if (num_queued_frames < max_queued_frames) {
-								return true;
-							}
-							return should_quit || new_clip_ready || override_stream_idx != -1;
-						});
-					}
+			if (progress_callback != nullptr) {
+				// NOTE: None of this will take into account any snapping done below.
+				double played_this_clip = double(in_pts_for_progress - clip.pts_in) / TIMEBASE / clip.speed;
+				double total_length = double(clip.pts_out - clip.pts_in) / TIMEBASE / clip.speed;
+				map<size_t, double> progress{{ clip_idx, played_this_clip / total_length }};
+
+				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
+					double played_next_clip = double(in_pts_secondary_for_progress - next_clip->pts_in) / TIMEBASE / next_clip->speed;
+					double total_next_length = double(next_clip->pts_out - next_clip->pts_in) / TIMEBASE / next_clip->speed;
+					progress[clip_idx + 1] = played_next_clip / total_next_length;
+				}
+				progress_callback(progress);
+			}
+
+			FrameOnDisk frame_lower, frame_upper;
+			bool ok = find_surrounding_frames(in_pts, primary_stream_idx, &frame_lower, &frame_upper);
+			if (!ok) {
+				break;
+			}
+
+			// Wait until we should, or (given buffering) can, output the frame.
+			{
+				unique_lock<mutex> lock(queue_state_mu);
+				if (video_stream == nullptr) {
+					// No queue, just wait until the right time and then show the frame.
+					new_clip_changed.wait_until(lock, next_frame_start, [this]{
+						return should_quit || new_clip_ready || override_stream_idx != -1;
+					});
 					if (should_quit) {
 						return;
 					}
-					if (new_clip_ready) {
-						if (video_stream != nullptr) {
-							lock.unlock();  // Urg.
-							video_stream->clear_queue();
-							lock.lock();
+				} else {
+					// If the queue is full (which is really the state we'd like to be in),
+					// wait until there's room for one more frame (ie., one was output from
+					// VideoStream), or until or until there's a new clip we're supposed to play.
+					//
+					// In this case, we don't sleep until next_frame_start; the displaying is
+					// done by the queue.
+					new_clip_changed.wait(lock, [this]{
+						if (num_queued_frames < max_queued_frames) {
+							return true;
 						}
-						goto wait_for_clip;
+						return should_quit || new_clip_ready || override_stream_idx != -1;
+					});
+				}
+				if (should_quit) {
+					return;
+				}
+				if (new_clip_ready) {
+					if (video_stream != nullptr) {
+						lock.unlock();  // Urg.
+						video_stream->clear_queue();
+						lock.lock();
 					}
-					// Honor if we got an override request for the camera.
-					if (override_stream_idx != -1) {
-						stream_idx = override_stream_idx;
-						override_stream_idx = -1;
-						continue;
+					return;
+				}
+				// Honor if we got an override request for the camera.
+				if (override_stream_idx != -1) {
+					stream_idx = override_stream_idx;
+					override_stream_idx = -1;
+					continue;
+				}
+			}
+
+			if (frame_lower.pts == frame_upper.pts || global_flags.interpolation_quality == 0) {
+				auto display_func = [this, primary_stream_idx, frame_lower, secondary_frame, fade_alpha]{
+					if (destination != nullptr) {
+						destination->setFrame(primary_stream_idx, frame_lower, secondary_frame, fade_alpha);
+					}
+				};
+				if (video_stream == nullptr) {
+					display_func();
+				} else {
+					if (secondary_stream_idx == -1) {
+						++metric_original_frame;
+						video_stream->schedule_original_frame(
+							next_frame_start, pts, display_func, QueueSpotHolder(this),
+							frame_lower);
+					} else {
+						assert(secondary_frame.pts != -1);
+						++metric_faded_frame;
+						video_stream->schedule_faded_frame(next_frame_start, pts, display_func,
+							QueueSpotHolder(this), frame_lower,
+							secondary_frame, fade_alpha);
 					}
 				}
+				last_pts_played = frame_lower.pts;
+				continue;
+			}
 
-				if (frame_lower.pts == frame_upper.pts || global_flags.interpolation_quality == 0) {
-					auto display_func = [this, primary_stream_idx, frame_lower, secondary_frame, fade_alpha]{
+			// Snap to input frame: If we can do so with less than 1% jitter
+			// (ie., move less than 1% of an _output_ frame), do so.
+			// TODO: Snap secondary (fade-to) clips in the same fashion.
+			double pts_snap_tolerance = 0.01 * double(TIMEBASE) / global_flags.output_framerate;
+			bool snapped = false;
+			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
+				if (fabs(snap_frame.pts - in_pts) < pts_snap_tolerance) {
+					auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
 						if (destination != nullptr) {
-							destination->setFrame(primary_stream_idx, frame_lower, secondary_frame, fade_alpha);
+							destination->setFrame(primary_stream_idx, snap_frame, secondary_frame, fade_alpha);
 						}
 					};
 					if (video_stream == nullptr) {
 						display_func();
 					} else {
 						if (secondary_stream_idx == -1) {
-							++metric_original_frame;
+							++metric_original_snapped_frame;
 							video_stream->schedule_original_frame(
-								next_frame_start, pts, display_func, QueueSpotHolder(this),
-								frame_lower);
+								next_frame_start, pts, display_func,
+								QueueSpotHolder(this), snap_frame);
 						} else {
 							assert(secondary_frame.pts != -1);
-							++metric_faded_frame;
-							video_stream->schedule_faded_frame(next_frame_start, pts, display_func,
-								QueueSpotHolder(this), frame_lower,
-								secondary_frame, fade_alpha);
+							++metric_faded_snapped_frame;
+							video_stream->schedule_faded_frame(
+								next_frame_start, pts, display_func, QueueSpotHolder(this),
+								snap_frame, secondary_frame, fade_alpha);
 						}
 					}
-					last_pts_played = frame_lower.pts;
-					continue;
+					in_pts_origin += snap_frame.pts - in_pts;
+					snapped = true;
+					last_pts_played = snap_frame.pts;
+					break;
 				}
+			}
+			if (snapped) {
+				continue;
+			}
 
-				// Snap to input frame: If we can do so with less than 1% jitter
-				// (ie., move less than 1% of an _output_ frame), do so.
-				// TODO: Snap secondary (fade-to) clips in the same fashion.
-				double pts_snap_tolerance = 0.01 * double(TIMEBASE) / global_flags.output_framerate;
-				bool snapped = false;
-				for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
-					if (fabs(snap_frame.pts - in_pts) < pts_snap_tolerance) {
-						auto display_func = [this, primary_stream_idx, snap_frame, secondary_frame, fade_alpha]{
-							if (destination != nullptr) {
-								destination->setFrame(primary_stream_idx, snap_frame, secondary_frame, fade_alpha);
-							}
-						};
-						if (video_stream == nullptr) {
-							display_func();
-						} else {
-							if (secondary_stream_idx == -1) {
-								++metric_original_snapped_frame;
-								video_stream->schedule_original_frame(
-									next_frame_start, pts, display_func,
-									QueueSpotHolder(this), snap_frame);
-							} else {
-								assert(secondary_frame.pts != -1);
-								++metric_faded_snapped_frame;
-								video_stream->schedule_faded_frame(
-									next_frame_start, pts, display_func, QueueSpotHolder(this),
-									snap_frame, secondary_frame, fade_alpha);
-							}
-						}
-						in_pts_origin += snap_frame.pts - in_pts;
-						snapped = true;
-						last_pts_played = snap_frame.pts;
-						break;
-					}
+			// The snapping above makes us lock to the input framerate, even in the presence
+			// of pts drift, for most typical cases where it's needed, like converting 60 → 2x60
+			// or 60 → 2x59.94. However, there are some corner cases like 25 → 2x59.94, where we'd
+			// get a snap very rarely (in the given case, once every 24 output frames), and by
+			// that time, we'd have drifted out. We could have solved this by changing the overall
+			// speed ever so slightly, but it requires that we know the actual frame rate (which
+			// is difficult in the presence of jitter and missed frames), or at least do some kind
+			// of matching/clustering. Instead, we take the opportunity to lock to in-between rational
+			// points if we can. E.g., if we are converting 60 → 2x60, we would not only snap to
+			// an original frame every other frame; we would also snap to exactly alpha=0.5 every
+			// in-between frame. Of course, we will still need to interpolate, but we get a lot
+			// closer when we actually get close to an original frame. In other words: Snap more
+			// often, but snap less each time. Unless the input and output frame rates are completely
+			// decorrelated with no common factor, of course (e.g. 12.345 → 34.567, which we should
+			// really never see in practice).
+			for (double fraction : { 1.0 / 2.0, 1.0 / 3.0, 2.0 / 3.0, 1.0 / 4.0, 3.0 / 4.0,
+						 1.0 / 5.0, 2.0 / 5.0, 3.0 / 5.0, 4.0 / 5.0 }) {
+				double subsnap_pts = frame_lower.pts + fraction * (frame_upper.pts - frame_lower.pts);
+				if (fabs(subsnap_pts - in_pts) < pts_snap_tolerance) {
+					in_pts_origin += lrint(subsnap_pts) - in_pts;
+					in_pts = lrint(subsnap_pts);
+					break;
 				}
-				if (snapped) {
-					continue;
+			}
+
+			if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(100)) {
+				fprintf(stderr, "WARNING: %ld ms behind, dropping an interpolated frame.\n",
+					lrint(1e3 * duration<double>(time_behind).count()));
+				++metric_dropped_interpolated_frame;
+				continue;
+			}
+
+			double alpha = double(in_pts - frame_lower.pts) / (frame_upper.pts - frame_lower.pts);
+
+			if (video_stream == nullptr) {
+				// Previews don't do any interpolation.
+				assert(secondary_stream_idx == -1);
+				if (destination != nullptr) {
+					destination->setFrame(primary_stream_idx, frame_lower);
 				}
-
-				// The snapping above makes us lock to the input framerate, even in the presence
-				// of pts drift, for most typical cases where it's needed, like converting 60 → 2x60
-				// or 60 → 2x59.94. However, there are some corner cases like 25 → 2x59.94, where we'd
-				// get a snap very rarely (in the given case, once every 24 output frames), and by
-				// that time, we'd have drifted out. We could have solved this by changing the overall
-				// speed ever so slightly, but it requires that we know the actual frame rate (which
-				// is difficult in the presence of jitter and missed frames), or at least do some kind
-				// of matching/clustering. Instead, we take the opportunity to lock to in-between rational
-				// points if we can. E.g., if we are converting 60 → 2x60, we would not only snap to
-				// an original frame every other frame; we would also snap to exactly alpha=0.5 every
-				// in-between frame. Of course, we will still need to interpolate, but we get a lot
-				// closer when we actually get close to an original frame. In other words: Snap more
-				// often, but snap less each time. Unless the input and output frame rates are completely
-				// decorrelated with no common factor, of course (e.g. 12.345 → 34.567, which we should
-				// really never see in practice).
-				for (double fraction : { 1.0 / 2.0, 1.0 / 3.0, 2.0 / 3.0, 1.0 / 4.0, 3.0 / 4.0,
-							 1.0 / 5.0, 2.0 / 5.0, 3.0 / 5.0, 4.0 / 5.0 }) {
-					double subsnap_pts = frame_lower.pts + fraction * (frame_upper.pts - frame_lower.pts);
-					if (fabs(subsnap_pts - in_pts) < pts_snap_tolerance) {
-						in_pts_origin += lrint(subsnap_pts) - in_pts;
-						in_pts = lrint(subsnap_pts);
-						break;
-					}
-				}
-
-				if (stream_output != FILE_STREAM_OUTPUT && time_behind >= milliseconds(100)) {
-					fprintf(stderr, "WARNING: %ld ms behind, dropping an interpolated frame.\n",
-						lrint(1e3 * duration<double>(time_behind).count()));
-					++metric_dropped_interpolated_frame;
-					continue;
-				}
-
-				double alpha = double(in_pts - frame_lower.pts) / (frame_upper.pts - frame_lower.pts);
-
-				if (video_stream == nullptr) {
-					// Previews don't do any interpolation.
-					assert(secondary_stream_idx == -1);
+				last_pts_played = frame_lower.pts;
+			} else {
+				auto display_func = [this](shared_ptr<Frame> frame) {
 					if (destination != nullptr) {
-						destination->setFrame(primary_stream_idx, frame_lower);
+						destination->setFrame(frame);
 					}
-					last_pts_played = frame_lower.pts;
+				};
+				if (secondary_stream_idx == -1) {
+					++metric_interpolated_frame;
 				} else {
-					auto display_func = [this](shared_ptr<Frame> frame) {
-						if (destination != nullptr) {
-							destination->setFrame(frame);
-						}
-					};
-					if (secondary_stream_idx == -1) {
-						++metric_interpolated_frame;
-					} else {
-						++metric_interpolated_faded_frame;
-					}
-					video_stream->schedule_interpolated_frame(
-						next_frame_start, pts, display_func, QueueSpotHolder(this),
-						frame_lower, frame_upper, alpha,
-						secondary_frame, fade_alpha);
-					last_pts_played = in_pts;  // Not really needed; only previews use last_pts_played.
+					++metric_interpolated_faded_frame;
 				}
-			}
-
-			// The clip ended.
-			if (should_quit) {
-				return;
-			}
-			if (done_callback != nullptr) {
-				done_callback();
-			}
-
-			// Start the next clip from the point where the fade went out.
-			if (next_clip != nullptr) {
-				origin = next_frame_start;
-				in_pts_origin = next_clip->pts_in + lrint(next_clip_fade_time * TIMEBASE * clip.speed);
+				video_stream->schedule_interpolated_frame(
+					next_frame_start, pts, display_func, QueueSpotHolder(this),
+					frame_lower, frame_upper, alpha,
+					secondary_frame, fade_alpha);
+				last_pts_played = in_pts;  // Not really needed; only previews use last_pts_played.
 			}
 		}
 
+		// The clip ended.
+		if (should_quit) {
+			return;
+		}
 		if (done_callback != nullptr) {
 			done_callback();
 		}
+
+		// Start the next clip from the point where the fade went out.
+		if (next_clip != nullptr) {
+			origin = next_frame_start;
+			in_pts_origin = next_clip->pts_in + lrint(next_clip_fade_time * TIMEBASE * clip.speed);
+		}
+	}
+
+	if (done_callback != nullptr) {
+		done_callback();
 	}
 }
 
@@ -398,9 +401,9 @@ bool Player::find_surrounding_frames(int64_t pts, int stream_idx, FrameOnDisk *f
 }
 
 Player::Player(JPEGFrameView *destination, Player::StreamOutput stream_output, AVFormatContext *file_avctx)
-	: destination(destination)
+	: destination(destination), stream_output(stream_output)
 {
-	player_thread = thread(&Player::thread_func, this, stream_output, file_avctx);
+	player_thread = thread(&Player::thread_func, this, file_avctx);
 
 	if (stream_output == HTTPD_STREAM_OUTPUT) {
 		global_metrics.add("http_output_frames", {{ "type", "original" }, { "reason", "edge_frame_or_no_interpolation" }}, &metric_original_frame);
