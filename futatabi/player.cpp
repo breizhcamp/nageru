@@ -113,6 +113,7 @@ void Player::play_playlist_once()
 	vector<ClipWithID> clip_list;
 	bool clip_ready;
 	steady_clock::time_point before_sleep = steady_clock::now();
+	string pause_status;
 
 	// Wait until we're supposed to play something.
 	{
@@ -131,6 +132,8 @@ void Player::play_playlist_once()
 			queued_clip_list.clear();
 			assert(!clip_list.empty());
 			assert(!splice_ready);  // This corner case should have been handled in splice_play().
+		} else {
+			pause_status = this->pause_status;
 		}
 	}
 
@@ -140,7 +143,9 @@ void Player::play_playlist_once()
 	if (!clip_ready) {
 		if (video_stream != nullptr) {
 			++metric_refresh_frame;
-			video_stream->schedule_refresh_frame(steady_clock::now(), pts, /*display_func=*/nullptr, QueueSpotHolder());
+			string subtitle = "Futatabi " NAGERU_VERSION ";PAUSED;" + pause_status;
+			video_stream->schedule_refresh_frame(steady_clock::now(), pts, /*display_func=*/nullptr, QueueSpotHolder(),
+				subtitle);
 		}
 		return;
 	}
@@ -250,18 +255,18 @@ void Player::play_playlist_once()
 				}
 			}
 
+			// NOTE: None of this will take into account any snapping done below.
+			double clip_progress = calc_progress(*clip, in_pts_for_progress);
+			map<uint64_t, double> progress{ { clip_list[clip_idx].id, clip_progress } };
+			double time_remaining;
+			if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
+				double next_clip_progress = calc_progress(*next_clip, in_pts_secondary_for_progress);
+				progress[clip_list[clip_idx + 1].id] = next_clip_progress;
+				time_remaining = compute_time_left(clip_list, clip_idx + 1, next_clip_progress);
+			} else {
+				time_remaining = compute_time_left(clip_list, clip_idx, clip_progress);
+			}
 			if (progress_callback != nullptr) {
-				// NOTE: None of this will take into account any snapping done below.
-				double clip_progress = calc_progress(*clip, in_pts_for_progress);
-				map<uint64_t, double> progress{ { clip_list[clip_idx].id, clip_progress } };
-				double time_remaining;
-				if (next_clip != nullptr && time_left_this_clip <= next_clip_fade_time) {
-					double next_clip_progress = calc_progress(*next_clip, in_pts_secondary_for_progress);
-					progress[clip_list[clip_idx + 1].id] = next_clip_progress;
-					time_remaining = compute_time_left(clip_list, clip_idx + 1, next_clip_progress);
-				} else {
-					time_remaining = compute_time_left(clip_list, clip_idx, clip_progress);
-				}
 				progress_callback(progress, time_remaining);
 			}
 
@@ -315,11 +320,23 @@ void Player::play_playlist_once()
 				}
 			}
 
+			string subtitle;
+			{
+				stringstream ss;
+				ss.imbue(locale("C"));
+				ss.precision(3);
+				ss << "Futatabi " NAGERU_VERSION ";PLAYING;";
+				ss << fixed << time_remaining;
+				ss << ";" << format_duration(time_remaining) << " left";
+				subtitle = ss.str();
+			}
+
 			// If there's nothing to interpolate between, or if interpolation is turned off,
 			// or we're a preview, then just display the frame.
 			if (frame_lower.pts == frame_upper.pts || global_flags.interpolation_quality == 0 || video_stream == nullptr) {
 				display_single_frame(primary_stream_idx, frame_lower, secondary_stream_idx,
-				                     secondary_frame, fade_alpha, next_frame_start, /*snapped=*/false);
+				                     secondary_frame, fade_alpha, next_frame_start, /*snapped=*/false,
+				                     subtitle);
 				continue;
 			}
 
@@ -331,7 +348,8 @@ void Player::play_playlist_once()
 			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
 				if (fabs(snap_frame.pts - in_pts) < pts_snap_tolerance) {
 					display_single_frame(primary_stream_idx, snap_frame, secondary_stream_idx,
-					                     secondary_frame, fade_alpha, next_frame_start, /*snapped=*/true);
+					                     secondary_frame, fade_alpha, next_frame_start, /*snapped=*/true,
+					                     subtitle);
 					in_pts_origin += snap_frame.pts - in_pts;
 					snapped = true;
 					break;
@@ -387,7 +405,7 @@ void Player::play_playlist_once()
 			video_stream->schedule_interpolated_frame(
 				next_frame_start, pts, display_func, QueueSpotHolder(this),
 				frame_lower, frame_upper, alpha,
-				secondary_frame, fade_alpha);
+				secondary_frame, fade_alpha, subtitle);
 			last_pts_played = in_pts;  // Not really needed; only previews use last_pts_played.
 		}
 
@@ -408,7 +426,7 @@ void Player::play_playlist_once()
 	}
 }
 
-void Player::display_single_frame(int primary_stream_idx, const FrameOnDisk &primary_frame, int secondary_stream_idx, const FrameOnDisk &secondary_frame, double fade_alpha, steady_clock::time_point frame_start, bool snapped)
+void Player::display_single_frame(int primary_stream_idx, const FrameOnDisk &primary_frame, int secondary_stream_idx, const FrameOnDisk &secondary_frame, double fade_alpha, steady_clock::time_point frame_start, bool snapped, const std::string &subtitle)
 {
 	auto display_func = [this, primary_stream_idx, primary_frame, secondary_frame, fade_alpha] {
 		if (destination != nullptr) {
@@ -427,7 +445,7 @@ void Player::display_single_frame(int primary_stream_idx, const FrameOnDisk &pri
 			}
 			video_stream->schedule_original_frame(
 				frame_start, pts, display_func, QueueSpotHolder(this),
-				primary_frame);
+				primary_frame, subtitle);
 		} else {
 			assert(secondary_frame.pts != -1);
 			// NOTE: We could be increasing unused metrics for previews, but that's harmless.
@@ -438,7 +456,7 @@ void Player::display_single_frame(int primary_stream_idx, const FrameOnDisk &pri
 			}
 			video_stream->schedule_faded_frame(frame_start, pts, display_func,
 			                                   QueueSpotHolder(this), primary_frame,
-			                                   secondary_frame, fade_alpha);
+			                                   secondary_frame, fade_alpha, subtitle);
 		}
 	}
 	last_pts_played = primary_frame.pts;
@@ -589,4 +607,19 @@ double compute_time_left(const vector<ClipWithID> &clips, size_t currently_playi
 		last_fade_time_seconds = min(clip_length, clip.fade_time_seconds);
 	}
 	return remaining;
+}
+
+string format_duration(double t)
+{
+	int t_ms = lrint(t * 1e3);
+
+	int ms = t_ms % 1000;
+	t_ms /= 1000;
+	int s = t_ms % 60;
+	t_ms /= 60;
+	int m = t_ms;
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "%d:%02d.%03d", m, s, ms);
+	return buf;
 }

@@ -53,6 +53,14 @@ public:
 	// If nothing is playing, the call will be ignored.
 	void splice_play(const std::vector<ClipWithID> &clips);
 
+	// Set the status string that will be used for the video stream's status subtitles
+	// whenever we are not playing anything.
+	void set_pause_status(const std::string &status)
+	{
+		std::lock_guard<std::mutex> lock(queue_state_mu);
+		pause_status = status;
+	}
+
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
 	using done_callback_func = std::function<void()>;
@@ -71,7 +79,7 @@ public:
 private:
 	void thread_func(AVFormatContext *file_avctx);
 	void play_playlist_once();
-	void display_single_frame(int primary_stream_idx, const FrameOnDisk &primary_frame, int secondary_stream_idx, const FrameOnDisk &secondary_frame, double fade_alpha, std::chrono::steady_clock::time_point frame_start, bool snapped);
+	void display_single_frame(int primary_stream_idx, const FrameOnDisk &primary_frame, int secondary_stream_idx, const FrameOnDisk &secondary_frame, double fade_alpha, std::chrono::steady_clock::time_point frame_start, bool snapped, const std::string &subtitle);
 	void open_output_stream();
 	static int write_packet2_thunk(void *opaque, uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
 	int write_packet2(uint8_t *buf, int buf_size, AVIODataMarkerType type, int64_t time);
@@ -97,6 +105,7 @@ private:
 
 	bool splice_ready = false;  // Under queue_state_mu.
 	std::vector<ClipWithID> to_splice_clip_list;  // Under queue_state_mu.
+	std::string pause_status = "paused";  // Under queue_state_mu.
 
 	std::unique_ptr<VideoStream> video_stream;  // Can be nullptr.
 
@@ -126,5 +135,7 @@ static inline double compute_total_time(const std::vector<ClipWithID> &clips)
 {
 	return compute_time_left(clips, 0, 0.0);
 }
+
+std::string format_duration(double t);
 
 #endif  // !defined(_PLAYER_H)

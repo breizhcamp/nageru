@@ -524,21 +524,6 @@ void MainWindow::live_player_done()
 	ui->stop_btn->setEnabled(false);
 }
 
-static string format_duration(double t)
-{
-	int t_ms = lrint(t * 1e3);
-
-	int ms = t_ms % 1000;
-	t_ms /= 1000;
-	int s = t_ms % 60;
-	t_ms /= 60;
-	int m = t_ms;
-
-	char buf[256];
-	snprintf(buf, sizeof(buf), "%d:%02d.%03d", m, s, ms);
-	return buf;
-}
-
 void MainWindow::live_player_clip_progress(const map<uint64_t, double> &progress, double time_remaining)
 {
 	playlist_clips->set_progress(progress);
@@ -1036,6 +1021,9 @@ void MainWindow::highlight_camera_input(int stream_idx)
 void MainWindow::set_output_status(const string &status)
 {
 	ui->live_label->setText(QString::fromStdString("Current output (" + status + ")"));
+	if (live_player != nullptr) {
+		live_player->set_pause_status(status);
+	}
 
 	lock_guard<mutex> lock(queue_status_mu);
 	queue_status = status;

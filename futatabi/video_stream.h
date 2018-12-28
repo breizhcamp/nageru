@@ -47,21 +47,21 @@ public:
 	void schedule_original_frame(std::chrono::steady_clock::time_point,
 	                             int64_t output_pts, std::function<void()> &&display_func,
 	                             QueueSpotHolder &&queue_spot_holder,
-	                             FrameOnDisk frame);
+	                             FrameOnDisk frame, const std::string &subtitle);
 	void schedule_faded_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
 	                          std::function<void()> &&display_func,
 	                          QueueSpotHolder &&queue_spot_holder,
 	                          FrameOnDisk frame1, FrameOnDisk frame2,
-	                          float fade_alpha);
+	                          float fade_alpha, const std::string &subtitle);
 	void schedule_interpolated_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
 	                                 std::function<void(std::shared_ptr<Frame>)> &&display_func,
 	                                 QueueSpotHolder &&queue_spot_holder,
 	                                 FrameOnDisk frame1, FrameOnDisk frame2,
-	                                 float alpha, FrameOnDisk secondary_frame = {},  // Empty = no secondary (fade) frame.
-	                                 float fade_alpha = 0.0f);
+	                                 float alpha, FrameOnDisk secondary_frame,  // Empty = no secondary (fade) frame.
+	                                 float fade_alpha, const std::string &subtitle);
 	void schedule_refresh_frame(std::chrono::steady_clock::time_point, int64_t output_pts,
 	                            std::function<void()> &&display_func,
-	                            QueueSpotHolder &&queue_spot_holder);
+	                            QueueSpotHolder &&queue_spot_holder, const std::string &subtitle);
 
 private:
 	FrameReader frame_reader;
@@ -126,6 +126,8 @@ private:
 
 		std::function<void()> display_func;  // Called when the image is done decoding.
 		std::function<void(std::shared_ptr<Frame>)> display_decoded_func;  // Same, except for INTERPOLATED and FADED_INTERPOLATED.
+
+		std::string subtitle;  // Blank for none.
 
 		QueueSpotHolder queue_spot_holder;
 	};

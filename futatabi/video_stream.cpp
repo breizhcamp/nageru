@@ -264,7 +264,7 @@ void VideoStream::start()
 
 	size_t width = global_flags.width, height = global_flags.height;  // Doesn't matter for MJPEG.
 	mux.reset(new Mux(avctx, width, height, Mux::CODEC_MJPEG, /*video_extradata=*/"", /*audio_codec_parameters=*/nullptr,
-	                  AVCOL_SPC_BT709, COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}));
+	                  AVCOL_SPC_BT709, COARSE_TIMEBASE, /*write_callback=*/nullptr, Mux::WRITE_FOREGROUND, {}, Mux::WITH_SUBTITLES));
 
 	encode_thread = thread(&VideoStream::encode_thread_func, this);
 }
@@ -307,7 +307,7 @@ void VideoStream::clear_queue()
 void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
                                           int64_t output_pts, function<void()> &&display_func,
                                           QueueSpotHolder &&queue_spot_holder,
-                                          FrameOnDisk frame)
+                                          FrameOnDisk frame, const string &subtitle)
 {
 	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, frame.pts);
 
@@ -322,6 +322,7 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
 	qf.frame1 = frame;
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
+	qf.subtitle = subtitle;
 
 	lock_guard<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
@@ -332,7 +333,7 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
                                        function<void()> &&display_func,
                                        QueueSpotHolder &&queue_spot_holder,
                                        FrameOnDisk frame1_spec, FrameOnDisk frame2_spec,
-                                       float fade_alpha)
+                                       float fade_alpha, const string &subtitle)
 {
 	fprintf(stderr, "output_pts=%ld  faded         input_pts=%ld,%ld  fade_alpha=%.2f\n", output_pts, frame1_spec.pts, frame2_spec.pts, fade_alpha);
 
@@ -365,6 +366,7 @@ void VideoStream::schedule_faded_frame(steady_clock::time_point local_pts, int64
 	qf.frame1 = frame1_spec;
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
+	qf.subtitle = subtitle;
 
 	qf.secondary_frame = frame2_spec;
 
@@ -400,7 +402,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
                                               int64_t output_pts, function<void(shared_ptr<Frame>)> &&display_func,
                                               QueueSpotHolder &&queue_spot_holder,
                                               FrameOnDisk frame1, FrameOnDisk frame2,
-                                              float alpha, FrameOnDisk secondary_frame, float fade_alpha)
+                                              float alpha, FrameOnDisk secondary_frame, float fade_alpha, const string &subtitle)
 {
 	if (secondary_frame.pts != -1) {
 		fprintf(stderr, "output_pts=%ld  interpolated  input_pts1=%ld input_pts2=%ld alpha=%.3f  secondary_pts=%ld  fade_alpha=%.2f\n", output_pts, frame1.pts, frame2.pts, alpha, secondary_frame.pts, fade_alpha);
@@ -426,6 +428,7 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 	qf.display_decoded_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
 	qf.local_pts = local_pts;
+	qf.subtitle = subtitle;
 
 	check_error();
 
@@ -524,13 +527,14 @@ void VideoStream::schedule_interpolated_frame(steady_clock::time_point local_pts
 
 void VideoStream::schedule_refresh_frame(steady_clock::time_point local_pts,
                                          int64_t output_pts, function<void()> &&display_func,
-                                         QueueSpotHolder &&queue_spot_holder)
+                                         QueueSpotHolder &&queue_spot_holder, const string &subtitle)
 {
 	QueuedFrame qf;
 	qf.type = QueuedFrame::REFRESH;
 	qf.output_pts = output_pts;
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
+	qf.subtitle = subtitle;
 
 	lock_guard<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
@@ -677,6 +681,19 @@ void VideoStream::encode_thread_func()
 		} else {
 			assert(false);
 		}
+
+		if (!qf.subtitle.empty()) {
+			AVPacket pkt;
+			av_init_packet(&pkt);
+			pkt.stream_index = mux->get_subtitle_stream_idx();
+			assert(pkt.stream_index != -1);
+			pkt.data = (uint8_t *)qf.subtitle.data();
+			pkt.size = qf.subtitle.size();
+			pkt.flags = 0;
+			pkt.duration = lrint(TIMEBASE / global_flags.output_framerate);  // Doesn't really matter for Nageru.
+			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
+		}
+
 		if (qf.display_func != nullptr) {
 			qf.display_func();
 		}

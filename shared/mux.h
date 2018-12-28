@@ -64,6 +64,10 @@ public:
 		// higher overhead.
 		WRITE_BACKGROUND,
 	};
+	enum WithSubtitles {
+		WITH_SUBTITLES,
+		WITHOUT_SUBTITLES
+	};
 
 	// Takes ownership of avctx. <write_callback> will be called every time
 	// a write has been made to the video stream (id 0), with the pts of
@@ -72,9 +76,10 @@ public:
 	// will be added to.
 	//
 	// If audio_codecpar is nullptr, there will be no audio stream.
-	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, int time_base, std::function<void(int64_t)> write_callback, WriteStrategy write_strategy, const std::vector<MuxMetrics *> &metrics);
+	Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const std::string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, int time_base, std::function<void(int64_t)> write_callback, WriteStrategy write_strategy, const std::vector<MuxMetrics *> &metrics, WithSubtitles with_subtitles = WITHOUT_SUBTITLES);
 	~Mux();
 	void add_packet(const AVPacket &pkt, int64_t pts, int64_t dts, AVRational timebase = { 1, TIMEBASE }, int stream_index_override = -1);
+	int get_subtitle_stream_idx() const { return subtitle_stream_idx; }
 
 	// As long as the mux is plugged, it will not actually write anything to disk,
 	// just queue the packets. Once it is unplugged, the packets are reordered by pts
@@ -113,6 +118,7 @@ private:
 	std::condition_variable packet_queue_ready;
 
 	std::vector<AVStream *> streams;
+	int subtitle_stream_idx = -1;
 
 	std::function<void(int64_t)> write_callback;
 	std::vector<MuxMetrics *> metrics;

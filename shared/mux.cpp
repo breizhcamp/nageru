@@ -47,7 +47,7 @@ struct PacketBefore {
 	const AVFormatContext * const ctx;
 };
 
-Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, int time_base, function<void(int64_t)> write_callback, WriteStrategy write_strategy, const vector<MuxMetrics *> &metrics)
+Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const string &video_extradata, const AVCodecParameters *audio_codecpar, AVColorSpace color_space, int time_base, function<void(int64_t)> write_callback, WriteStrategy write_strategy, const vector<MuxMetrics *> &metrics, WithSubtitles with_subtitles)
 	: write_strategy(write_strategy), avctx(avctx), write_callback(write_callback), metrics(metrics)
 {
 	AVStream *avstream_video = avformat_new_stream(avctx, nullptr);
@@ -102,6 +102,20 @@ Mux::Mux(AVFormatContext *avctx, int width, int height, Codec video_codec, const
 			exit(1);
 		}
 		streams.push_back(avstream_audio);
+	}
+
+	if (with_subtitles == WITH_SUBTITLES) {
+		AVStream *avstream_subtitles = avformat_new_stream(avctx, nullptr);
+		if (avstream_subtitles == nullptr) {
+			fprintf(stderr, "avformat_new_stream() failed\n");
+			exit(1);
+		}
+		avstream_subtitles->time_base = AVRational{1, time_base};
+		avstream_subtitles->codecpar->codec_type = AVMEDIA_TYPE_SUBTITLE;
+		avstream_subtitles->codecpar->codec_id = AV_CODEC_ID_WEBVTT;
+		avstream_subtitles->disposition = AV_DISPOSITION_METADATA;
+		streams.push_back(avstream_subtitles);
+		subtitle_stream_idx = streams.size() - 1;
 	}
 
 	AVDictionary *options = NULL;
