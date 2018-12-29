@@ -525,7 +525,7 @@ void Player::play(const vector<ClipWithID> &clips)
 
 void Player::splice_play(const vector<ClipWithID> &clips)
 {
-        lock_guard<mutex> lock(queue_state_mu);
+	lock_guard<mutex> lock(queue_state_mu);
 	if (new_clip_ready) {
 		queued_clip_list = clips;
 		assert(!splice_ready);
@@ -588,7 +588,7 @@ void Player::release_queue_spot()
 	new_clip_changed.notify_all();
 }
 
-double compute_time_left(const vector<ClipWithID> &clips, size_t currently_playing_idx, double progress_currently_playing) 
+double compute_time_left(const vector<ClipWithID> &clips, size_t currently_playing_idx, double progress_currently_playing)
 {
 	// Look at the last clip and then start counting from there.
 	double remaining = 0.0;
