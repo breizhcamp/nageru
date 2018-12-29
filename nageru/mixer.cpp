@@ -798,7 +798,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 
 	size_t cbcr_width, cbcr_height, cbcr_offset, y_offset;
 	size_t expected_length = video_format.stride * (video_format.height + video_format.extra_lines_top + video_format.extra_lines_bottom);
-	if (userdata->pixel_format == PixelFormat_8BitYCbCrPlanar) {
+	if (userdata != nullptr && userdata->pixel_format == PixelFormat_8BitYCbCrPlanar) {
 		// The calculation above is wrong for planar Y'CbCr, so just override it.
 		assert(card->type == CardType::FFMPEG_INPUT);
 		assert(video_offset == 0);
