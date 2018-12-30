@@ -865,6 +865,7 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 		}
 		frame_upload_start = steady_clock::now();
 	}
+	assert(userdata != nullptr);
 	userdata->last_interlaced = video_format.interlaced;
 	userdata->last_has_signal = video_format.has_signal;
 	userdata->last_is_connected = video_format.is_connected;
