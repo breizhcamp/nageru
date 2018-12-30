@@ -1,3 +1,17 @@
+Nageru and Futatabi 1.8.1, December 30th, 2018
+
+  - Futatabi can now communicate its queue status through a subtitle track,
+    and Nageru can consume it. This allows Nageru themes to get precise
+    information programmatically, e.g. to show status or automatically
+    switch away when the queue is about to end.
+
+  - Futatabi can now reuse the computed flow across successive frames when
+    interpolating between the same frame pair. This significantly reduces
+    the GPU load when doing super-slow motion (slower than 0.5x).
+
+  - Various smaller fixes.
+
+
 Nageru and Futatabi 1.8.0, December 20th, 2018
 
   - Initial release of Futatabi, a multicamera slow motion video server
