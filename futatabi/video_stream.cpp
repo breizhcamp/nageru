@@ -615,6 +615,20 @@ void VideoStream::encode_thread_func()
 			frame_queue.pop_front();
 		}
 
+		// Hack: We mux the subtitle packet one time unit before the actual frame,
+		// so that Nageru is sure to get it first.
+		if (!qf.subtitle.empty()) {
+			AVPacket pkt;
+			av_init_packet(&pkt);
+			pkt.stream_index = mux->get_subtitle_stream_idx();
+			assert(pkt.stream_index != -1);
+			pkt.data = (uint8_t *)qf.subtitle.data();
+			pkt.size = qf.subtitle.size();
+			pkt.flags = 0;
+			pkt.duration = lrint(TIMEBASE / global_flags.output_framerate);  // Doesn't really matter for Nageru.
+			mux->add_packet(pkt, qf.output_pts - 1, qf.output_pts - 1);
+		}
+
 		if (qf.type == QueuedFrame::ORIGINAL) {
 			// Send the JPEG frame on, unchanged.
 			string jpeg = frame_reader.read_frame(qf.frame1);
@@ -681,19 +695,6 @@ void VideoStream::encode_thread_func()
 		} else {
 			assert(false);
 		}
-
-		if (!qf.subtitle.empty()) {
-			AVPacket pkt;
-			av_init_packet(&pkt);
-			pkt.stream_index = mux->get_subtitle_stream_idx();
-			assert(pkt.stream_index != -1);
-			pkt.data = (uint8_t *)qf.subtitle.data();
-			pkt.size = qf.subtitle.size();
-			pkt.flags = 0;
-			pkt.duration = lrint(TIMEBASE / global_flags.output_framerate);  // Doesn't really matter for Nageru.
-			mux->add_packet(pkt, qf.output_pts, qf.output_pts);
-		}
-
 		if (qf.display_func != nullptr) {
 			qf.display_func();
 		}
