@@ -394,6 +394,8 @@ bool FFmpegCapture::play_video(const string &pathname)
 	}
 
 	int audio_stream_index = find_stream_index(format_ctx.get(), AVMEDIA_TYPE_AUDIO);
+	int subtitle_stream_index = find_stream_index(format_ctx.get(), AVMEDIA_TYPE_SUBTITLE);
+	has_last_subtitle = false;
 
 	// Open video decoder.
 	const AVCodecParameters *video_codecpar = format_ctx->streams[video_stream_index]->codecpar;
@@ -455,7 +457,7 @@ bool FFmpegCapture::play_video(const string &pathname)
 		int64_t audio_pts;
 		bool error;
 		AVFrameWithDeleter frame = decode_frame(format_ctx.get(), video_codec_ctx.get(), audio_codec_ctx.get(),
-			pathname, video_stream_index, audio_stream_index, audio_frame.get(), &audio_format, &audio_pts, &error);
+			pathname, video_stream_index, audio_stream_index, subtitle_stream_index, audio_frame.get(), &audio_format, &audio_pts, &error);
 		if (error) {
 			return false;
 		}
@@ -636,7 +638,7 @@ namespace {
 }  // namespace
 
 AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCodecContext *video_codec_ctx, AVCodecContext *audio_codec_ctx,
-	const std::string &pathname, int video_stream_index, int audio_stream_index,
+	const std::string &pathname, int video_stream_index, int audio_stream_index, int subtitle_stream_index,
 	FrameAllocator::Frame *audio_frame, AudioFormat *audio_format, int64_t *audio_pts, bool *error)
 {
 	*error = false;
@@ -672,6 +674,9 @@ AVFrameWithDeleter FFmpegCapture::decode_frame(AVFormatContext *format_ctx, AVCo
 					*error = true;
 					return AVFrameWithDeleter(nullptr);
 				}
+			} else if (pkt.stream_index == subtitle_stream_index) {
+				last_subtitle = string(reinterpret_cast<const char *>(pkt.data), pkt.size);
+				has_last_subtitle = true;
 			}
 		} else {
 			eof = true;  // Or error, but ignore that for the time being.

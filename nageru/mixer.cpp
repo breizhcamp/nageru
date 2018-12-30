@@ -795,6 +795,11 @@ void Mixer::bm_frame(unsigned card_index, uint16_t timecode,
 	card->last_timecode = timecode;
 
 	PBOFrameAllocator::Userdata *userdata = (PBOFrameAllocator::Userdata *)video_frame.userdata;
+	if (card->type == CardType::FFMPEG_INPUT) {
+		FFmpegCapture *ffmpeg_capture = static_cast<FFmpegCapture *>(card->capture.get());
+		userdata->has_last_subtitle = ffmpeg_capture->get_has_last_subtitle();
+		userdata->last_subtitle = ffmpeg_capture->get_last_subtitle();
+	}
 
 	size_t cbcr_width, cbcr_height, cbcr_offset, y_offset;
 	size_t expected_length = video_format.stride * (video_format.height + video_format.extra_lines_top + video_format.extra_lines_bottom);

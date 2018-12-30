@@ -17,6 +17,11 @@
 // changes parameters midway, which is allowed in some formats.
 //
 // You can get out the audio either as decoded or in raw form (Kaeru uses this).
+//
+// If there's a subtitle track, you can also get out the last subtitle at the
+// point of the frame. Note that once we get a video frame, we don't look for
+// subtitle, so if subtitles and a frame comes at the same time, you might not
+// see the subtitle until the next frame.
 
 #include <assert.h>
 #include <stdint.h>
@@ -164,6 +169,18 @@ public:
 		return current_frame_ycbcr_format;
 	}
 
+	// Only valid to call during the frame callback.
+	std::string get_last_subtitle() const
+	{
+		return last_subtitle;
+	}
+
+	// Same.
+	bool get_has_last_subtitle() const
+	{
+		return has_last_subtitle;
+	}
+
 	void set_dequeue_thread_callbacks(std::function<void()> init, std::function<void()> cleanup) override
 	{
 		dequeue_init_callback = init;
@@ -218,7 +235,7 @@ private:
 
 	// Returns nullptr if no frame was decoded (e.g. EOF).
 	AVFrameWithDeleter decode_frame(AVFormatContext *format_ctx, AVCodecContext *video_codec_ctx, AVCodecContext *audio_codec_ctx,
-	                                const std::string &pathname, int video_stream_index, int audio_stream_index,
+	                                const std::string &pathname, int video_stream_index, int audio_stream_index, int subtitle_stream_index,
 	                                bmusb::FrameAllocator::Frame *audio_frame, bmusb::AudioFormat *audio_format, int64_t *audio_pts, bool *error);
 	void convert_audio(const AVFrame *audio_avframe, bmusb::FrameAllocator::Frame *audio_frame, bmusb::AudioFormat *audio_format);
 
@@ -276,6 +293,9 @@ private:
 	int64_t last_channel_layout;
 	int last_sample_rate;
 
+	// Subtitles (no decoding done, really).
+	bool has_last_subtitle = false;
+	std::string last_subtitle;
 };
 
 #endif  // !defined(_FFMPEG_CAPTURE_H)

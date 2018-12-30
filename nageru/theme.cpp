@@ -72,6 +72,8 @@ struct InputStateInfo {
 	unsigned last_width[MAX_VIDEO_CARDS], last_height[MAX_VIDEO_CARDS];
 	bool last_interlaced[MAX_VIDEO_CARDS], last_has_signal[MAX_VIDEO_CARDS], last_is_connected[MAX_VIDEO_CARDS];
 	unsigned last_frame_rate_nom[MAX_VIDEO_CARDS], last_frame_rate_den[MAX_VIDEO_CARDS];
+	bool has_last_subtitle[MAX_VIDEO_CARDS];
+	std::string last_subtitle[MAX_VIDEO_CARDS];
 };
 
 InputStateInfo::InputStateInfo(const InputState &input_state)
@@ -93,6 +95,8 @@ InputStateInfo::InputStateInfo(const InputState &input_state)
 		last_is_connected[signal_num] = userdata->last_is_connected;
 		last_frame_rate_nom[signal_num] = userdata->last_frame_rate_nom;
 		last_frame_rate_den[signal_num] = userdata->last_frame_rate_den;
+		has_last_subtitle[signal_num] = userdata->has_last_subtitle;
+		last_subtitle[signal_num] = userdata->last_subtitle;
 	}
 }
 
@@ -634,6 +638,20 @@ int InputStateInfo_get_frame_rate_den(lua_State* L)
 	return 1;
 }
 
+int InputStateInfo_get_last_subtitle(lua_State* L)
+{
+	assert(lua_gettop(L) == 2);
+	InputStateInfo *input_state_info = get_input_state_info(L, 1);
+	Theme *theme = get_theme_updata(L);
+	int signal_num = theme->map_signal(luaL_checknumber(L, 2));
+	if (!input_state_info->has_last_subtitle[signal_num]) {
+		lua_pushnil(L);
+	} else {
+		lua_pushstring(L, input_state_info->last_subtitle[signal_num].c_str());
+	}
+	return 1;
+}
+
 int Effect_set_float(lua_State *L)
 {
 	assert(lua_gettop(L) == 3);
@@ -829,6 +847,7 @@ const luaL_Reg InputStateInfo_funcs[] = {
 	{ "get_is_connected", InputStateInfo_get_is_connected },
 	{ "get_frame_rate_nom", InputStateInfo_get_frame_rate_nom },
 	{ "get_frame_rate_den", InputStateInfo_get_frame_rate_den },
+	{ "get_last_subtitle", InputStateInfo_get_last_subtitle },
 	{ NULL, NULL }
 };
 

@@ -52,6 +52,8 @@ public:
 		GLuint last_v210_width[2];  // PixelFormat_10BitYCbCr.
 		bool last_interlaced, last_has_signal, last_is_connected;
 		unsigned last_frame_rate_nom, last_frame_rate_den;
+		bool has_last_subtitle = false;
+		std::string last_subtitle;
 	};
 
 private:
