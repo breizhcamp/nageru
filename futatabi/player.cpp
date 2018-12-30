@@ -143,7 +143,7 @@ void Player::play_playlist_once()
 	if (!clip_ready) {
 		if (video_stream != nullptr) {
 			++metric_refresh_frame;
-			string subtitle = "Futatabi " NAGERU_VERSION ";PAUSED;" + pause_status;
+			string subtitle = "Futatabi " NAGERU_VERSION ";PAUSED;0.000;" + pause_status;
 			video_stream->schedule_refresh_frame(steady_clock::now(), pts, /*display_func=*/nullptr, QueueSpotHolder(),
 				subtitle);
 		}
