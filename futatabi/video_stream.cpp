@@ -241,6 +241,30 @@ VideoStream::~VideoStream()
 	if (last_flow_tex != 0) {
 		compute_flow->release_texture(last_flow_tex);
 	}
+
+	for (const unique_ptr<InterpolatedFrameResources> &resource : interpolate_resources) {
+		glUnmapNamedBuffer(resource->pbo);
+		check_error();
+		glDeleteBuffers(1, &resource->pbo);
+		check_error();
+		glDeleteFramebuffers(2, resource->input_fbos);
+		check_error();
+		glDeleteFramebuffers(1, &resource->fade_fbo);
+		check_error();
+		glDeleteTextures(1, &resource->input_tex);
+		check_error();
+		glDeleteTextures(1, &resource->gray_tex);
+		check_error();
+		glDeleteTextures(1, &resource->fade_y_output_tex);
+		check_error();
+		glDeleteTextures(1, &resource->fade_cbcr_output_tex);
+		check_error();
+		glDeleteTextures(1, &resource->cb_tex);
+		check_error();
+		glDeleteTextures(1, &resource->cr_tex);
+		check_error();
+	}
+	assert(interpolate_resources.size() == num_interpolate_slots);
 }
 
 void VideoStream::start()

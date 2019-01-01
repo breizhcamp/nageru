@@ -506,11 +506,12 @@ Player::Player(JPEGFrameView *destination, Player::StreamOutput stream_output, A
 Player::~Player()
 {
 	should_quit = true;
+	new_clip_changed.notify_all();
+	player_thread.join();
+
 	if (video_stream != nullptr) {
 		video_stream->stop();
 	}
-	new_clip_changed.notify_all();
-	player_thread.join();
 }
 
 void Player::play(const vector<ClipWithID> &clips)
