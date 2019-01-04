@@ -638,7 +638,7 @@ void MIDIMapper::update_lights_lock_held()
 
 		// For some reason, not all devices respond to note off.
 		// Use note-on with velocity of 0 (which is equivalent) instead.
-		snd_seq_ev_set_noteon(&ev, /*channel=*/0, note_num, active ? 127 : 0);
+		snd_seq_ev_set_noteon(&ev, /*channel=*/0, note_num, active ? 1 : 0);
 		WARN_ON_ERROR("snd_seq_event_output", snd_seq_event_output(alsa_seq, &ev));
 		current_light_status[note_num] = active;
 	}
