@@ -177,7 +177,7 @@ qt_files = qt5.preprocess(
 # Qt objects.
 nageru_srcs += ['nageru/glwidget.cpp', 'nageru/mainwindow.cpp', 'nageru/vumeter.cpp', 'nageru/lrameter.cpp', 'nageru/compression_reduction_meter.cpp',
 	'nageru/correlation_meter.cpp', 'nageru/analyzer.cpp', 'nageru/input_mapping_dialog.cpp', 'nageru/midi_mapping_dialog.cpp',
-	'nageru/nonlinear_fader.cpp', 'nageru/context_menus.cpp', 'nageru/vu_common.cpp', 'nageru/piecewise_interpolator.cpp', 'nageru/midi_mapper.cpp']
+	'nageru/nonlinear_fader.cpp', 'nageru/context_menus.cpp', 'nageru/vu_common.cpp', 'nageru/piecewise_interpolator.cpp', 'nageru/midi_mapper.cpp', 'nageru/midi_device.cpp']
 
 # Auxiliary objects used for nearly everything.
 aux_srcs = ['nageru/flags.cpp']

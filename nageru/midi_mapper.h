@@ -1,9 +1,9 @@
 #ifndef _MIDI_MAPPER_H
 #define _MIDI_MAPPER_H 1
 
-// MIDIMapper is a class that listens for incoming MIDI messages from
-// mixer controllers (ie., it is not meant to be used with regular
-// instruments), interprets them according to a device-specific, user-defined
+// MIDIMapper is a class that gets incoming MIDI messages from mixer
+// controllers (ie., it is not meant to be used with regular instruments)
+// via MIDIDevice, interprets them according to a device-specific, user-defined
 // mapping, and calls back into a receiver (typically the MainWindow).
 // This way, it is possible to control audio functionality using physical
 // pots and faders instead of the mouse.
@@ -18,11 +18,9 @@
 #include <thread>
 
 #include "defs.h"
+#include "midi_device.h"
 
 class MIDIMappingProto;
-typedef struct snd_seq_addr snd_seq_addr_t;
-typedef struct snd_seq_event snd_seq_event_t;
-typedef struct _snd_seq snd_seq_t;
 
 // Interface for receiving interpreted controller messages.
 class ControllerReceiver {
@@ -79,7 +77,7 @@ public:
 	virtual void note_on(unsigned note) = 0;
 };
 
-class MIDIMapper {
+class MIDIMapper : public MIDIReceiver {
 public:
 	MIDIMapper(ControllerReceiver *receiver);
 	virtual ~MIDIMapper();
@@ -98,10 +96,12 @@ public:
 		this->has_peaked[bus_idx] = has_peaked;
 	}
 
+	// MIDIReceiver.
+	void controller_received(int controller, int value) override;
+	void note_on_received(int note) override;
+	void update_num_subscribers(unsigned num_subscribers) override;
+
 private:
-	void thread_func();
-	void handle_event(snd_seq_t *seq, snd_seq_event_t *event);
-	void subscribe_to_port_lock_held(snd_seq_t *seq, const snd_seq_addr_t &addr);
 	void match_controller(int controller, int field_number, int bank_field_number, float value, std::function<void(unsigned, float)> func);
 	void match_button(int note, int field_number, int bank_field_number, std::function<void(unsigned)> func);
 	bool has_active_controller(unsigned bus_idx, int field_number, int bank_field_number);  // Also works for buttons.
@@ -125,10 +125,7 @@ private:
 	std::atomic<int> current_controller_bank{0};
 	std::atomic<int> num_subscribed_ports{0};
 
-	std::thread midi_thread;
-	std::map<unsigned, bool> current_light_status;  // Keyed by note number. Under <mu>.
-	snd_seq_t *alsa_seq{nullptr};  // Under <mu>.
-	int alsa_queue_id{-1};  // Under <mu>.
+	MIDIDevice midi_device;
 };
 
 bool load_midi_mapping_from_file(const std::string &filename, MIDIMappingProto *new_mapping);

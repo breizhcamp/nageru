@@ -42,23 +42,11 @@ double map_controller_to_float(int val)
 }  // namespace
 
 MIDIMapper::MIDIMapper(ControllerReceiver *receiver)
-	: receiver(receiver), mapping_proto(new MIDIMappingProto)
+	: receiver(receiver), mapping_proto(new MIDIMappingProto), midi_device(this)
 {
-	should_quit_fd = eventfd(/*initval=*/0, /*flags=*/0);
-	assert(should_quit_fd != -1);
 }
 
-MIDIMapper::~MIDIMapper()
-{
-	should_quit = true;
-	const uint64_t one = 1;
-	if (write(should_quit_fd, &one, sizeof(one)) != sizeof(one)) {
-		perror("write(should_quit_fd)");
-		exit(1);
-	}
-	midi_thread.join();
-	close(should_quit_fd);
-}
+MIDIMapper::~MIDIMapper() {}
 
 bool load_midi_mapping_from_file(const string &filename, MIDIMappingProto *new_mapping)
 {
@@ -115,7 +103,7 @@ void MIDIMapper::set_midi_mapping(const MIDIMappingProto &new_mapping)
 
 void MIDIMapper::start_thread()
 {
-	midi_thread = thread(&MIDIMapper::thread_func, this);
+	midi_device.start_thread();
 }
 
 const MIDIMappingProto &MIDIMapper::get_current_mapping() const
@@ -131,299 +119,112 @@ ControllerReceiver *MIDIMapper::set_receiver(ControllerReceiver *new_receiver)
 	return new_receiver;  // Now old receiver.
 }
 
-#define RETURN_ON_ERROR(msg, expr) do {                            \
-	int err = (expr);                                          \
-	if (err < 0) {                                             \
-		fprintf(stderr, msg ": %s\n", snd_strerror(err));  \
-		return;                                            \
-	}                                                          \
-} while (false)
-
-#define WARN_ON_ERROR(msg, expr) do {                              \
-	int err = (expr);                                          \
-	if (err < 0) {                                             \
-		fprintf(stderr, msg ": %s\n", snd_strerror(err));  \
-	}                                                          \
-} while (false)
-
-
-void MIDIMapper::thread_func()
+void MIDIMapper::controller_received(int controller, int value_int)
 {
-	pthread_setname_np(pthread_self(), "MIDIMapper");
+	const float value = map_controller_to_float(value_int);
 
-	snd_seq_t *seq;
-	int err;
+	receiver->controller_changed(controller);
 
-	RETURN_ON_ERROR("snd_seq_open", snd_seq_open(&seq, "default", SND_SEQ_OPEN_DUPLEX, 0));
-	RETURN_ON_ERROR("snd_seq_nonblock", snd_seq_nonblock(seq, 1));
-	RETURN_ON_ERROR("snd_seq_client_name", snd_seq_set_client_name(seq, "nageru"));
-	RETURN_ON_ERROR("snd_seq_create_simple_port",
-		snd_seq_create_simple_port(seq, "nageru",
-			SND_SEQ_PORT_CAP_READ |
-				SND_SEQ_PORT_CAP_SUBS_READ |
-				SND_SEQ_PORT_CAP_WRITE |
-				SND_SEQ_PORT_CAP_SUBS_WRITE,
-			SND_SEQ_PORT_TYPE_MIDI_GENERIC |
-				SND_SEQ_PORT_TYPE_APPLICATION));
+	// Global controllers.
+	match_controller(controller, MIDIMappingBusProto::kLocutFieldNumber, MIDIMappingProto::kLocutBankFieldNumber,
+		value, bind(&ControllerReceiver::set_locut, receiver, _2));
+	match_controller(controller, MIDIMappingBusProto::kLimiterThresholdFieldNumber, MIDIMappingProto::kLimiterThresholdBankFieldNumber,
+		value, bind(&ControllerReceiver::set_limiter_threshold, receiver, _2));
+	match_controller(controller, MIDIMappingBusProto::kMakeupGainFieldNumber, MIDIMappingProto::kMakeupGainBankFieldNumber,
+		value, bind(&ControllerReceiver::set_makeup_gain, receiver, _2));
 
-	int queue_id = snd_seq_alloc_queue(seq);
-	RETURN_ON_ERROR("snd_seq_create_queue", queue_id);
-	RETURN_ON_ERROR("snd_seq_start_queue", snd_seq_start_queue(seq, queue_id, nullptr));
-
-	// The sequencer object is now ready to be used from other threads.
-	{
-		lock_guard<mutex> lock(mu);
-		alsa_seq = seq;
-		alsa_queue_id = queue_id;
-	}
-
-	// Listen to the announce port (0:1), which will tell us about new ports.
-	RETURN_ON_ERROR("snd_seq_connect_from", snd_seq_connect_from(seq, 0, /*client=*/0, /*port=*/1));
-
-	// Now go through all ports and subscribe to them.
-	snd_seq_client_info_t *cinfo;
-	snd_seq_client_info_alloca(&cinfo);
-
-	snd_seq_client_info_set_client(cinfo, -1);
-	while (snd_seq_query_next_client(seq, cinfo) >= 0) {
-		int client = snd_seq_client_info_get_client(cinfo);
-
-		snd_seq_port_info_t *pinfo;
-		snd_seq_port_info_alloca(&pinfo);
-
-		snd_seq_port_info_set_client(pinfo, client);
-		snd_seq_port_info_set_port(pinfo, -1);
-		while (snd_seq_query_next_port(seq, pinfo) >= 0) {
-			constexpr int mask = SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ;
-			if ((snd_seq_port_info_get_capability(pinfo) & mask) == mask) {
-				lock_guard<mutex> lock(mu);
-				subscribe_to_port_lock_held(seq, *snd_seq_port_info_get_addr(pinfo));
-			}
-		}
-	}
-
-	int num_alsa_fds = snd_seq_poll_descriptors_count(seq, POLLIN);
-	unique_ptr<pollfd[]> fds(new pollfd[num_alsa_fds + 1]);
-
-	while (!should_quit) {
-		snd_seq_poll_descriptors(seq, fds.get(), num_alsa_fds, POLLIN);
-		fds[num_alsa_fds].fd = should_quit_fd;
-		fds[num_alsa_fds].events = POLLIN;
-		fds[num_alsa_fds].revents = 0;
-
-		err = poll(fds.get(), num_alsa_fds + 1, -1);
-		if (err == 0 || (err == -1 && errno == EINTR)) {
-			continue;
-		}
-		if (err == -1) {
-			perror("poll");
-			break;
-		}
-		if (fds[num_alsa_fds].revents) {
-			// Activity on should_quit_fd.
-			break;
-		}
-
-		// Seemingly we can get multiple events in a single poll,
-		// and if we don't handle them all, poll will _not_ alert us!
-		while (!should_quit) {
-			snd_seq_event_t *event;
-			err = snd_seq_event_input(seq, &event);
-			if (err < 0) {
-				if (err == -EINTR) continue;
-				if (err == -EAGAIN) break;
-				if (err == -ENOSPC) {
-					fprintf(stderr, "snd_seq_event_input: Some events were lost.\n");
-					continue;
-				}
-				fprintf(stderr, "snd_seq_event_input: %s\n", snd_strerror(err));
-				return;
-			}
-			if (event) {
-				handle_event(seq, event);
-			}
-		}
-	}
+	// Bus controllers.
+	match_controller(controller, MIDIMappingBusProto::kStereoWidthFieldNumber, MIDIMappingProto::kStereoWidthBankFieldNumber,
+		value, bind(&ControllerReceiver::set_stereo_width, receiver, _1, _2));
+	match_controller(controller, MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber,
+		value, bind(&ControllerReceiver::set_treble, receiver, _1, _2));
+	match_controller(controller, MIDIMappingBusProto::kMidFieldNumber, MIDIMappingProto::kMidBankFieldNumber,
+		value, bind(&ControllerReceiver::set_mid, receiver, _1, _2));
+	match_controller(controller, MIDIMappingBusProto::kBassFieldNumber, MIDIMappingProto::kBassBankFieldNumber,
+		value, bind(&ControllerReceiver::set_bass, receiver, _1, _2));
+	match_controller(controller, MIDIMappingBusProto::kGainFieldNumber, MIDIMappingProto::kGainBankFieldNumber,
+		value, bind(&ControllerReceiver::set_gain, receiver, _1, _2));
+	match_controller(controller, MIDIMappingBusProto::kCompressorThresholdFieldNumber, MIDIMappingProto::kCompressorThresholdBankFieldNumber,
+		value, bind(&ControllerReceiver::set_compressor_threshold, receiver, _1, _2));
+	match_controller(controller, MIDIMappingBusProto::kFaderFieldNumber, MIDIMappingProto::kFaderBankFieldNumber,
+		value, bind(&ControllerReceiver::set_fader, receiver, _1, _2));
 }
 
-void MIDIMapper::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
+void MIDIMapper::note_on_received(int note)
 {
-	if (event->source.client == snd_seq_client_id(seq)) {
-		// Ignore events we sent out ourselves.
-		return;
-	}
-
 	lock_guard<mutex> lock(mu);
-	switch (event->type) {
-	case SND_SEQ_EVENT_CONTROLLER: {
-		const int controller = event->data.control.param;
-		const float value = map_controller_to_float(event->data.control.value);
+	receiver->note_on(note);
 
-		receiver->controller_changed(controller);
-
-		// Global controllers.
-		match_controller(controller, MIDIMappingBusProto::kLocutFieldNumber, MIDIMappingProto::kLocutBankFieldNumber,
-			value, bind(&ControllerReceiver::set_locut, receiver, _2));
-		match_controller(controller, MIDIMappingBusProto::kLimiterThresholdFieldNumber, MIDIMappingProto::kLimiterThresholdBankFieldNumber,
-			value, bind(&ControllerReceiver::set_limiter_threshold, receiver, _2));
-		match_controller(controller, MIDIMappingBusProto::kMakeupGainFieldNumber, MIDIMappingProto::kMakeupGainBankFieldNumber,
-			value, bind(&ControllerReceiver::set_makeup_gain, receiver, _2));
-
-		// Bus controllers.
-		match_controller(controller, MIDIMappingBusProto::kStereoWidthFieldNumber, MIDIMappingProto::kStereoWidthBankFieldNumber,
-			value, bind(&ControllerReceiver::set_stereo_width, receiver, _1, _2));
-		match_controller(controller, MIDIMappingBusProto::kTrebleFieldNumber, MIDIMappingProto::kTrebleBankFieldNumber,
-			value, bind(&ControllerReceiver::set_treble, receiver, _1, _2));
-		match_controller(controller, MIDIMappingBusProto::kMidFieldNumber, MIDIMappingProto::kMidBankFieldNumber,
-			value, bind(&ControllerReceiver::set_mid, receiver, _1, _2));
-		match_controller(controller, MIDIMappingBusProto::kBassFieldNumber, MIDIMappingProto::kBassBankFieldNumber,
-			value, bind(&ControllerReceiver::set_bass, receiver, _1, _2));
-		match_controller(controller, MIDIMappingBusProto::kGainFieldNumber, MIDIMappingProto::kGainBankFieldNumber,
-			value, bind(&ControllerReceiver::set_gain, receiver, _1, _2));
-		match_controller(controller, MIDIMappingBusProto::kCompressorThresholdFieldNumber, MIDIMappingProto::kCompressorThresholdBankFieldNumber,
-			value, bind(&ControllerReceiver::set_compressor_threshold, receiver, _1, _2));
-		match_controller(controller, MIDIMappingBusProto::kFaderFieldNumber, MIDIMappingProto::kFaderBankFieldNumber,
-			value, bind(&ControllerReceiver::set_fader, receiver, _1, _2));
-		break;
-	}
-	case SND_SEQ_EVENT_NOTEON: {
-		const int note = event->data.note.note;
-
-		receiver->note_on(note);
-
-		for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
-			const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
-			if (bus_mapping.has_prev_bank() &&
-			    bus_mapping.prev_bank().note_number() == note) {
-				current_controller_bank = (current_controller_bank + num_controller_banks - 1) % num_controller_banks;
-				update_highlights();
-				update_lights_lock_held();
-			}
-			if (bus_mapping.has_next_bank() &&
-			    bus_mapping.next_bank().note_number() == note) {
-				current_controller_bank = (current_controller_bank + 1) % num_controller_banks;
-				update_highlights();
-				update_lights_lock_held();
-			}
-			if (bus_mapping.has_select_bank_1() &&
-			    bus_mapping.select_bank_1().note_number() == note) {
-				current_controller_bank = 0;
-				update_highlights();
-				update_lights_lock_held();
-			}
-			if (bus_mapping.has_select_bank_2() &&
-			    bus_mapping.select_bank_2().note_number() == note &&
-			    num_controller_banks >= 2) {
-				current_controller_bank = 1;
-				update_highlights();
-				update_lights_lock_held();
-			}
-			if (bus_mapping.has_select_bank_3() &&
-			    bus_mapping.select_bank_3().note_number() == note &&
-			    num_controller_banks >= 3) {
-				current_controller_bank = 2;
-				update_highlights();
-				update_lights_lock_held();
-			}
-			if (bus_mapping.has_select_bank_4() &&
-			    bus_mapping.select_bank_4().note_number() == note &&
-			    num_controller_banks >= 4) {
-				current_controller_bank = 3;
-				update_highlights();
-				update_lights_lock_held();
-			}
-			if (bus_mapping.has_select_bank_5() &&
-			    bus_mapping.select_bank_5().note_number() == note &&
-			    num_controller_banks >= 5) {
-				current_controller_bank = 4;
-				update_highlights();
-				update_lights_lock_held();
-			}
-		}
-
-		match_button(note, MIDIMappingBusProto::kToggleLocutFieldNumber, MIDIMappingProto::kToggleLocutBankFieldNumber,
-			bind(&ControllerReceiver::toggle_locut, receiver, _1));
-		match_button(note, MIDIMappingBusProto::kToggleAutoGainStagingFieldNumber, MIDIMappingProto::kToggleAutoGainStagingBankFieldNumber,
-			bind(&ControllerReceiver::toggle_auto_gain_staging, receiver, _1));
-		match_button(note, MIDIMappingBusProto::kToggleCompressorFieldNumber, MIDIMappingProto::kToggleCompressorBankFieldNumber,
-			bind(&ControllerReceiver::toggle_compressor, receiver, _1));
-		match_button(note, MIDIMappingBusProto::kClearPeakFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
-			bind(&ControllerReceiver::clear_peak, receiver, _1));
-		match_button(note, MIDIMappingBusProto::kToggleMuteFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
-			bind(&ControllerReceiver::toggle_mute, receiver, _1));
-		match_button(note, MIDIMappingBusProto::kToggleLimiterFieldNumber, MIDIMappingProto::kToggleLimiterBankFieldNumber,
-			bind(&ControllerReceiver::toggle_limiter, receiver));
-		match_button(note, MIDIMappingBusProto::kToggleAutoMakeupGainFieldNumber, MIDIMappingProto::kToggleAutoMakeupGainBankFieldNumber,
-			bind(&ControllerReceiver::toggle_auto_makeup_gain, receiver));
-		break;
-	}
-	case SND_SEQ_EVENT_PORT_START:
-		subscribe_to_port_lock_held(seq, event->data.addr);
-		break;
-	case SND_SEQ_EVENT_PORT_EXIT:
-		printf("MIDI port %d:%d went away.\n", event->data.addr.client, event->data.addr.port);
-		break;
-	case SND_SEQ_EVENT_PORT_SUBSCRIBED:
-		if (event->data.connect.sender.client != 0 &&  // Ignore system senders.
-		    event->data.connect.sender.client != snd_seq_client_id(seq) &&
-		    event->data.connect.dest.client == snd_seq_client_id(seq)) {
-			++num_subscribed_ports;
+	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
+		const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
+		if (bus_mapping.has_prev_bank() &&
+		    bus_mapping.prev_bank().note_number() == note) {
+			current_controller_bank = (current_controller_bank + num_controller_banks - 1) % num_controller_banks;
 			update_highlights();
+			update_lights_lock_held();
 		}
-		break;
-	case SND_SEQ_EVENT_PORT_UNSUBSCRIBED:
-		if (event->data.connect.sender.client != 0 &&  // Ignore system senders.
-		    event->data.connect.sender.client != snd_seq_client_id(seq) &&
-		    event->data.connect.dest.client == snd_seq_client_id(seq)) {
-			--num_subscribed_ports;
+		if (bus_mapping.has_next_bank() &&
+		    bus_mapping.next_bank().note_number() == note) {
+			current_controller_bank = (current_controller_bank + 1) % num_controller_banks;
 			update_highlights();
+			update_lights_lock_held();
 		}
-		break;
-	case SND_SEQ_EVENT_NOTEOFF:
-	case SND_SEQ_EVENT_CLIENT_START:
-	case SND_SEQ_EVENT_CLIENT_EXIT:
-	case SND_SEQ_EVENT_CLIENT_CHANGE:
-	case SND_SEQ_EVENT_PORT_CHANGE:
-		break;
-	default:
-		printf("Ignoring MIDI event of unknown type %d.\n", event->type);
+		if (bus_mapping.has_select_bank_1() &&
+		    bus_mapping.select_bank_1().note_number() == note) {
+			current_controller_bank = 0;
+			update_highlights();
+			update_lights_lock_held();
+		}
+		if (bus_mapping.has_select_bank_2() &&
+		    bus_mapping.select_bank_2().note_number() == note &&
+		    num_controller_banks >= 2) {
+			current_controller_bank = 1;
+			update_highlights();
+			update_lights_lock_held();
+		}
+		if (bus_mapping.has_select_bank_3() &&
+		    bus_mapping.select_bank_3().note_number() == note &&
+		    num_controller_banks >= 3) {
+			current_controller_bank = 2;
+			update_highlights();
+			update_lights_lock_held();
+		}
+		if (bus_mapping.has_select_bank_4() &&
+		    bus_mapping.select_bank_4().note_number() == note &&
+		    num_controller_banks >= 4) {
+			current_controller_bank = 3;
+			update_highlights();
+			update_lights_lock_held();
+		}
+		if (bus_mapping.has_select_bank_5() &&
+		    bus_mapping.select_bank_5().note_number() == note &&
+		    num_controller_banks >= 5) {
+			current_controller_bank = 4;
+			update_highlights();
+			update_lights_lock_held();
+		}
 	}
+
+	match_button(note, MIDIMappingBusProto::kToggleLocutFieldNumber, MIDIMappingProto::kToggleLocutBankFieldNumber,
+		bind(&ControllerReceiver::toggle_locut, receiver, _1));
+	match_button(note, MIDIMappingBusProto::kToggleAutoGainStagingFieldNumber, MIDIMappingProto::kToggleAutoGainStagingBankFieldNumber,
+		bind(&ControllerReceiver::toggle_auto_gain_staging, receiver, _1));
+	match_button(note, MIDIMappingBusProto::kToggleCompressorFieldNumber, MIDIMappingProto::kToggleCompressorBankFieldNumber,
+		bind(&ControllerReceiver::toggle_compressor, receiver, _1));
+	match_button(note, MIDIMappingBusProto::kClearPeakFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
+		bind(&ControllerReceiver::clear_peak, receiver, _1));
+	match_button(note, MIDIMappingBusProto::kToggleMuteFieldNumber, MIDIMappingProto::kClearPeakBankFieldNumber,
+		bind(&ControllerReceiver::toggle_mute, receiver, _1));
+	match_button(note, MIDIMappingBusProto::kToggleLimiterFieldNumber, MIDIMappingProto::kToggleLimiterBankFieldNumber,
+		bind(&ControllerReceiver::toggle_limiter, receiver));
+	match_button(note, MIDIMappingBusProto::kToggleAutoMakeupGainFieldNumber, MIDIMappingProto::kToggleAutoMakeupGainBankFieldNumber,
+		bind(&ControllerReceiver::toggle_auto_makeup_gain, receiver));
 }
 
-void MIDIMapper::subscribe_to_port_lock_held(snd_seq_t *seq, const snd_seq_addr_t &addr)
+void MIDIMapper::update_num_subscribers(unsigned num_subscribers)
 {
-	// Client 0 (SNDRV_SEQ_CLIENT_SYSTEM) is basically the system; ignore it.
-	// MIDI through (SNDRV_SEQ_CLIENT_DUMMY) echoes back what we give it, so ignore that, too.
-	if (addr.client == 0 || addr.client == 14) {
-		return;
-	}
-
-	// Don't listen to ourselves.
-	if (addr.client == snd_seq_client_id(seq)) {
-		return;
-	}
-
-	int err = snd_seq_connect_from(seq, 0, addr.client, addr.port);
-	if (err < 0) {
-		// Just print out a warning (i.e., don't die); it could
-		// very well just be e.g. another application.
-		printf("Couldn't subscribe to MIDI port %d:%d (%s).\n",
-			addr.client, addr.port, snd_strerror(err));
-	} else {
-		printf("Subscribed to MIDI port %d:%d.\n", addr.client, addr.port);
-	}
-
-	// For sending data back.
-	err = snd_seq_connect_to(seq, 0, addr.client, addr.port);
-	if (err < 0) {
-		printf("Couldn't subscribe MIDI port %d:%d (%s) to us.\n",
-			addr.client, addr.port, snd_strerror(err));
-	} else {
-		printf("Subscribed MIDI port %d:%d to us.\n", addr.client, addr.port);
-	}
-
-	current_light_status.clear();  // The current state of the device is unknown.
-	update_lights_lock_held();
+	num_subscribed_ports = num_subscribers;
+	update_highlights();
 }
 
 void MIDIMapper::match_controller(int controller, int field_number, int bank_field_number, float value, function<void(unsigned, float)> func)
@@ -572,7 +373,7 @@ void MIDIMapper::update_highlights()
 
 void MIDIMapper::update_lights_lock_held()
 {
-	if (alsa_seq == nullptr || global_audio_mixer == nullptr) {
+	if (global_audio_mixer == nullptr) {
 		return;
 	}
 
@@ -617,32 +418,7 @@ void MIDIMapper::update_lights_lock_held()
 		}
 	}
 
-	unsigned num_events = 0;
-	for (unsigned note_num = 1; note_num <= 127; ++note_num) {
-		bool active = active_lights.count(note_num);
-		if (current_light_status.count(note_num) &&
-		    current_light_status[note_num] == active) {
-			// Already known to be in the desired state.
-			continue;
-		}
-
-		snd_seq_event_t ev;
-		snd_seq_ev_clear(&ev);
-
-		// Some devices drop events if we throw them onto them
-		// too quickly. Add a 1 ms delay for each.
-		snd_seq_real_time_t tm{0, num_events++ * 1000000};
-		snd_seq_ev_schedule_real(&ev, alsa_queue_id, true, &tm);
-		snd_seq_ev_set_source(&ev, 0);
-		snd_seq_ev_set_subs(&ev);
-
-		// For some reason, not all devices respond to note off.
-		// Use note-on with velocity of 0 (which is equivalent) instead.
-		snd_seq_ev_set_noteon(&ev, /*channel=*/0, note_num, active ? 1 : 0);
-		WARN_ON_ERROR("snd_seq_event_output", snd_seq_event_output(alsa_seq, &ev));
-		current_light_status[note_num] = active;
-	}
-	WARN_ON_ERROR("snd_seq_drain_output", snd_seq_drain_output(alsa_seq));
+	midi_device.update_lights(active_lights);
 }
 
 void MIDIMapper::activate_lights(unsigned bus_idx, int field_number, set<unsigned> *active_lights)
