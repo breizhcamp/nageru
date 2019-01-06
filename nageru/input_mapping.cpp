@@ -10,6 +10,7 @@
 
 #include "audio_mixer.h" 
 #include "state.pb.h"
+#include "shared/text_proto.h"
 
 using namespace std;
 using namespace google::protobuf;
@@ -54,39 +55,15 @@ bool save_input_mapping_to_file(const map<DeviceSpec, DeviceInfo> &devices, cons
 		}
 	}
 
-	// Save to disk. We use the text format because it's friendlier
-	// for a user to look at and edit.
-	int fd = open(filename.c_str(), O_WRONLY | O_TRUNC | O_CREAT, 0666);
-	if (fd == -1) {
-		perror(filename.c_str());
-		return false;
-	}
-	io::FileOutputStream output(fd);  // Takes ownership of fd.
-	if (!TextFormat::Print(mapping_proto, &output)) {
-		// TODO: Don't overwrite the old file (if any) on error.
-		output.Close();
-		return false;
-	}
-
-	output.Close();
-	return true;
+	return save_proto_to_file(mapping_proto, filename);
 }
 
 bool load_input_mapping_from_file(const map<DeviceSpec, DeviceInfo> &devices, const string &filename, InputMapping *new_mapping)
 {
-	// Read and parse the protobuf from disk.
-	int fd = open(filename.c_str(), O_RDONLY);
-	if (fd == -1) {
-		perror(filename.c_str());
-		return false;
-	}
-	io::FileInputStream input(fd);  // Takes ownership of fd.
 	InputMappingProto mapping_proto;
-	if (!TextFormat::Parse(&input, &mapping_proto)) {
-		input.Close();
+	if (!load_proto_from_file(filename, &mapping_proto)) {
 		return false;
 	}
-	input.Close();
 
 	// Map devices in the proto to our current ones:
 

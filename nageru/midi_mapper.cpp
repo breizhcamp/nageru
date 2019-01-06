@@ -20,6 +20,7 @@
 
 #include "audio_mixer.h"
 #include "midi_mapping.pb.h"
+#include "shared/text_proto.h"
 
 using namespace google::protobuf;
 using namespace std;
@@ -50,39 +51,12 @@ MIDIMapper::~MIDIMapper() {}
 
 bool load_midi_mapping_from_file(const string &filename, MIDIMappingProto *new_mapping)
 {
-	// Read and parse the protobuf from disk.
-	int fd = open(filename.c_str(), O_RDONLY);
-	if (fd == -1) {
-		perror(filename.c_str());
-		return false;
-	}
-	io::FileInputStream input(fd);  // Takes ownership of fd.
-	if (!TextFormat::Parse(&input, new_mapping)) {
-		input.Close();
-		return false;
-	}
-	input.Close();
-	return true;
+	return load_proto_from_file(filename, new_mapping);
 }
 
 bool save_midi_mapping_to_file(const MIDIMappingProto &mapping_proto, const string &filename)
 {
-	// Save to disk. We use the text format because it's friendlier
-	// for a user to look at and edit.
-	int fd = open(filename.c_str(), O_WRONLY | O_TRUNC | O_CREAT, 0666);
-	if (fd == -1) {
-		perror(filename.c_str());
-		return false;
-	}
-	io::FileOutputStream output(fd);  // Takes ownership of fd.
-	if (!TextFormat::Print(mapping_proto, &output)) {
-		// TODO: Don't overwrite the old file (if any) on error.
-		output.Close();
-		return false;
-	}
-
-	output.Close();
-	return true;
+	return save_proto_to_file(mapping_proto, filename);
 }
 
 void MIDIMapper::set_midi_mapping(const MIDIMappingProto &new_mapping)
