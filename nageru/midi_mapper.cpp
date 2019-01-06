@@ -345,6 +345,19 @@ void MIDIMapper::update_highlights()
 	}
 }
 
+// Find what MIDI note the given light (as given by field_number) is mapped to, and enable it.
+void activate_mapped_light(const MIDIMappingBusProto &bus_mapping, int field_number, set<unsigned> *active_lights)
+{
+	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
+	const Reflection *bus_reflection = bus_mapping.GetReflection();
+	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
+		return;
+	}
+	const MIDILightProto &light_proto =
+		static_cast<const MIDILightProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
+	active_lights->insert(light_proto.note_number());
+}
+
 void MIDIMapper::update_lights_lock_held()
 {
 	if (global_audio_mixer == nullptr) {
@@ -375,52 +388,31 @@ void MIDIMapper::update_lights_lock_held()
 	}
 	unsigned num_buses = min<unsigned>(global_audio_mixer->num_buses(), mapping_proto->bus_mapping_size());
 	for (unsigned bus_idx = 0; bus_idx < num_buses; ++bus_idx) {
+		const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
 		if (global_audio_mixer->get_mute(bus_idx)) {
-			activate_lights(bus_idx, MIDIMappingBusProto::kIsMutedFieldNumber, &active_lights);
+			activate_mapped_light(bus_mapping, MIDIMappingBusProto::kIsMutedFieldNumber, &active_lights);
 		}
 		if (global_audio_mixer->get_locut_enabled(bus_idx)) {
-			activate_lights(bus_idx, MIDIMappingBusProto::kLocutIsOnFieldNumber, &active_lights);
+			activate_mapped_light(bus_mapping, MIDIMappingBusProto::kLocutIsOnFieldNumber, &active_lights);
 		}
 		if (global_audio_mixer->get_gain_staging_auto(bus_idx)) {
-			activate_lights(bus_idx, MIDIMappingBusProto::kAutoGainStagingIsOnFieldNumber, &active_lights);
+			activate_mapped_light(bus_mapping, MIDIMappingBusProto::kAutoGainStagingIsOnFieldNumber, &active_lights);
 		}
 		if (global_audio_mixer->get_compressor_enabled(bus_idx)) {
-			activate_lights(bus_idx, MIDIMappingBusProto::kCompressorIsOnFieldNumber, &active_lights);
+			activate_mapped_light(bus_mapping, MIDIMappingBusProto::kCompressorIsOnFieldNumber, &active_lights);
 		}
 		if (has_peaked[bus_idx]) {
-			activate_lights(bus_idx, MIDIMappingBusProto::kHasPeakedFieldNumber, &active_lights);
+			activate_mapped_light(bus_mapping, MIDIMappingBusProto::kHasPeakedFieldNumber, &active_lights);
 		}
 	}
 
 	midi_device.update_lights(active_lights);
 }
 
-void MIDIMapper::activate_lights(unsigned bus_idx, int field_number, set<unsigned> *active_lights)
-{
-	const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
-
-	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
-	const Reflection *bus_reflection = bus_mapping.GetReflection();
-	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
-		return;
-	}
-	const MIDILightProto &light_proto =
-		static_cast<const MIDILightProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
-	active_lights->insert(light_proto.note_number());
-}
-
 void MIDIMapper::activate_lights_all_buses(int field_number, set<unsigned> *active_lights)
 {
 	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
 		const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
-
-		const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
-		const Reflection *bus_reflection = bus_mapping.GetReflection();
-		if (!bus_reflection->HasField(bus_mapping, descriptor)) {
-			continue;
-		}
-		const MIDILightProto &light_proto =
-			static_cast<const MIDILightProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
-		active_lights->insert(light_proto.note_number());
+		activate_mapped_light(bus_mapping, field_number, active_lights);
 	}
 }

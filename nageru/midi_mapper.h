@@ -110,7 +110,6 @@ private:
 	void update_highlights();
 
 	void update_lights_lock_held();
-	void activate_lights(unsigned bus_idx, int field_number, std::set<unsigned> *active_lights);
 	void activate_lights_all_buses(int field_number, std::set<unsigned> *active_lights);
 
 	std::atomic<bool> should_quit{false};
