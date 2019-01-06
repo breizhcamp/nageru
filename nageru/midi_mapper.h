@@ -18,7 +18,7 @@
 #include <thread>
 
 #include "defs.h"
-#include "midi_device.h"
+#include "shared/midi_device.h"
 
 class MIDIMappingProto;
 
