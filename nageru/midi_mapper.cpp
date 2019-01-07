@@ -20,6 +20,7 @@
 
 #include "audio_mixer.h"
 #include "midi_mapping.pb.h"
+#include "shared/midi_mapper_util.h"
 #include "shared/text_proto.h"
 
 using namespace google::protobuf;
@@ -209,15 +210,7 @@ void MIDIMapper::match_controller(int controller, int field_number, int bank_fie
 
 	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
 		const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
-
-		const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
-		const Reflection *bus_reflection = bus_mapping.GetReflection();
-		if (!bus_reflection->HasField(bus_mapping, descriptor)) {
-			continue;
-		}
-		const MIDIControllerProto &controller_proto =
-			static_cast<const MIDIControllerProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
-		if (controller_proto.controller_number() == controller) {
+		if (match_controller_helper(bus_mapping, field_number, controller)) {
 			func(bus_idx, value);
 		}
 	}
@@ -231,15 +224,7 @@ void MIDIMapper::match_button(int note, int field_number, int bank_field_number,
 
 	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
 		const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);
-
-		const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
-		const Reflection *bus_reflection = bus_mapping.GetReflection();
-		if (!bus_reflection->HasField(bus_mapping, descriptor)) {
-			continue;
-		}
-		const MIDIButtonProto &button_proto =
-			static_cast<const MIDIButtonProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
-		if (button_proto.note_number() == note) {
+		if (match_button_helper(bus_mapping, field_number, note)) {
 			func(bus_idx);
 		}
 	}
@@ -259,10 +244,7 @@ bool MIDIMapper::has_active_controller(unsigned bus_idx, int field_number, int b
 
 bool MIDIMapper::bank_mismatch(int bank_field_number)
 {
-	const FieldDescriptor *bank_descriptor = mapping_proto->GetDescriptor()->FindFieldByNumber(bank_field_number);
-	const Reflection *reflection = mapping_proto->GetReflection();
-	return (reflection->HasField(*mapping_proto, bank_descriptor) &&
- 	        reflection->GetInt32(*mapping_proto, bank_descriptor) != current_controller_bank);
+	return !match_bank_helper(*mapping_proto, bank_field_number, current_controller_bank);
 }
 
 void MIDIMapper::refresh_highlights()
