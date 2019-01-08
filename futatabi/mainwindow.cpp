@@ -273,21 +273,33 @@ void MainWindow::cue_in_clicked()
 {
 	if (!cliplist_clips->empty() && cliplist_clips->back()->pts_out < 0) {
 		cliplist_clips->mutable_back()->pts_in = current_pts;
-		return;
+	} else {
+		Clip clip;
+		clip.pts_in = max<int64_t>(current_pts - lrint(global_flags.cue_point_padding_seconds * TIMEBASE), 0);
+		cliplist_clips->add_clip(clip);
+		playlist_selection_changed();
 	}
-	Clip clip;
-	clip.pts_in = max<int64_t>(current_pts - lrint(global_flags.cue_point_padding_seconds * TIMEBASE), 0);
-	cliplist_clips->add_clip(clip);
-	playlist_selection_changed();
+
+	// Select the item so that we can jog it.
+	ui->clip_list->setFocus();
+	QModelIndex index = cliplist_clips->index(cliplist_clips->size() - 1, int(ClipList::Column::IN));
+	ui->clip_list->selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect);
 	ui->clip_list->scrollToBottom();
 }
 
 void MainWindow::cue_out_clicked()
 {
-	if (!cliplist_clips->empty()) {
-		cliplist_clips->mutable_back()->pts_out = current_pts + lrint(global_flags.cue_point_padding_seconds * TIMEBASE);
-		// TODO: select the row in the clip list?
+	if (cliplist_clips->empty()) {
+		return;
 	}
+
+	cliplist_clips->mutable_back()->pts_out = current_pts + lrint(global_flags.cue_point_padding_seconds * TIMEBASE);
+
+	// Select the item so that we can jog it.
+	ui->clip_list->setFocus();
+	QModelIndex index = cliplist_clips->index(cliplist_clips->size() - 1, int(ClipList::Column::OUT));
+	ui->clip_list->selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect);
+	ui->clip_list->scrollToBottom();
 }
 
 void MainWindow::queue_clicked()
