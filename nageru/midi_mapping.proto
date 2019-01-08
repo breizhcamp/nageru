@@ -38,7 +38,7 @@ message MIDIMappingBusProto {
 	optional MIDIButtonProto toggle_compressor = 11;
 	optional MIDIButtonProto clear_peak = 12;
 
-	// These are really global (controller bank change affects all buss),
+	// These are really global (controller bank change affects all buses),
 	// but it's not uncommon that we'd want one button per bus to switch banks.
 	// E.g., if the user binds the “mute” button to “next bank”, they'd want every
 	// mute button on the mixer to do that, so they need one mapping per bus.
