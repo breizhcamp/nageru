@@ -803,6 +803,7 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 	Clip fake_clip;
 	fake_clip.pts_in = pts;
 	fake_clip.pts_out = pts + 1;
+	fake_clip.stream_idx = stream_idx;
 	preview_player->play(fake_clip);
 }
 
