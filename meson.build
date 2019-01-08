@@ -159,9 +159,9 @@ endif
 # Protobuf compilation.
 gen = generator(protoc, \
 	output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
-	arguments : ['--proto_path=@CURRENT_SOURCE_DIR@/nageru', '--cpp_out=@BUILD_DIR@', '@INPUT@'])
-proto_generated = gen.process(['nageru/state.proto', 'nageru/midi_mapping.proto', 'nageru/json.proto'])
-protobuf_lib = static_library('protobufs', proto_generated, dependencies: nageru_deps, include_directories: nageru_include_dirs)
+	arguments : ['--proto_path=@CURRENT_SOURCE_DIR@/nageru', '--cpp_out=@BUILD_DIR@', '-I@CURRENT_SOURCE_DIR@/shared', '@INPUT@'])
+proto_generated = gen.process(['nageru/state.proto', 'nageru/json.proto', 'nageru/nageru_midi_mapping.proto'])
+protobuf_lib = static_library('nageru_protobufs', proto_generated, dependencies: nageru_deps, include_directories: nageru_include_dirs)
 protobuf_hdrs = declare_dependency(sources: proto_generated)
 nageru_link_with += protobuf_lib
 

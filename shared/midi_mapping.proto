@@ -1,0 +1,19 @@
+// Mappings from MIDI controllers to the UI. (We don't really build
+// a more complicated data structure than this in Nageru itself either;
+// we just edit and match directly against the protobuf.)
+
+syntax = "proto2";
+
+// A single, given controller mapping.
+message MIDIControllerProto {
+	required int32 controller_number = 1;
+	// TODO: Add flags like invert here if/when we need them.
+}
+
+message MIDIButtonProto {
+	required int32 note_number = 1;
+}
+
+message MIDILightProto {
+	required int32 note_number = 1;
+}

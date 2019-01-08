@@ -19,7 +19,7 @@
 #include <string>
 
 #include "midi_mapper.h"
-#include "midi_mapping.pb.h"
+#include "nageru_midi_mapping.pb.h"
 #include "shared/post_to_main_thread.h"
 #include "ui_midi_mapping.h"
 

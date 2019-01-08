@@ -57,7 +57,7 @@
 #include "input_mapping.h"
 #include "input_mapping_dialog.h"
 #include "lrameter.h"
-#include "midi_mapping.pb.h"
+#include "nageru_midi_mapping.pb.h"
 #include "midi_mapping_dialog.h"
 #include "mixer.h"
 #include "nonlinear_fader.h"

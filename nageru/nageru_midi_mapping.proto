@@ -4,19 +4,7 @@
 
 syntax = "proto2";
 
-// A single, given controller mapping.
-message MIDIControllerProto {
-	required int32 controller_number = 1;
-	// TODO: Add flags like invert here if/when we need them.
-}
-
-message MIDIButtonProto {
-	required int32 note_number = 1;
-}
-
-message MIDILightProto {
-	required int32 note_number = 1;
-}
+import "midi_mapping.proto";
 
 // All the mappings for a given a bus.
 message MIDIMappingBusProto {

@@ -19,7 +19,7 @@
 #include <thread>
 
 #include "audio_mixer.h"
-#include "midi_mapping.pb.h"
+#include "nageru_midi_mapping.pb.h"
 #include "shared/midi_mapper_util.h"
 #include "shared/text_proto.h"
 
