@@ -327,19 +327,6 @@ void MIDIMapper::update_highlights()
 	}
 }
 
-// Find what MIDI note the given light (as given by field_number) is mapped to, and enable it.
-void activate_mapped_light(const MIDIMappingBusProto &bus_mapping, int field_number, set<unsigned> *active_lights)
-{
-	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
-	const Reflection *bus_reflection = bus_mapping.GetReflection();
-	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
-		return;
-	}
-	const MIDILightProto &light_proto =
-		static_cast<const MIDILightProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
-	active_lights->insert(light_proto.note_number());
-}
-
 void MIDIMapper::update_lights_lock_held()
 {
 	if (global_audio_mixer == nullptr) {
