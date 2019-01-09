@@ -3,6 +3,7 @@
 
 #include "clip_list.h"
 #include "db.h"
+#include "midi_mapper.h"
 #include "state.pb.h"
 
 #include <QLabel>
@@ -26,7 +27,7 @@ class Player;
 class QPushButton;
 class QTableView;
 
-class MainWindow : public QMainWindow {
+class MainWindow : public QMainWindow, public ControllerReceiver {
 	Q_OBJECT
 
 public:
@@ -37,6 +38,19 @@ public:
 	std::pair<std::string, std::string> get_queue_status() const;
 
 	void display_frame(unsigned stream_idx, const FrameOnDisk &frame);
+
+	// ControllerReceiver interface.
+	void preview() override;
+	void queue() override;
+	void play() override;
+	void jog(int delta) override;
+	void switch_camera(unsigned camera_idx) override;
+	void cue_in() override;
+	void cue_out() override;
+
+	// Raw receivers are not used.
+	void controller_changed(unsigned controller) override {}
+	void note_on(unsigned note) override {}
 
 private:
 	Ui::MainWindow *ui;
@@ -60,6 +74,16 @@ private:
 	// Used to keep track of small mouse wheel motions on the camera index in the playlist.
 	int last_mousewheel_camera_row = -1;
 	int leftover_angle_degrees = 0;
+
+	// Normally, jog is only allowed if in the focus (well, selection) is
+	// on the in or out pts columns. However, changing camera (even when
+	// using a MIDI button) on the clip list changes the highlight,
+	// and we'd like to keep on jogging. Thus, as a special case, if you
+	// change to a camera column on the clip list (and don't change which
+	// clip you're looking at), the last column you were at will be stored here.
+	// If you then try to jog, we'll fetch the value from here and highlight it.
+	// Doing pretty much anything else is going to reset it back to -1, though.
+	int hidden_jog_column = -1;
 
 	// Some operations, notably scrubbing and scrolling, happen in so large increments
 	// that we want to group them instead of saving to disk every single time.
@@ -94,6 +118,8 @@ private:
 	QNetworkAccessManager http;
 	QNetworkReply *http_reply = nullptr;
 
+	MIDIMapper midi_mapper;
+
 	void change_num_cameras();
 	void cue_in_clicked();
 	void cue_out_clicked();
@@ -108,6 +134,9 @@ private:
 	void playlist_duplicate();
 	void playlist_remove();
 	void playlist_move(int delta);
+
+	enum JogDestination { JOG_CLIP_LIST, JOG_PLAYLIST };
+	void jog_internal(JogDestination jog_destination, int column, int row, int stream_idx, int pts_delta);
 
 	void defer_timer_expired();
 	void content_changed();  // In clip_list or play_list.

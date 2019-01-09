@@ -17,7 +17,8 @@ enum LongOption {
 	OPTION_SLOW_DOWN_INPUT = 1001,
 	OPTION_HTTP_PORT = 1002,
 	OPTION_TALLY_URL = 1003,
-	OPTION_CUE_POINT_PADDING = 1004
+	OPTION_CUE_POINT_PADDING = 1004,
+	OPTION_MIDI_MAPPING = 1005
 };
 
 void usage()
@@ -40,6 +41,7 @@ void usage()
 	fprintf(stderr, "  -d, --working-directory DIR     where to store frames and database\n");
 	fprintf(stderr, "      --http-port PORT            which port to listen on for output\n");
 	fprintf(stderr, "      --tally-url URL             URL to get tally color from (polled every 100 ms)\n");
+	fprintf(stderr, "      --midi-mapping=FILE         start with the given MIDI controller mapping\n");
 }
 
 void parse_flags(int argc, char *const argv[])
@@ -55,6 +57,7 @@ void parse_flags(int argc, char *const argv[])
 		{ "http-port", required_argument, 0, OPTION_HTTP_PORT },
 		{ "tally-url", required_argument, 0, OPTION_TALLY_URL },
 		{ "cue-point-padding", required_argument, 0, OPTION_CUE_POINT_PADDING },
+		{ "midi-mapping", required_argument, 0, OPTION_MIDI_MAPPING },
 		{ 0, 0, 0, 0 }
 	};
 	for (;;) {
@@ -102,6 +105,9 @@ void parse_flags(int argc, char *const argv[])
 		case OPTION_CUE_POINT_PADDING:
 			global_flags.cue_point_padding_seconds = atof(optarg);
 			global_flags.cue_point_padding_set = true;
+			break;
+		case OPTION_MIDI_MAPPING:
+			global_flags.midi_mapping_filename = optarg;
 			break;
 		case OPTION_HELP:
 			usage();

@@ -17,6 +17,7 @@ struct Flags {
 	std::string tally_url;
 	double cue_point_padding_seconds = 0.0;  // Can be changed in the menus.
 	bool cue_point_padding_set = false;
+	std::string midi_mapping_filename;  // Empty for none.
 };
 extern Flags global_flags;
 

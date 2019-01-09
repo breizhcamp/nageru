@@ -5,6 +5,7 @@
 #include "flags.h"
 #include "frame_on_disk.h"
 #include "player.h"
+#include "futatabi_midi_mapping.pb.h"
 #include "shared/aboutdialog.h"
 #include "shared/disk_space_estimator.h"
 #include "shared/post_to_main_thread.h"
@@ -33,9 +34,25 @@ static PlayList *playlist_clips;
 
 extern int64_t current_pts;
 
+namespace {
+
+void set_pts_in(int64_t pts, int64_t current_pts, ClipProxy &clip)
+{
+	pts = std::max<int64_t>(pts, 0);
+	if (clip->pts_out == -1) {
+		pts = std::min(pts, current_pts);
+	} else {
+		pts = std::min(pts, clip->pts_out);
+	}
+	clip->pts_in = pts;
+}
+
+}  // namespace
+
 MainWindow::MainWindow()
 	: ui(new Ui::MainWindow),
-	  db(global_flags.working_directory + "/futatabi.db")
+	  db(global_flags.working_directory + "/futatabi.db"),
+	  midi_mapper(this)
 {
 	global_mainwindow = this;
 	ui->setupUi(this);
@@ -195,6 +212,7 @@ MainWindow::MainWindow()
 		});
 	});
 	set_output_status("paused");
+	enable_or_disable_queue_button();
 
 	defer_timeout = new QTimer(this);
 	defer_timeout->setSingleShot(true);
@@ -221,6 +239,18 @@ MainWindow::MainWindow()
 	if (!global_flags.tally_url.empty()) {
 		start_tally();
 	}
+
+	if (!global_flags.midi_mapping_filename.empty()) {
+		MIDIMappingProto midi_mapping;
+		if (!load_midi_mapping_from_file(global_flags.midi_mapping_filename, &midi_mapping)) {
+			fprintf(stderr, "Couldn't load MIDI mapping '%s'; exiting.\n",
+				global_flags.midi_mapping_filename.c_str());
+			exit(1);
+		}
+		midi_mapper.set_midi_mapping(midi_mapping);
+	}
+	midi_mapper.refresh_lights();
+	midi_mapper.start_thread();
 }
 
 void MainWindow::change_num_cameras()
@@ -443,6 +473,64 @@ void MainWindow::playlist_move(int delta)
 	playlist_selection_changed();
 }
 
+void MainWindow::jog_internal(JogDestination jog_destination, int row, int column, int stream_idx, int pts_delta)
+{
+	constexpr int camera_pts_per_pixel = 1500;  // One click of most mice (15 degrees), multiplied by the default wheel_sensitivity.
+
+	int in_column, out_column, camera_column;
+	if (jog_destination == JOG_CLIP_LIST) {
+		in_column = int(ClipList::Column::IN);
+		out_column = int(ClipList::Column::OUT);
+		camera_column = -1;
+	} else if (jog_destination == JOG_PLAYLIST) {
+		in_column = int(PlayList::Column::IN);
+		out_column = int(PlayList::Column::OUT);
+		camera_column = int(PlayList::Column::CAMERA);
+	} else {
+		assert(false);
+	}
+
+	currently_deferring_model_changes = true;
+	{
+		current_change_id = (jog_destination == JOG_CLIP_LIST) ? "cliplist:" : "playlist:";
+		ClipProxy clip = (jog_destination == JOG_CLIP_LIST) ? cliplist_clips->mutable_clip(row) : playlist_clips->mutable_clip(row);
+		if (jog_destination == JOG_PLAYLIST) {
+			stream_idx = clip->stream_idx;
+		}
+
+		if (column == in_column) {
+			current_change_id += "in:" + to_string(row);
+			int64_t pts = clip->pts_in + pts_delta;
+			set_pts_in(pts, current_pts, clip);
+			preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
+		} else if (column == out_column) {
+			current_change_id += "out:" + to_string(row);
+			int64_t pts = clip->pts_out + pts_delta;
+			pts = std::max(pts, clip->pts_in);
+			pts = std::min(pts, current_pts);
+			clip->pts_out = pts;
+			preview_single_frame(pts, stream_idx, LAST_BEFORE);
+		} else if (column == camera_column) {
+			current_change_id += "camera:" + to_string(row);
+			int angle_degrees = pts_delta;
+			if (last_mousewheel_camera_row == row) {
+				angle_degrees += leftover_angle_degrees;
+			}
+
+			int stream_idx = clip->stream_idx + angle_degrees / camera_pts_per_pixel;
+			stream_idx = std::max(stream_idx, 0);
+			stream_idx = std::min<int>(stream_idx, num_cameras - 1);
+			clip->stream_idx = stream_idx;
+
+			last_mousewheel_camera_row = row;
+			leftover_angle_degrees = angle_degrees % camera_pts_per_pixel;
+
+			// Don't update the live view, that's rarely what the operator wants.
+		}
+	}
+	currently_deferring_model_changes = false;
+}
+
 void MainWindow::defer_timer_expired()
 {
 	state_changed(deferred_state);
@@ -564,26 +652,15 @@ void MainWindow::relayout()
 	ui->preview_display->setMinimumWidth(ui->preview_display->height() * 16 / 9);
 }
 
-void set_pts_in(int64_t pts, int64_t current_pts, ClipProxy &clip)
-{
-	pts = std::max<int64_t>(pts, 0);
-	if (clip->pts_out == -1) {
-		pts = std::min(pts, current_pts);
-	} else {
-		pts = std::min(pts, clip->pts_out);
-	}
-	clip->pts_in = pts;
-}
-
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
 	constexpr int dead_zone_pixels = 3;  // To avoid that simple clicks get misinterpreted.
-	constexpr int camera_degrees_per_pixel = 15;  // One click of most mice.
 	int scrub_sensitivity = 100;  // pts units per pixel.
 	int wheel_sensitivity = 100;  // pts units per degree.
 
 	if (event->type() == QEvent::FocusIn || event->type() == QEvent::FocusOut) {
 		enable_or_disable_preview_button();
+		hidden_jog_column = -1;
 	}
 
 	unsigned stream_idx = ui->preview_display->get_stream_idx();
@@ -714,22 +791,22 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		}
 
 		QTableView *destination;
-		int in_column, out_column, camera_column;
+		JogDestination jog_destination;
 		if (watched == ui->clip_list->viewport()) {
 			destination = ui->clip_list;
-			in_column = int(ClipList::Column::IN);
-			out_column = int(ClipList::Column::OUT);
-			camera_column = -1;
+			jog_destination = JOG_CLIP_LIST;
 			last_mousewheel_camera_row = -1;
 		} else if (watched == ui->playlist->viewport()) {
 			destination = ui->playlist;
-			in_column = int(PlayList::Column::IN);
-			out_column = int(PlayList::Column::OUT);
-			camera_column = int(PlayList::Column::CAMERA);
+			jog_destination = JOG_PLAYLIST;
+			if (destination->columnAt(wheel->x()) != int(PlayList::Column::CAMERA)) {
+				last_mousewheel_camera_row = -1;
+			}
 		} else {
 			last_mousewheel_camera_row = -1;
 			return false;
 		}
+
 		int column = destination->columnAt(wheel->x());
 		int row = destination->rowAt(wheel->y());
 		if (column == -1 || row == -1)
@@ -741,48 +818,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			return false;
 		}
 
-		currently_deferring_model_changes = true;
-		{
-			current_change_id = (watched == ui->clip_list->viewport()) ? "cliplist:" : "playlist:";
-			ClipProxy clip = (watched == ui->clip_list->viewport()) ? cliplist_clips->mutable_clip(row) : playlist_clips->mutable_clip(row);
-			if (watched == ui->playlist->viewport()) {
-				stream_idx = clip->stream_idx;
-			}
-
-			if (column != camera_column) {
-				last_mousewheel_camera_row = -1;
-			}
-			if (column == in_column) {
-				current_change_id += "in:" + to_string(row);
-				int64_t pts = clip->pts_in + angle_delta * wheel_sensitivity;
-				set_pts_in(pts, current_pts, clip);
-				preview_single_frame(pts, stream_idx, FIRST_AT_OR_AFTER);
-			} else if (column == out_column) {
-				current_change_id += "out:" + to_string(row);
-				int64_t pts = clip->pts_out + angle_delta * wheel_sensitivity;
-				pts = std::max(pts, clip->pts_in);
-				pts = std::min(pts, current_pts);
-				clip->pts_out = pts;
-				preview_single_frame(pts, stream_idx, LAST_BEFORE);
-			} else if (column == camera_column) {
-				current_change_id += "camera:" + to_string(row);
-				int angle_degrees = angle_delta;
-				if (last_mousewheel_camera_row == row) {
-					angle_degrees += leftover_angle_degrees;
-				}
-
-				int stream_idx = clip->stream_idx + angle_degrees / camera_degrees_per_pixel;
-				stream_idx = std::max(stream_idx, 0);
-				stream_idx = std::min<int>(stream_idx, num_cameras - 1);
-				clip->stream_idx = stream_idx;
-
-				last_mousewheel_camera_row = row;
-				leftover_angle_degrees = angle_degrees % camera_degrees_per_pixel;
-
-				// Don't update the live view, that's rarely what the operator wants.
-			}
-		}
-		currently_deferring_model_changes = false;
+		jog_internal(jog_destination, row, column, stream_idx, angle_delta * wheel_sensitivity);
 		return true;  // Don't scroll.
 	} else if (event->type() == QEvent::MouseButtonRelease) {
 		scrubbing = false;
@@ -830,7 +866,9 @@ void MainWindow::playlist_selection_changed()
 		any_selected && selected->selectedRows().front().row() > 0);
 	ui->playlist_move_down_btn->setEnabled(
 		any_selected && selected->selectedRows().back().row() < int(playlist_clips->size()) - 1);
+
 	ui->play_btn->setEnabled(!playlist_clips->empty());
+	midi_mapper.set_play_enabled(!playlist_clips->empty());
 
 	if (!any_selected) {
 		set_output_status("paused");
@@ -844,11 +882,20 @@ void MainWindow::playlist_selection_changed()
 	}
 }
 
-void MainWindow::clip_list_selection_changed(const QModelIndex &current, const QModelIndex &)
+void MainWindow::clip_list_selection_changed(const QModelIndex &current, const QModelIndex &previous)
 {
 	int camera_selected = -1;
 	if (cliplist_clips->is_camera_column(current.column())) {
 		camera_selected = current.column() - int(ClipList::Column::CAMERA_1);
+
+		// See the comment on hidden_jog_column.
+		if (current.row() != previous.row()) {
+			hidden_jog_column = -1;
+		} else if (hidden_jog_column == -1) {
+			hidden_jog_column = previous.column();
+		}
+	} else {
+		hidden_jog_column = -1;
 	}
 	highlight_camera_input(camera_selected);
 	enable_or_disable_queue_button();
@@ -1043,6 +1090,7 @@ void MainWindow::highlight_camera_input(int stream_idx)
 			displays[i].frame->setStyleSheet("");
 		}
 	}
+	midi_mapper.highlight_camera_input(stream_idx);
 }
 
 void MainWindow::enable_or_disable_preview_button()
@@ -1055,12 +1103,14 @@ void MainWindow::enable_or_disable_preview_button()
 		QItemSelectionModel *selected = ui->playlist->selectionModel();
 		if (selected->hasSelection()) {
 			ui->preview_btn->setEnabled(true);
+			midi_mapper.set_preview_enabled(true);
 			return;
 		}
 	}
 
 	// TODO: Perhaps only enable this if something is actually selected.
 	ui->preview_btn->setEnabled(!cliplist_clips->empty());
+	midi_mapper.set_preview_enabled(!cliplist_clips->empty());
 }
 
 void MainWindow::enable_or_disable_queue_button()
@@ -1085,6 +1135,7 @@ void MainWindow::enable_or_disable_queue_button()
 	}
 
 	ui->queue_btn->setEnabled(enabled);
+	midi_mapper.set_queue_enabled(enabled);
 }
 
 void MainWindow::set_output_status(const string &status)
@@ -1117,6 +1168,71 @@ void MainWindow::display_frame(unsigned stream_idx, const FrameOnDisk &frame)
 		});
 	}
 	displays[stream_idx].display->setFrame(stream_idx, frame);
+}
+
+void MainWindow::preview()
+{
+	post_to_main_thread([this] {
+		preview_clicked();
+	});
+}
+
+void MainWindow::queue()
+{
+	post_to_main_thread([this] {
+		queue_clicked();
+	});
+}
+
+void MainWindow::play()
+{
+	post_to_main_thread([this] {
+		play_clicked();
+	});
+}
+
+void MainWindow::jog(int delta)
+{
+	post_to_main_thread([this, delta] {
+		int64_t pts_delta = delta * (TIMEBASE / 60);  // One click = frame at 60 fps.
+		if (ui->playlist->hasFocus()) {
+			QModelIndex selected = ui->playlist->selectionModel()->currentIndex();
+			if (selected.column() != -1 && selected.row() != -1) {
+				jog_internal(JOG_PLAYLIST, selected.row(), selected.column(), /*stream_idx=*/-1, pts_delta);
+			}
+		} else if (ui->clip_list->hasFocus()) {
+			QModelIndex selected = ui->clip_list->selectionModel()->currentIndex();
+			if (cliplist_clips->is_camera_column(selected.column()) &&
+			    hidden_jog_column != -1) {
+				// See the definition on hidden_jog_column.
+				selected = selected.sibling(selected.row(), hidden_jog_column);
+				ui->clip_list->selectionModel()->setCurrentIndex(selected, QItemSelectionModel::ClearAndSelect);
+				hidden_jog_column = -1;
+			}
+			if (selected.column() != -1 && selected.row() != -1) {
+				jog_internal(JOG_CLIP_LIST, selected.row(), selected.column(), ui->preview_display->get_stream_idx(), pts_delta);
+			}
+		}
+	});
+}
+
+void MainWindow::switch_camera(unsigned camera_idx)
+{
+	post_to_main_thread([this, camera_idx] {
+		if (camera_idx < num_cameras) {  // TODO: Also make this change a highlighted clip?
+			preview_angle_clicked(camera_idx);
+		}
+	});
+}
+
+void MainWindow::cue_in()
+{
+	post_to_main_thread([this] { cue_in_clicked(); });
+}
+
+void MainWindow::cue_out()
+{
+	post_to_main_thread([this] { cue_out_clicked(); });
 }
 
 template<class Model>

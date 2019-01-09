@@ -268,8 +268,8 @@ endforeach
 # Protobuf compilation.
 gen = generator(protoc, \
 	output    : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
-	arguments : ['--proto_path=@CURRENT_SOURCE_DIR@/futatabi', '--cpp_out=@BUILD_DIR@', '@INPUT@'])
-proto_generated = gen.process('futatabi/state.proto', 'futatabi/frame.proto')
+	arguments : ['--proto_path=@CURRENT_SOURCE_DIR@/futatabi', '--cpp_out=@BUILD_DIR@', '-I@CURRENT_SOURCE_DIR@/shared', '@INPUT@'])
+proto_generated = gen.process('futatabi/state.proto', 'futatabi/frame.proto', 'futatabi/futatabi_midi_mapping.proto')
 
 # Preprocess Qt as needed.
 moc_files = qt5.preprocess(
@@ -284,7 +284,7 @@ futatabi_srcs = ['futatabi/flow.cpp', 'futatabi/gpu_timers.cpp']
 futatabi_srcs += ['futatabi/main.cpp', 'futatabi/player.cpp', 'futatabi/video_stream.cpp', 'futatabi/chroma_subsampler.cpp']
 futatabi_srcs += ['futatabi/vaapi_jpeg_decoder.cpp', 'futatabi/db.cpp', 'futatabi/ycbcr_converter.cpp', 'futatabi/flags.cpp']
 futatabi_srcs += ['futatabi/mainwindow.cpp', 'futatabi/jpeg_frame_view.cpp', 'futatabi/clip_list.cpp', 'futatabi/frame_on_disk.cpp']
-futatabi_srcs += ['futatabi/export.cpp']
+futatabi_srcs += ['futatabi/export.cpp', 'futatabi/midi_mapper.cpp']
 futatabi_srcs += moc_files
 futatabi_srcs += proto_generated
 
