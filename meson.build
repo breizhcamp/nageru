@@ -257,7 +257,7 @@ executable('kaeru', 'nageru/kaeru.cpp',
 executable('benchmark_audio_mixer', 'nageru/benchmark_audio_mixer.cpp', dependencies: nageru_deps, include_directories: nageru_include_dirs, link_with: [audio, aux])
 
 # These are needed for a default run.
-data_files = ['nageru/theme.lua', 'nageru/simple.lua', 'nageru/bg.jpeg', 'nageru/akai_midimix.midimapping']
+data_files = ['nageru/theme.lua', 'nageru/simple.lua', 'nageru/bg.jpeg', 'nageru/akai_midimix.midimapping', 'futatabi/behringer_cmd_pl1.midimapping']
 install_data(data_files, install_dir: join_paths(get_option('prefix'), 'share/nageru'))
 foreach file : data_files
 	run_command('ln', '-s', join_paths(meson.current_source_dir(), file), meson.current_build_dir())
