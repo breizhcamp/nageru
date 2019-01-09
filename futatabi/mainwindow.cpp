@@ -342,6 +342,8 @@ void MainWindow::queue_clicked()
 
 void MainWindow::preview_clicked()
 {
+	// See also enable_or_disable_preview_button().
+
 	if (ui->playlist->hasFocus()) {
 		// Allow the playlist as preview iff it has focus and something is selected.
 		QItemSelectionModel *selected = ui->playlist->selectionModel();
@@ -574,6 +576,10 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 	constexpr int camera_degrees_per_pixel = 15;  // One click of most mice.
 	int scrub_sensitivity = 100;  // pts units per pixel.
 	int wheel_sensitivity = 100;  // pts units per degree.
+
+	if (event->type() == QEvent::FocusIn || event->type() == QEvent::FocusOut) {
+		enable_or_disable_preview_button();
+	}
 
 	unsigned stream_idx = ui->preview_display->get_stream_idx();
 
@@ -809,6 +815,8 @@ void MainWindow::preview_single_frame(int64_t pts, unsigned stream_idx, MainWind
 
 void MainWindow::playlist_selection_changed()
 {
+	enable_or_disable_preview_button();
+
 	QItemSelectionModel *selected = ui->playlist->selectionModel();
 	bool any_selected = selected->hasSelection();
 	ui->playlist_duplicate_btn->setEnabled(any_selected);
@@ -1029,6 +1037,24 @@ void MainWindow::highlight_camera_input(int stream_idx)
 			displays[i].frame->setStyleSheet("");
 		}
 	}
+}
+
+void MainWindow::enable_or_disable_preview_button()
+{
+	// Follows the logic in preview_clicked().
+
+	if (ui->playlist->hasFocus()) {
+		// Allow the playlist as preview iff it has focus and something is selected.
+		// TODO: Is this part really relevant?
+		QItemSelectionModel *selected = ui->playlist->selectionModel();
+		if (selected->hasSelection()) {
+			ui->preview_btn->setEnabled(true);
+			return;
+		}
+	}
+
+	// TODO: Perhaps only enable this if something is actually selected.
+	ui->preview_btn->setEnabled(!cliplist_clips->empty());
 }
 
 void MainWindow::set_output_status(const string &status)

@@ -138,6 +138,7 @@ private:
 	void padding_toggled(double seconds, bool checked);
 
 	void highlight_camera_input(int stream_idx);
+	void enable_or_disable_preview_button();
 
 	template<class Model>
 	void replace_model(QTableView *view, Model **model, Model *new_model);
