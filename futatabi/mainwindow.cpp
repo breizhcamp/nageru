@@ -203,6 +203,7 @@ MainWindow::MainWindow()
 
 	connect(ui->clip_list->selectionModel(), &QItemSelectionModel::currentChanged,
 	        this, &MainWindow::clip_list_selection_changed);
+	enable_or_disable_queue_button();
 
 	// Find out how many cameras we have in the existing frames;
 	// if none, we start with two cameras.
@@ -285,6 +286,7 @@ void MainWindow::cue_in_clicked()
 	QModelIndex index = cliplist_clips->index(cliplist_clips->size() - 1, int(ClipList::Column::IN));
 	ui->clip_list->selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect);
 	ui->clip_list->scrollToBottom();
+	enable_or_disable_queue_button();
 }
 
 void MainWindow::cue_out_clicked()
@@ -300,10 +302,13 @@ void MainWindow::cue_out_clicked()
 	QModelIndex index = cliplist_clips->index(cliplist_clips->size() - 1, int(ClipList::Column::OUT));
 	ui->clip_list->selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect);
 	ui->clip_list->scrollToBottom();
+	enable_or_disable_queue_button();
 }
 
 void MainWindow::queue_clicked()
 {
+	// See also enable_or_disable_queue_button().
+
 	if (cliplist_clips->empty()) {
 		return;
 	}
@@ -846,6 +851,7 @@ void MainWindow::clip_list_selection_changed(const QModelIndex &current, const Q
 		camera_selected = current.column() - int(ClipList::Column::CAMERA_1);
 	}
 	highlight_camera_input(camera_selected);
+	enable_or_disable_queue_button();
 }
 
 void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_left)
@@ -1055,6 +1061,30 @@ void MainWindow::enable_or_disable_preview_button()
 
 	// TODO: Perhaps only enable this if something is actually selected.
 	ui->preview_btn->setEnabled(!cliplist_clips->empty());
+}
+
+void MainWindow::enable_or_disable_queue_button()
+{
+	// Follows the logic in queue_clicked().
+	// TODO: Perhaps only enable this if something is actually selected.
+
+	bool enabled;
+
+	if (cliplist_clips->empty()) {
+		enabled = false;
+	} else {
+		QItemSelectionModel *selected = ui->clip_list->selectionModel();
+		if (!selected->hasSelection()) {
+			Clip clip = *cliplist_clips->back();
+			enabled = clip.pts_out != -1;
+		} else {
+			QModelIndex index = selected->currentIndex();
+			Clip clip = *cliplist_clips->clip(index.row());
+			enabled = clip.pts_out != -1;
+		}
+	}
+
+	ui->queue_btn->setEnabled(enabled);
 }
 
 void MainWindow::set_output_status(const string &status)

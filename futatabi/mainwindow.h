@@ -139,6 +139,7 @@ private:
 
 	void highlight_camera_input(int stream_idx);
 	void enable_or_disable_preview_button();
+	void enable_or_disable_queue_button();
 
 	template<class Model>
 	void replace_model(QTableView *view, Model **model, Model *new_model);
