@@ -16,6 +16,11 @@ typedef struct _snd_seq snd_seq_t;
 
 class MIDIReceiver {
 public:
+	// Pitch bend events are received as a virtual controller with
+	// range -8192..8191 instead of 0..127 (but see the comment
+	// in map_controller_to_float() in midi_mapper.cpp).
+	static constexpr int PITCH_BEND_CONTROLLER = 128;
+
 	virtual ~MIDIReceiver() {}
 	virtual void controller_received(int controller, int value) = 0;
 	virtual void note_on_received(int note) = 0;

@@ -20,6 +20,7 @@
 
 #include "audio_mixer.h"
 #include "nageru_midi_mapping.pb.h"
+#include "shared/midi_device.h"
 #include "shared/midi_mapper_util.h"
 #include "shared/text_proto.h"
 
@@ -29,8 +30,23 @@ using namespace std::placeholders;
 
 namespace {
 
-double map_controller_to_float(int val)
+double map_controller_to_float(int controller, int val)
 {
+	if (controller == MIDIReceiver::PITCH_BEND_CONTROLLER) {
+		// We supposedly go from -8192 to 8191 (inclusive), but there are
+		// controllers that only have 10-bit precision and do the upconversion
+		// to 14-bit wrong (just padding with zeros), making 8176 the highest
+		// attainable value. We solve this by making the effective range
+		// -8176..8176 (inclusive).
+		if (val <= -8176) {
+			return 0.0;
+		} else if (val >= 8176) {
+			return 1.0;
+		} else {
+			return 0.5 * (double(val) / 8176.0) + 0.5;
+		}
+	}
+
 	// Slightly hackish mapping so that we can represent exactly 0.0, 0.5 and 1.0.
 	if (val <= 0) {
 		return 0.0;
@@ -96,7 +112,7 @@ ControllerReceiver *MIDIMapper::set_receiver(ControllerReceiver *new_receiver)
 
 void MIDIMapper::controller_received(int controller, int value_int)
 {
-	const float value = map_controller_to_float(value_int);
+	const float value = map_controller_to_float(controller, value_int);
 
 	receiver->controller_changed(controller);
 

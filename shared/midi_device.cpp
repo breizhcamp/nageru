@@ -160,6 +160,11 @@ void MIDIDevice::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
 		receiver->controller_received(event->data.control.param, event->data.control.value);
 		break;
 	}
+	case SND_SEQ_EVENT_PITCHBEND: {
+		// Note, -8192 to 8191 instead of 0 to 127.
+		receiver->controller_received(MIDIReceiver::PITCH_BEND_CONTROLLER, event->data.control.value);
+		break;
+	}
 	case SND_SEQ_EVENT_NOTEON: {
 		receiver->note_on_received(event->data.note.note);
 		break;
@@ -245,7 +250,7 @@ void MIDIDevice::update_lights_lock_held(const set<unsigned> &active_lights)
 	}
 
 	unsigned num_events = 0;
-	for (unsigned note_num = 1; note_num <= 127; ++note_num) {
+	for (unsigned note_num = 1; note_num <= 127; ++note_num) {  // Note: Pitch bend is ignored.
 		bool active = active_lights.count(note_num);
 		if (current_light_status.count(note_num) &&
 		    current_light_status[note_num] == active) {

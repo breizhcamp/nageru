@@ -18,6 +18,7 @@
 #include <limits>
 #include <string>
 
+#include "controller_spin_box.h"
 #include "midi_mapper.h"
 #include "nageru_midi_mapping.pb.h"
 #include "shared/post_to_main_thread.h"
@@ -419,8 +420,14 @@ void MIDIMappingDialog::add_controls(const string &heading,
 		item->setText(0, QString::fromStdString(control.label + "   "));
 
 		for (unsigned bus_idx = 0; bus_idx < num_buses; ++bus_idx) {
-			QSpinBox *spinner = new QSpinBox(this);
-			spinner->setRange(-1, 127);
+			QSpinBox *spinner;
+			if (control_type == ControlType::CONTROLLER) {
+				spinner = new ControllerSpinBox(this);
+				spinner->setRange(-1, 128);  // 128 for pitch bend.
+			} else {
+				spinner = new QSpinBox(this);
+				spinner->setRange(-1, 127);
+			}
 			spinner->setAutoFillBackground(true);
 			spinner->setSpecialValueText("\u200d");  // Zero-width joiner (ie., empty).
 			spinner->installEventFilter(this);  // So we know when the focus changes.
