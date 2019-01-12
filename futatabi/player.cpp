@@ -194,7 +194,6 @@ void Player::play_playlist_once()
 			{
 				lock_guard<mutex> lock(queue_state_mu);
 				if (splice_ready) {
-					fprintf(stderr, "splicing\n");
 					if (next_clip == nullptr) {
 						do_splice(to_splice_clip_list, clip_idx, -1, &clip_list);
 					} else {
