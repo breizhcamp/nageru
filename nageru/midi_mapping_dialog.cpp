@@ -543,6 +543,10 @@ pair<int, int> MIDIMappingDialog::guess_offset(unsigned bus_idx, MIDIMappingDial
 			// The bus has a controller set that the source bus doesn't set.
 			return not_found;
 		}
+		if (source_spinner->value() == MIDIReceiver::PITCH_BEND_CONTROLLER) {
+			// It's impossible to interpolate across the pitch bend.
+			return not_found;
+		}
 
 		int candidate_offset = spinner->value() - source_spinner->value();
 		if (!found_offset) {
