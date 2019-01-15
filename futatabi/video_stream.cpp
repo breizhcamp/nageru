@@ -335,18 +335,14 @@ void VideoStream::schedule_original_frame(steady_clock::time_point local_pts,
 {
 	fprintf(stderr, "output_pts=%ld  original      input_pts=%ld\n", output_pts, frame.pts);
 
-	// Preload the file from disk, so that the encoder thread does not get stalled.
-	// TODO: Consider sending it through the queue instead.
-	(void)frame_reader.read_frame(frame);
-
 	QueuedFrame qf;
 	qf.local_pts = local_pts;
 	qf.type = QueuedFrame::ORIGINAL;
 	qf.output_pts = output_pts;
-	qf.frame1 = frame;
 	qf.display_func = move(display_func);
 	qf.queue_spot_holder = move(queue_spot_holder);
 	qf.subtitle = subtitle;
+	qf.encoded_jpeg.reset(new string(frame_reader.read_frame(frame)));
 
 	lock_guard<mutex> lock(queue_lock);
 	frame_queue.push_back(move(qf));
@@ -655,7 +651,7 @@ void VideoStream::encode_thread_func()
 
 		if (qf.type == QueuedFrame::ORIGINAL) {
 			// Send the JPEG frame on, unchanged.
-			string jpeg = frame_reader.read_frame(qf.frame1);
+			string jpeg = move(*qf.encoded_jpeg);
 			AVPacket pkt;
 			av_init_packet(&pkt);
 			pkt.stream_index = 0;

@@ -111,7 +111,15 @@ private:
 
 		int64_t output_pts;
 		enum Type { ORIGINAL, FADED, INTERPOLATED, FADED_INTERPOLATED, REFRESH } type;
-		FrameOnDisk frame1;  // The only frame for original frames.
+
+		// For original frames only. Made move-only so we know explicitly
+		// we don't copy these ~200 kB files around inadvertedly.
+		//
+		// TODO: Consider using vector<uint8_t> instead, so we save one copy.
+		std::unique_ptr<std::string> encoded_jpeg;
+
+		// For everything except original frames.
+		FrameOnDisk frame1;
 
 		// For fades only (including fades against interpolated frames).
 		FrameOnDisk secondary_frame;

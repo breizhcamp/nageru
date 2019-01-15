@@ -32,6 +32,8 @@ static bool inline operator==(const FrameOnDisk &a, const FrameOnDisk &b)
 // the sequential reads. (For this reason, each display has a private
 // FrameReader. Thus, we can easily keep multiple open file descriptors around
 // for a single .frames file.)
+//
+// Thread-compatible, but not thread-safe.
 class FrameReader {
 public:
 	FrameReader();
