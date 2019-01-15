@@ -181,6 +181,8 @@ MainWindow::MainWindow()
 	connect(ui->stop_btn, &QPushButton::clicked, this, &MainWindow::stop_clicked);
 	ui->stop_btn->setEnabled(false);
 
+	connect(ui->speed_slider, &QAbstractSlider::valueChanged, this, &MainWindow::speed_slider_changed);
+
 	connect(ui->playlist_duplicate_btn, &QPushButton::clicked, this, &MainWindow::playlist_duplicate);
 
 	connect(ui->playlist_remove_btn, &QPushButton::clicked, this, &MainWindow::playlist_remove);
@@ -622,6 +624,13 @@ void MainWindow::stop_clicked()
 	playlist_clips->set_progress({});
 	live_player->play(fake_clip);
 	ui->stop_btn->setEnabled(false);
+}
+
+void MainWindow::speed_slider_changed(int percent)
+{
+	float speed = percent / 100.0f;
+	ui->speed_label->setText(QString::fromStdString(to_string(percent) + "%"));
+	live_player->set_master_speed(speed);
 }
 
 void MainWindow::live_player_done()
@@ -1223,6 +1232,21 @@ void MainWindow::switch_camera(unsigned camera_idx)
 			preview_angle_clicked(camera_idx);
 		}
 	});
+}
+
+void MainWindow::set_master_speed(float speed)
+{
+	speed = min(max(speed, 0.1f), 2.0f);
+
+	post_to_main_thread([this, speed] {
+		int percent = lrintf(speed * 100.0f);
+		ui->speed_slider->blockSignals(true);
+		ui->speed_slider->setValue(percent);
+		ui->speed_slider->blockSignals(false);
+		ui->speed_label->setText(QString::fromStdString(to_string(percent) + "%"));
+	});
+
+	live_player->set_master_speed(speed);
 }
 
 void MainWindow::cue_in()

@@ -36,3 +36,6 @@ cue_out_enabled: { note_number: 33 }
 # but it's also unclear where else it would be.
 preview: { note_number: 27 }
 preview_enabled: { note_number: 27 }
+
+# The slider (pitch bend) is mapped to master speed.
+master_speed: { controller_number: 128 }

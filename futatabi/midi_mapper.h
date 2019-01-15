@@ -34,6 +34,7 @@ public:
 	virtual void play() = 0;
 	virtual void jog(int delta) = 0;
 	virtual void switch_camera(unsigned camera_idx) = 0;
+	virtual void set_master_speed(float speed) = 0;
 	virtual void cue_in() = 0;
 	virtual void cue_out() = 0;
 

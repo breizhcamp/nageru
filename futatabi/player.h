@@ -61,6 +61,11 @@ public:
 		pause_status = status;
 	}
 
+	void set_master_speed(float speed)
+	{
+		change_master_speed = speed;
+	}
+
 	// Not thread-safe to set concurrently with playing.
 	// Will be called back from the player thread.
 	using done_callback_func = std::function<void()>;
@@ -90,6 +95,7 @@ private:
 
 	std::thread player_thread;
 	std::atomic<bool> should_quit{ false };
+	std::atomic<float> change_master_speed{ 0.0f / 0.0f };
 
 	JPEGFrameView *destination;
 	done_callback_func done_callback;

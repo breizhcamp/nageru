@@ -29,6 +29,9 @@ message MIDIMappingProto {
 	optional MIDIControllerProto jog = 16;
 	optional int32 jog_bank = 17;
 
+	optional MIDIControllerProto master_speed = 34;
+	optional int32 master_speed_bank = 35;
+
 	// Buttons.
 	optional MIDIButtonProto preview = 18;
 	optional int32 preview_bank = 19;

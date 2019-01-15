@@ -78,11 +78,16 @@ ControllerReceiver *MIDIMapper::set_receiver(ControllerReceiver *new_receiver)
 void MIDIMapper::controller_received(int controller, int value_int)
 {
 	int delta_value = value_int - 64;  // For infinite controllers such as jog.
+	float value = map_controller_to_float(controller, value_int);
 
 	receiver->controller_changed(controller);
 
 	match_controller(controller, MIDIMappingProto::kJogFieldNumber, MIDIMappingProto::kJogBankFieldNumber,
 		delta_value, bind(&ControllerReceiver::jog, receiver, _1));
+
+	// Speed goes from 0.0 to 2.0 (the receiver will clamp).
+	match_controller(controller, MIDIMappingProto::kMasterSpeedFieldNumber, MIDIMappingProto::kMasterSpeedBankFieldNumber,
+		value * 2.0, bind(&ControllerReceiver::set_master_speed, receiver, _1));
 }
 
 void MIDIMapper::note_on_received(int note)

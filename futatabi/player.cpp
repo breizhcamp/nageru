@@ -114,6 +114,7 @@ void Player::play_playlist_once()
 	bool clip_ready;
 	steady_clock::time_point before_sleep = steady_clock::now();
 	string pause_status;
+	float master_speed = 1.0f;
 
 	// Wait until we're supposed to play something.
 	{
@@ -184,8 +185,15 @@ void Player::play_playlist_once()
 			double out_pts = out_pts_origin + TIMEBASE * frameno / global_flags.output_framerate;
 			next_frame_start =
 				origin + microseconds(lrint((out_pts - out_pts_origin) * 1e6 / TIMEBASE));
-			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * clip->speed / global_flags.output_framerate);
+			int64_t in_pts = lrint(in_pts_origin + TIMEBASE * frameno * clip->speed * master_speed / global_flags.output_framerate);
 			pts = lrint(out_pts);
+
+			float new_master_speed = change_master_speed.exchange(0.0f / 0.0f);
+			if (!std::isnan(new_master_speed)) {
+				master_speed = new_master_speed;
+				in_pts_origin = in_pts - TIMEBASE * frameno * clip->speed * master_speed / global_flags.output_framerate;
+				out_pts_origin = out_pts - TIMEBASE * frameno / global_flags.output_framerate;
+			}
 
 			if (in_pts >= clip->pts_out) {
 				break;
