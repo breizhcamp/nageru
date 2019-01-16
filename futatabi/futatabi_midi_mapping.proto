@@ -48,6 +48,7 @@ message MIDIMappingProto {
 	optional MIDIButtonProto toggle_lock = 36;
 	optional int32 toggle_lock_bank = 37;
 	optional MIDILightProto locked = 38;
+	optional MIDILightProto locked_blinking = 39;
 
 	optional MIDIButtonProto cue_in = 27;
 	optional int32 cue_in_bank = 28;

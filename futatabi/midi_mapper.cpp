@@ -231,8 +231,10 @@ void MIDIMapper::update_lights_lock_held()
 	if (play_enabled_light) {
 		activate_mapped_light(*mapping_proto, MIDIMappingProto::kPlayEnabledFieldNumber, &active_lights);
 	}
-	if (locked_light) {
+	if (locked_light == On) {
 		activate_mapped_light(*mapping_proto, MIDIMappingProto::kLockedFieldNumber, &active_lights);
+	} else if (locked_light == Blinking) {
+		activate_mapped_light(*mapping_proto, MIDIMappingProto::kLockedBlinkingFieldNumber, &active_lights);
 	}
 	if (current_highlighted_camera >= 0 && current_highlighted_camera < mapping_proto->camera_size()) {
 		const CameraMIDIMappingProto &camera = mapping_proto->camera(current_highlighted_camera);

@@ -100,6 +100,10 @@ private:
 	// NOTE: The undo stack always has the current state on top.
 	std::deque<StateProto> undo_stack, redo_stack;
 
+	// If we need to blink the lock light, we do so for only a second.
+	// This timer signals that we should end it.
+	QTimer *lock_blink_timeout;
+
 	// Before a change that should be deferred (see above), currently_deferring_model_changes
 	// must be set to true, and current_change_id must be given contents describing what's
 	// changed to avoid accidental grouping.
@@ -146,6 +150,8 @@ private:
 	void content_changed();  // In clip_list or play_list.
 	void state_changed(const StateProto &state);  // Called post-filtering.
 	void save_settings();
+
+	void lock_blink_timer_expired();
 
 	enum Rounding { FIRST_AT_OR_AFTER,
 	                LAST_BEFORE };

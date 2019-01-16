@@ -43,3 +43,4 @@ master_speed: { controller_number: 128 }
 # Master speed lock is mapped to lock.
 toggle_lock: { note_number: 25 }
 locked: { note_number: 25 }
+locked_blinking: { note_number: 25  velocity: 2 }

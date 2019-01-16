@@ -222,6 +222,10 @@ MainWindow::MainWindow()
 	connect(defer_timeout, &QTimer::timeout, this, &MainWindow::defer_timer_expired);
 	ui->undo_action->setEnabled(true);
 
+	lock_blink_timeout = new QTimer(this);
+	lock_blink_timeout->setSingleShot(true);
+	connect(lock_blink_timeout, &QTimer::timeout, this, &MainWindow::lock_blink_timer_expired);
+
 	connect(ui->clip_list->selectionModel(), &QItemSelectionModel::currentChanged,
 	        this, &MainWindow::clip_list_selection_changed);
 	enable_or_disable_queue_button();
@@ -592,6 +596,11 @@ void MainWindow::save_settings()
 	db.store_settings(settings);
 }
 
+void MainWindow::lock_blink_timer_expired()
+{
+	midi_mapper.set_locked(MIDIMapper::LightState(ui->speed_lock_btn->isChecked()));  // Presumably On, or the timer should have been canceled.
+}
+
 void MainWindow::play_clicked()
 {
 	if (playlist_clips->empty())
@@ -639,7 +648,8 @@ void MainWindow::speed_lock_clicked()
 	// TODO: Make for a less abrupt transition if we're not already at 100%.
 	ui->speed_slider->setValue(100);  // Also actually sets the master speed and updates the label.
 	ui->speed_slider->setEnabled(!ui->speed_lock_btn->isChecked());
-	midi_mapper.set_locked(ui->speed_lock_btn->isChecked());
+	midi_mapper.set_locked(MIDIMapper::LightState(ui->speed_lock_btn->isChecked()));
+	lock_blink_timeout->stop();
 }
 
 void MainWindow::live_player_done()
@@ -1257,6 +1267,8 @@ void MainWindow::set_master_speed(float speed)
 
 	post_to_main_thread([this, speed] {
 		if (ui->speed_lock_btn->isChecked()) {
+			midi_mapper.set_locked(MIDIMapper::Blinking);
+			lock_blink_timeout->start(1000);
 			return;
 		}
 

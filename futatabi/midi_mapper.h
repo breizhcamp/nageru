@@ -45,6 +45,13 @@ public:
 
 class MIDIMapper : public MIDIReceiver {
 public:
+	// Converts conveniently from a bool.
+	enum LightState {
+		Off = 0,
+		On = 1,
+		Blinking = 2
+	};
+
 	MIDIMapper(ControllerReceiver *receiver);
 	virtual ~MIDIMapper();
 	void set_midi_mapping(const MIDIMappingProto &new_mapping);
@@ -68,7 +75,7 @@ public:
 		play_enabled_light = enabled;
 		refresh_lights();
 	}
-	void set_locked(bool locked) {
+	void set_locked(LightState locked) {
 		locked_light = locked;
 		refresh_lights();
 	}
@@ -102,7 +109,7 @@ private:
 	std::atomic<bool> preview_enabled_light{false};
 	std::atomic<bool> queue_enabled_light{false};
 	std::atomic<bool> play_enabled_light{false};
-	std::atomic<bool> locked_light{true};
+	std::atomic<LightState> locked_light{On};
 	std::atomic<int> current_highlighted_camera{-1};
 
 	MIDIDevice midi_device;
