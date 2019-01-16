@@ -45,6 +45,10 @@ message MIDIMappingProto {
 	optional int32 play_bank = 25;
 	optional MIDILightProto play_enabled = 26;
 
+	optional MIDIButtonProto toggle_lock = 36;
+	optional int32 toggle_lock_bank = 37;
+	optional MIDILightProto locked = 38;
+
 	optional MIDIButtonProto cue_in = 27;
 	optional int32 cue_in_bank = 28;
 	optional MIDILightProto cue_in_enabled = 29;  // In practice always true currently.

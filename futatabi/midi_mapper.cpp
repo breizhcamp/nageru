@@ -141,6 +141,8 @@ void MIDIMapper::note_on_received(int note)
 		bind(&ControllerReceiver::queue, receiver));
 	match_button(note, MIDIMappingProto::kPlayFieldNumber, MIDIMappingProto::kPlayBankFieldNumber,
 		bind(&ControllerReceiver::play, receiver));
+	match_button(note, MIDIMappingProto::kToggleLockFieldNumber, MIDIMappingProto::kToggleLockBankFieldNumber,
+		bind(&ControllerReceiver::toggle_lock, receiver));
 
 	unsigned num_cameras = std::min(MAX_STREAMS, mapping_proto->camera_size());
 	for (unsigned camera_idx = 0; camera_idx < num_cameras; ++camera_idx) {
@@ -227,6 +229,9 @@ void MIDIMapper::update_lights_lock_held()
 	}
 	if (play_enabled_light) {
 		activate_mapped_light(*mapping_proto, MIDIMappingProto::kPlayEnabledFieldNumber, &active_lights);
+	}
+	if (locked_light) {
+		activate_mapped_light(*mapping_proto, MIDIMappingProto::kLockedFieldNumber, &active_lights);
 	}
 	if (current_highlighted_camera >= 0 && current_highlighted_camera < mapping_proto->camera_size()) {
 		const CameraMIDIMappingProto &camera = mapping_proto->camera(current_highlighted_camera);

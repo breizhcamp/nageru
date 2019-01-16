@@ -142,6 +142,9 @@
           </item>
           <item>
            <widget class="QSlider" name="speed_slider">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
             <property name="minimum">
              <number>10</number>
             </property>
@@ -157,24 +160,32 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="speed_label">
+           <widget class="QPushButton" name="speed_lock_btn">
             <property name="sizePolicy">
-             <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
             <property name="minimumSize">
              <size>
-              <width>40</width>
+              <width>72</width>
               <height>0</height>
              </size>
             </property>
             <property name="text">
-             <string>100%</string>
+             <string> 100%</string>
             </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
+            <property name="icon">
+             <iconset>
+              <normalon>:/lock.svg</normalon>
+             </iconset>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
             </property>
            </widget>
           </item>
@@ -522,6 +533,8 @@
    <header>jpeg_frame_view.h</header>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="mainwindow.qrc"/>
+ </resources>
  <connections/>
 </ui>

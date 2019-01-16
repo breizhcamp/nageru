@@ -39,3 +39,7 @@ preview_enabled: { note_number: 27 }
 
 # The slider (pitch bend) is mapped to master speed.
 master_speed: { controller_number: 128 }
+
+# Master speed lock is mapped to lock.
+toggle_lock: { note_number: 25 }
+locked: { note_number: 25 }

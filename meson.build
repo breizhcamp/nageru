@@ -275,6 +275,7 @@ proto_generated = gen.process('futatabi/state.proto', 'futatabi/frame.proto', 'f
 moc_files = qt5.preprocess(
 	moc_headers: ['futatabi/mainwindow.h', 'futatabi/jpeg_frame_view.h', 'futatabi/clip_list.h'],
 	ui_files: ['futatabi/mainwindow.ui'],
+	qresources: ['futatabi/mainwindow.qrc'],
 	dependencies: qt5deps)
 
 # Flow objects.

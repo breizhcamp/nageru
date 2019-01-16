@@ -32,6 +32,7 @@ public:
 	virtual void preview() = 0;
 	virtual void queue() = 0;
 	virtual void play() = 0;
+	virtual void toggle_lock() = 0;
 	virtual void jog(int delta) = 0;
 	virtual void switch_camera(unsigned camera_idx) = 0;
 	virtual void set_master_speed(float speed) = 0;
@@ -68,6 +69,10 @@ public:
 		play_enabled_light = enabled;
 		refresh_lights();
 	}
+	void set_locked(bool locked) {
+		locked_light = locked;
+		refresh_lights();
+	}
 	void highlight_camera_input(int stream_idx) {  // -1 for none.
 		current_highlighted_camera = stream_idx;
 		refresh_lights();
@@ -99,6 +104,7 @@ private:
 	std::atomic<bool> preview_enabled_light{false};
 	std::atomic<bool> queue_enabled_light{false};
 	std::atomic<bool> play_enabled_light{false};
+	std::atomic<bool> locked_light{true};
 	std::atomic<int> current_highlighted_camera{-1};
 
 	MIDIDevice midi_device;

@@ -182,6 +182,7 @@ MainWindow::MainWindow()
 	ui->stop_btn->setEnabled(false);
 
 	connect(ui->speed_slider, &QAbstractSlider::valueChanged, this, &MainWindow::speed_slider_changed);
+	connect(ui->speed_lock_btn, &QPushButton::clicked, this, &MainWindow::speed_lock_clicked);
 
 	connect(ui->playlist_duplicate_btn, &QPushButton::clicked, this, &MainWindow::playlist_duplicate);
 
@@ -629,8 +630,16 @@ void MainWindow::stop_clicked()
 void MainWindow::speed_slider_changed(int percent)
 {
 	float speed = percent / 100.0f;
-	ui->speed_label->setText(QString::fromStdString(to_string(percent) + "%"));
+	ui->speed_lock_btn->setText(QString::fromStdString(" " + to_string(percent) + "%"));
 	live_player->set_master_speed(speed);
+}
+
+void MainWindow::speed_lock_clicked()
+{
+	// TODO: Make for a less abrupt transition if we're not already at 100%.
+	ui->speed_slider->setValue(100);  // Also actually sets the master speed and updates the label.
+	ui->speed_slider->setEnabled(!ui->speed_lock_btn->isChecked());
+	midi_mapper.set_locked(ui->speed_lock_btn->isChecked());
 }
 
 void MainWindow::live_player_done()
@@ -1200,6 +1209,14 @@ void MainWindow::play()
 	});
 }
 
+void MainWindow::toggle_lock()
+{
+	post_to_main_thread([this] {
+		ui->speed_lock_btn->setChecked(!ui->speed_lock_btn->isChecked());
+		speed_lock_clicked();
+	});
+}
+
 void MainWindow::jog(int delta)
 {
 	post_to_main_thread([this, delta] {
@@ -1239,14 +1256,18 @@ void MainWindow::set_master_speed(float speed)
 	speed = min(max(speed, 0.1f), 2.0f);
 
 	post_to_main_thread([this, speed] {
+		if (ui->speed_lock_btn->isChecked()) {
+			return;
+		}
+
 		int percent = lrintf(speed * 100.0f);
 		ui->speed_slider->blockSignals(true);
 		ui->speed_slider->setValue(percent);
 		ui->speed_slider->blockSignals(false);
-		ui->speed_label->setText(QString::fromStdString(to_string(percent) + "%"));
-	});
+		ui->speed_lock_btn->setText(QString::fromStdString(" " + to_string(percent) + "%"));
 
-	live_player->set_master_speed(speed);
+		live_player->set_master_speed(speed);
+	});
 }
 
 void MainWindow::cue_in()
