@@ -603,16 +603,11 @@ void MainWindow::lock_blink_timer_expired()
 
 void MainWindow::play_clicked()
 {
-	if (playlist_clips->empty())
-		return;
-
 	QItemSelectionModel *selected = ui->playlist->selectionModel();
-	unsigned start_row;
 	if (!selected->hasSelection()) {
-		start_row = 0;
-	} else {
-		start_row = selected->selectedRows(0)[0].row();
+		return;
 	}
+	unsigned start_row = selected->selectedRows(0)[0].row();
 
 	vector<ClipWithID> clips;
 	for (unsigned row = start_row; row < playlist_clips->size(); ++row) {
@@ -895,8 +890,8 @@ void MainWindow::playlist_selection_changed()
 	ui->playlist_move_down_btn->setEnabled(
 		any_selected && selected->selectedRows().back().row() < int(playlist_clips->size()) - 1);
 
-	ui->play_btn->setEnabled(!playlist_clips->empty());
-	midi_mapper.set_play_enabled(!playlist_clips->empty());
+	ui->play_btn->setEnabled(any_selected);
+	midi_mapper.set_play_enabled(any_selected);
 
 	if (!any_selected) {
 		set_output_status("paused");
