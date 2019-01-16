@@ -49,7 +49,7 @@ inline bool match_bank_helper(const Proto &msg, int bank_field_number, int bank)
 
 // Find what MIDI note the given light (as given by field_number) is mapped to, and enable it.
 template <class Proto>
-void activate_mapped_light(const Proto &msg, int field_number, std::set<unsigned> *active_lights)
+void activate_mapped_light(const Proto &msg, int field_number, std::map<unsigned, uint8_t> *active_lights)
 {
 	using namespace google::protobuf;
 	const FieldDescriptor *descriptor = msg.GetDescriptor()->FindFieldByNumber(field_number);
@@ -59,7 +59,7 @@ void activate_mapped_light(const Proto &msg, int field_number, std::set<unsigned
 	}
 	const MIDILightProto &light_proto =
 		static_cast<const MIDILightProto &>(reflection->GetMessage(msg, descriptor));
-	active_lights->insert(light_proto.note_number());
+	active_lights->emplace(light_proto.note_number(), light_proto.velocity());
 }
 
 inline double map_controller_to_float(int controller, int val)

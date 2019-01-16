@@ -16,4 +16,5 @@ message MIDIButtonProto {
 
 message MIDILightProto {
 	required int32 note_number = 1;
+	optional int32 velocity = 2 [default=1];
 }

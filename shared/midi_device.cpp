@@ -233,17 +233,12 @@ void MIDIDevice::subscribe_to_port_lock_held(snd_seq_t *seq, const snd_seq_addr_
 	}
 
 	// The current status of the device is unknown, so refresh it.
-	set<unsigned> active_lights;
-	for (const auto &it : current_light_status) {
-		if (it.second) {
-			active_lights.insert(it.first);
-		}
-	}
+	map<unsigned, uint8_t> active_lights = move(current_light_status);
 	current_light_status.clear();
 	update_lights_lock_held(active_lights);
 }
 
-void MIDIDevice::update_lights_lock_held(const set<unsigned> &active_lights)
+void MIDIDevice::update_lights_lock_held(const map<unsigned, uint8_t> &active_lights)
 {
 	if (alsa_seq == nullptr) {
 		return;
@@ -251,9 +246,10 @@ void MIDIDevice::update_lights_lock_held(const set<unsigned> &active_lights)
 
 	unsigned num_events = 0;
 	for (unsigned note_num = 1; note_num <= 127; ++note_num) {  // Note: Pitch bend is ignored.
-		bool active = active_lights.count(note_num);
+		const auto it = active_lights.find(note_num);
+		uint8_t velocity = (it == active_lights.end()) ? 0 : it->second;
 		if (current_light_status.count(note_num) &&
-		    current_light_status[note_num] == active) {
+		    current_light_status[note_num] == velocity) {
 			// Already known to be in the desired state.
 			continue;
 		}
@@ -270,9 +266,9 @@ void MIDIDevice::update_lights_lock_held(const set<unsigned> &active_lights)
 
 		// For some reason, not all devices respond to note off.
 		// Use note-on with velocity of 0 (which is equivalent) instead.
-		snd_seq_ev_set_noteon(&ev, /*channel=*/0, note_num, active ? 1 : 0);
+		snd_seq_ev_set_noteon(&ev, /*channel=*/0, note_num, velocity);
 		WARN_ON_ERROR("snd_seq_event_output", snd_seq_event_output(alsa_seq, &ev));
-		current_light_status[note_num] = active;
+		current_light_status[note_num] = velocity;
 	}
 	WARN_ON_ERROR("snd_seq_drain_output", snd_seq_drain_output(alsa_seq));
 }
