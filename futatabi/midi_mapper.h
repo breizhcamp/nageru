@@ -15,7 +15,6 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <string>
 #include <thread>
 
@@ -90,7 +89,6 @@ private:
 	bool bank_mismatch(int bank_field_number);
 
 	void update_lights_lock_held();
-	void activate_lights_all_buses(int field_number, std::set<unsigned> *active_lights);
 
 	std::atomic<bool> should_quit{false};
 	int should_quit_fd;
