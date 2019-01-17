@@ -83,6 +83,10 @@ public:
 		current_highlighted_camera = stream_idx;
 		refresh_lights();
 	}
+	void set_speed_light(float speed) {  // Goes from 0.0 to 2.0.
+		current_speed = speed;
+		refresh_lights();
+	}
 
 	// MIDIReceiver.
 	void controller_received(int controller, int value) override;
@@ -111,6 +115,7 @@ private:
 	std::atomic<LightState> play_enabled_light{Off};
 	std::atomic<LightState> locked_light{On};
 	std::atomic<int> current_highlighted_camera{-1};
+	std::atomic<float> current_speed{1.0f};
 
 	MIDIDevice midi_device;
 };

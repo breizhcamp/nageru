@@ -31,6 +31,9 @@ message MIDIMappingProto {
 
 	optional MIDIControllerProto master_speed = 34;
 	optional int32 master_speed_bank = 35;
+	optional MIDIControllerProto master_speed_light = 42;  // NOTE: Controller, not light.
+	optional int32 master_speed_light_min = 43;
+	optional int32 master_speed_light_max = 44 [default=128];  // Exclusive.
 
 	// Buttons.
 	optional MIDIButtonProto preview = 18;

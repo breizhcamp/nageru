@@ -8,6 +8,7 @@
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/text_format.h>
+#include <math.h>
 #include <pthread.h>
 #include <poll.h>
 #include <stdint.h>
@@ -243,6 +244,15 @@ void MIDIMapper::update_lights_lock_held()
 	if (current_highlighted_camera >= 0 && current_highlighted_camera < mapping_proto->camera_size()) {
 		const CameraMIDIMappingProto &camera = mapping_proto->camera(current_highlighted_camera);
 		activate_mapped_light(camera, CameraMIDIMappingProto::kIsCurrentFieldNumber, &active_lights);
+	}
+
+	// Master speed light.
+	if (mapping_proto->has_master_speed_light()) {
+		unsigned controller = mapping_proto->master_speed_light().controller_number();
+		unsigned min = mapping_proto->master_speed_light_min();
+		unsigned max = mapping_proto->master_speed_light_max();
+		int speed_light_value = lrintf((max - min - 1) * current_speed / 2.0f) + min;
+		active_lights[MIDIDevice::LightKey{MIDIDevice::LightKey::CONTROLLER, controller}] = speed_light_value;
 	}
 
 	// These are always enabled right now.

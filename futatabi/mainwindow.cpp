@@ -648,6 +648,7 @@ void MainWindow::speed_slider_changed(int percent)
 	float speed = percent / 100.0f;
 	ui->speed_lock_btn->setText(QString::fromStdString(" " + to_string(percent) + "%"));
 	live_player->set_master_speed(speed);
+	midi_mapper.set_speed_light(speed);
 }
 
 void MainWindow::speed_lock_clicked()
@@ -1302,6 +1303,7 @@ void MainWindow::set_master_speed(float speed)
 		ui->speed_lock_btn->setText(QString::fromStdString(" " + to_string(percent) + "%"));
 
 		live_player->set_master_speed(speed);
+		midi_mapper.set_speed_light(speed);
 	});
 }
 
