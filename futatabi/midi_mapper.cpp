@@ -246,8 +246,8 @@ void MIDIMapper::update_lights_lock_held()
 	}
 
 	// These are always enabled right now.
-	activate_mapped_light(*mapping_proto, MIDIMappingProto::kCueInFieldNumber, &active_lights);
-	activate_mapped_light(*mapping_proto, MIDIMappingProto::kCueOutFieldNumber, &active_lights);
+	activate_mapped_light(*mapping_proto, MIDIMappingProto::kCueInEnabledFieldNumber, &active_lights);
+	activate_mapped_light(*mapping_proto, MIDIMappingProto::kCueOutEnabledFieldNumber, &active_lights);
 
 	midi_device.update_lights(active_lights);
 }
