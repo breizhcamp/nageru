@@ -318,7 +318,7 @@ void MIDIMapper::update_lights_lock_held()
 		return;
 	}
 
-	map<unsigned, uint8_t> active_lights;  // Desired state.
+	map<MIDIDevice::LightKey, uint8_t> active_lights;  // Desired state.
 	if (current_controller_bank == 0) {
 		activate_lights_all_buses(MIDIMappingBusProto::kBank1IsSelectedFieldNumber, &active_lights);
 	}
@@ -363,7 +363,7 @@ void MIDIMapper::update_lights_lock_held()
 	midi_device.update_lights(active_lights);
 }
 
-void MIDIMapper::activate_lights_all_buses(int field_number, map<unsigned, uint8_t> *active_lights)
+void MIDIMapper::activate_lights_all_buses(int field_number, map<MIDIDevice::LightKey, uint8_t> *active_lights)
 {
 	for (size_t bus_idx = 0; bus_idx < size_t(mapping_proto->bus_mapping_size()); ++bus_idx) {
 		const MIDIMappingBusProto &bus_mapping = mapping_proto->bus_mapping(bus_idx);

@@ -109,7 +109,7 @@ private:
 	void update_highlights();
 
 	void update_lights_lock_held();
-	void activate_lights_all_buses(int field_number, std::map<unsigned, uint8_t> *active_lights);
+	void activate_lights_all_buses(int field_number, std::map<MIDIDevice::LightKey, uint8_t> *active_lights);
 
 	std::atomic<bool> should_quit{false};
 	int should_quit_fd;

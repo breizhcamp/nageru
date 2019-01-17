@@ -28,11 +28,24 @@ public:
 
 class MIDIDevice {
 public:
+	struct LightKey {
+		enum { NOTE, CONTROLLER } type;
+		unsigned number;
+
+		bool operator< (const LightKey& other) const
+		{
+			if (type != other.type) {
+				return type < other.type;
+			}
+			return number < other.number;
+		}
+	};
+
 	MIDIDevice(MIDIReceiver *receiver);
 	~MIDIDevice();
 	void start_thread();
 
-	void update_lights(const std::map<unsigned, uint8_t> &active_lights)
+	void update_lights(const std::map<LightKey, uint8_t> &active_lights)
 	{
 		std::lock_guard<std::mutex> lock(mu);
 		update_lights_lock_held(active_lights);
@@ -42,7 +55,7 @@ private:
 	void thread_func();
 	void handle_event(snd_seq_t *seq, snd_seq_event_t *event);
 	void subscribe_to_port_lock_held(snd_seq_t *seq, const snd_seq_addr_t &addr);
-	void update_lights_lock_held(const std::map<unsigned, uint8_t> &active_lights);
+	void update_lights_lock_held(const std::map<LightKey, uint8_t> &active_lights);
 
 	std::atomic<bool> should_quit{false};
 	int should_quit_fd;
@@ -51,7 +64,7 @@ private:
 	MIDIReceiver *receiver;  // Under <mu>.
 
 	std::thread midi_thread;
-	std::map<unsigned, uint8_t> current_light_status;  // Keyed by note number. Under <mu>.
+	std::map<LightKey, uint8_t> current_light_status;  // Keyed by note number. Under <mu>.
 	snd_seq_t *alsa_seq{nullptr};  // Under <mu>.
 	int alsa_queue_id{-1};  // Under <mu>.
 	std::atomic<int> num_subscribed_ports{0};

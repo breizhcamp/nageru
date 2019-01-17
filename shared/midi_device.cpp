@@ -233,42 +233,63 @@ void MIDIDevice::subscribe_to_port_lock_held(snd_seq_t *seq, const snd_seq_addr_
 	}
 
 	// The current status of the device is unknown, so refresh it.
-	map<unsigned, uint8_t> active_lights = move(current_light_status);
+	map<LightKey, uint8_t> active_lights = move(current_light_status);
 	current_light_status.clear();
 	update_lights_lock_held(active_lights);
 }
 
-void MIDIDevice::update_lights_lock_held(const map<unsigned, uint8_t> &active_lights)
+void MIDIDevice::update_lights_lock_held(const map<LightKey, uint8_t> &active_lights)
 {
 	if (alsa_seq == nullptr) {
 		return;
 	}
 
 	unsigned num_events = 0;
-	for (unsigned note_num = 1; note_num <= 127; ++note_num) {  // Note: Pitch bend is ignored.
-		const auto it = active_lights.find(note_num);
-		uint8_t velocity = (it == active_lights.end()) ? 0 : it->second;
-		if (current_light_status.count(note_num) &&
-		    current_light_status[note_num] == velocity) {
-			// Already known to be in the desired state.
-			continue;
+	for (auto type : { LightKey::NOTE, LightKey::CONTROLLER }) {
+		for (unsigned num = 1; num <= 127; ++num) {  // Note: Pitch bend is ignored.
+			LightKey key{type, num};
+			const auto it = active_lights.find(key);
+			uint8_t value;  // Velocity for notes, controller value for controllers.
+
+			// Notes have a natural “off”, while controllers don't really.
+			// For some reason, not all devices respond to note off.
+			// Use note-on with value of 0 (which is equivalent) instead.
+			if (it == active_lights.end()) {
+				// Notes have a natural “off”, while controllers don't really,
+				// so just skip them if we have no set value.
+				if (type == LightKey::CONTROLLER) continue;
+
+				// For some reason, not all devices respond to note off.
+				// Use note-on with value of 0 (which is equivalent) instead.
+				value = 0;
+			} else {
+				value = it->second;
+			}
+			if (current_light_status.count(key) &&
+			    current_light_status[key] == value) {
+				// Already known to be in the desired state.
+				continue;
+			}
+
+			snd_seq_event_t ev;
+			snd_seq_ev_clear(&ev);
+
+			// Some devices drop events if we throw them onto them
+			// too quickly. Add a 1 ms delay for each.
+			snd_seq_real_time_t tm{0, num_events++ * 1000000};
+			snd_seq_ev_schedule_real(&ev, alsa_queue_id, true, &tm);
+			snd_seq_ev_set_source(&ev, 0);
+			snd_seq_ev_set_subs(&ev);
+
+			if (type == LightKey::NOTE) {
+				snd_seq_ev_set_noteon(&ev, /*channel=*/0, num, value);
+				current_light_status[key] = value;
+			} else {
+				snd_seq_ev_set_controller(&ev, /*channel=*/0, num, value);
+				current_light_status[key] = value;
+			}
+			WARN_ON_ERROR("snd_seq_event_output", snd_seq_event_output(alsa_seq, &ev));
 		}
-
-		snd_seq_event_t ev;
-		snd_seq_ev_clear(&ev);
-
-		// Some devices drop events if we throw them onto them
-		// too quickly. Add a 1 ms delay for each.
-		snd_seq_real_time_t tm{0, num_events++ * 1000000};
-		snd_seq_ev_schedule_real(&ev, alsa_queue_id, true, &tm);
-		snd_seq_ev_set_source(&ev, 0);
-		snd_seq_ev_set_subs(&ev);
-
-		// For some reason, not all devices respond to note off.
-		// Use note-on with velocity of 0 (which is equivalent) instead.
-		snd_seq_ev_set_noteon(&ev, /*channel=*/0, note_num, velocity);
-		WARN_ON_ERROR("snd_seq_event_output", snd_seq_event_output(alsa_seq, &ev));
-		current_light_status[note_num] = velocity;
 	}
 	WARN_ON_ERROR("snd_seq_drain_output", snd_seq_drain_output(alsa_seq));
 }

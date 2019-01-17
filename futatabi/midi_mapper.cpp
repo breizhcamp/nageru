@@ -206,7 +206,7 @@ void MIDIMapper::refresh_lights()
 
 void MIDIMapper::update_lights_lock_held()
 {
-	map<unsigned, uint8_t> active_lights;  // Desired state.
+	map<MIDIDevice::LightKey, uint8_t> active_lights;  // Desired state.
 	if (current_controller_bank == 0) {
 		activate_mapped_light(*mapping_proto, MIDIMappingProto::kBank1IsSelectedFieldNumber, &active_lights);
 	}
