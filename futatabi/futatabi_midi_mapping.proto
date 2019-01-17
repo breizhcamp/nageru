@@ -35,7 +35,8 @@ message MIDIMappingProto {
 	// Buttons.
 	optional MIDIButtonProto preview = 18;
 	optional int32 preview_bank = 19;
-	optional MIDILightProto preview_enabled = 20;
+	optional MIDILightProto preview_playing = 41;
+	optional MIDILightProto preview_ready = 20;
 
 	optional MIDIButtonProto queue = 21;
 	optional int32 queue_bank = 22;

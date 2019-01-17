@@ -36,7 +36,8 @@ cue_out_enabled: { note_number: 33 }
 # Preview is mapped to Scratch. It doesn't really feel right,
 # but it's also unclear where else it would be.
 preview: { note_number: 27 }
-preview_enabled: { note_number: 27 }
+preview_playing: { note_number: 27 }
+preview_ready: { note_number: 27  velocity: 2 }
 
 # The slider (pitch bend) is mapped to master speed.
 master_speed: { controller_number: 128 }

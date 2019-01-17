@@ -222,8 +222,10 @@ void MIDIMapper::update_lights_lock_held()
 	if (current_controller_bank == 4) {
 		activate_mapped_light(*mapping_proto, MIDIMappingProto::kBank5IsSelectedFieldNumber, &active_lights);
 	}
-	if (preview_enabled_light) {
-		activate_mapped_light(*mapping_proto, MIDIMappingProto::kPreviewEnabledFieldNumber, &active_lights);
+	if (preview_enabled_light == On) {  // Playing.
+		activate_mapped_light(*mapping_proto, MIDIMappingProto::kPreviewPlayingFieldNumber, &active_lights);
+	} else if (preview_enabled_light == Blinking) {  // Preview ready.
+		activate_mapped_light(*mapping_proto, MIDIMappingProto::kPreviewReadyFieldNumber, &active_lights);
 	}
 	if (queue_enabled_light) {
 		activate_mapped_light(*mapping_proto, MIDIMappingProto::kQueueEnabledFieldNumber, &active_lights);

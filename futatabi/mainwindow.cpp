@@ -203,6 +203,12 @@ MainWindow::MainWindow()
 	playlist_selection_changed();  // First time set-up.
 
 	preview_player.reset(new Player(ui->preview_display, Player::NO_STREAM_OUTPUT));
+	preview_player->set_done_callback([this] {
+		post_to_main_thread([this] {
+			preview_player_done();
+		});
+	});
+
 	live_player.reset(new Player(ui->live_display, Player::HTTPD_STREAM_OUTPUT));
 	live_player->set_done_callback([this] {
 		post_to_main_thread([this] {
@@ -393,6 +399,8 @@ void MainWindow::preview_clicked()
 			QModelIndex index = selected->currentIndex();
 			const Clip &clip = *playlist_clips->clip(index.row());
 			preview_player->play(clip);
+			preview_playing = true;
+			enable_or_disable_preview_button();
 			return;
 		}
 	}
@@ -403,6 +411,8 @@ void MainWindow::preview_clicked()
 	QItemSelectionModel *selected = ui->clip_list->selectionModel();
 	if (!selected->hasSelection()) {
 		preview_player->play(*cliplist_clips->back());
+		preview_playing = true;
+		enable_or_disable_preview_button();
 		return;
 	}
 
@@ -414,6 +424,8 @@ void MainWindow::preview_clicked()
 		clip.stream_idx = ui->preview_display->get_stream_idx();
 	}
 	preview_player->play(clip);
+	preview_playing = true;
+	enable_or_disable_preview_button();
 }
 
 void MainWindow::preview_angle_clicked(unsigned stream_idx)
@@ -645,6 +657,12 @@ void MainWindow::speed_lock_clicked()
 	ui->speed_slider->setEnabled(!ui->speed_lock_btn->isChecked());
 	midi_mapper.set_locked(MIDIMapper::LightState(ui->speed_lock_btn->isChecked()));
 	lock_blink_timeout->stop();
+}
+
+void MainWindow::preview_player_done()
+{
+	preview_playing = false;
+	enable_or_disable_preview_button();
 }
 
 void MainWindow::live_player_done()
@@ -1132,14 +1150,18 @@ void MainWindow::enable_or_disable_preview_button()
 		QItemSelectionModel *selected = ui->playlist->selectionModel();
 		if (selected->hasSelection()) {
 			ui->preview_btn->setEnabled(true);
-			midi_mapper.set_preview_enabled(true);
+			midi_mapper.set_preview_enabled(preview_playing ? MIDIMapper::On : MIDIMapper::Blinking);
 			return;
 		}
 	}
 
 	// TODO: Perhaps only enable this if something is actually selected.
 	ui->preview_btn->setEnabled(!cliplist_clips->empty());
-	midi_mapper.set_preview_enabled(!cliplist_clips->empty());
+	if (preview_playing) {
+		midi_mapper.set_preview_enabled(MIDIMapper::On);
+	} else {
+		midi_mapper.set_preview_enabled(cliplist_clips->empty() ? MIDIMapper::Off : MIDIMapper::Blinking);
+	}
 }
 
 void MainWindow::enable_or_disable_queue_button()

@@ -63,7 +63,7 @@ public:
 
 	void refresh_lights();
 
-	void set_preview_enabled(bool enabled) {
+	void set_preview_enabled(LightState enabled) {
 		preview_enabled_light = enabled;
 		refresh_lights();
 	}
@@ -106,7 +106,7 @@ private:
 	int num_controller_banks;  // Under <mu>.
 	std::atomic<int> current_controller_bank{0};
 
-	std::atomic<bool> preview_enabled_light{false};
+	std::atomic<LightState> preview_enabled_light{Off};
 	std::atomic<bool> queue_enabled_light{false};
 	std::atomic<LightState> play_enabled_light{Off};
 	std::atomic<LightState> locked_light{On};
