@@ -71,7 +71,7 @@ public:
 		queue_enabled_light = enabled;
 		refresh_lights();
 	}
-	void set_play_enabled(bool enabled) {
+	void set_play_enabled(LightState enabled) {
 		play_enabled_light = enabled;
 		refresh_lights();
 	}
@@ -108,7 +108,7 @@ private:
 
 	std::atomic<bool> preview_enabled_light{false};
 	std::atomic<bool> queue_enabled_light{false};
-	std::atomic<bool> play_enabled_light{false};
+	std::atomic<LightState> play_enabled_light{Off};
 	std::atomic<LightState> locked_light{On};
 	std::atomic<int> current_highlighted_camera{-1};
 

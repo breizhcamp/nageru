@@ -616,9 +616,8 @@ void MainWindow::play_clicked()
 	live_player->play(clips);
 	playlist_clips->set_progress({ { start_row, 0.0f } });
 	ui->playlist->selectionModel()->clear();
-	playlist_selection_changed();
-
 	ui->stop_btn->setEnabled(true);
+	playlist_selection_changed();
 }
 
 void MainWindow::stop_clicked()
@@ -629,6 +628,7 @@ void MainWindow::stop_clicked()
 	playlist_clips->set_progress({});
 	live_player->play(fake_clip);
 	ui->stop_btn->setEnabled(false);
+	playlist_selection_changed();
 }
 
 void MainWindow::speed_slider_changed(int percent)
@@ -649,9 +649,9 @@ void MainWindow::speed_lock_clicked()
 
 void MainWindow::live_player_done()
 {
-	playlist_selection_changed();
 	playlist_clips->set_progress({});
 	ui->stop_btn->setEnabled(false);
+	playlist_selection_changed();
 }
 
 void MainWindow::live_player_clip_progress(const map<uint64_t, double> &progress, double time_remaining)
@@ -891,7 +891,13 @@ void MainWindow::playlist_selection_changed()
 		any_selected && selected->selectedRows().back().row() < int(playlist_clips->size()) - 1);
 
 	ui->play_btn->setEnabled(any_selected);
-	midi_mapper.set_play_enabled(any_selected);
+	if (ui->stop_btn->isEnabled()) {  // Playing.
+		midi_mapper.set_play_enabled(MIDIMapper::On);
+	} else if (any_selected) {
+		midi_mapper.set_play_enabled(MIDIMapper::Blinking);
+	} else {
+		midi_mapper.set_play_enabled(MIDIMapper::Off);
+	}
 
 	if (!any_selected) {
 		set_output_status("paused");

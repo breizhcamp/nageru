@@ -228,8 +228,10 @@ void MIDIMapper::update_lights_lock_held()
 	if (queue_enabled_light) {
 		activate_mapped_light(*mapping_proto, MIDIMappingProto::kQueueEnabledFieldNumber, &active_lights);
 	}
-	if (play_enabled_light) {
-		activate_mapped_light(*mapping_proto, MIDIMappingProto::kPlayEnabledFieldNumber, &active_lights);
+	if (play_enabled_light == On) {  // Playing.
+		activate_mapped_light(*mapping_proto, MIDIMappingProto::kPlayingFieldNumber, &active_lights);
+	} else if (play_enabled_light == Blinking) {  // Play ready.
+		activate_mapped_light(*mapping_proto, MIDIMappingProto::kPlayReadyFieldNumber, &active_lights);
 	}
 	if (locked_light == On) {
 		activate_mapped_light(*mapping_proto, MIDIMappingProto::kLockedFieldNumber, &active_lights);

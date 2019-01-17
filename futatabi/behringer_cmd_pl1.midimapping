@@ -20,7 +20,8 @@ camera: { button: { note_number: 23 } is_current: { note_number: 23 } }
 
 # Play is naturally mapped to the play button.
 play: { note_number: 35 }
-play_enabled: { note_number: 35 }
+play_ready: { note_number: 35  velocity: 2 }
+playing: { note_number: 35 }
 
 # Queue is marked to Cue; close enough.
 queue: { note_number: 34 }

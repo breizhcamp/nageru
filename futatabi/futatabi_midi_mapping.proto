@@ -43,7 +43,8 @@ message MIDIMappingProto {
 
 	optional MIDIButtonProto play = 24;
 	optional int32 play_bank = 25;
-	optional MIDILightProto play_enabled = 26;
+	optional MIDILightProto playing = 26;
+	optional MIDILightProto play_ready = 40;
 
 	optional MIDIButtonProto toggle_lock = 36;
 	optional int32 toggle_lock_bank = 37;
