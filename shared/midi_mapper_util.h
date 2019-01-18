@@ -7,31 +7,43 @@
 #include <google/protobuf/descriptor.h>
 
 template <class Proto>
-inline bool match_controller_helper(const Proto &msg, int field_number, int controller)
+inline int get_controller_mapping_helper(const Proto &msg, int field_number, int default_value)
 {
 	using namespace google::protobuf;
 	const FieldDescriptor *descriptor = msg.GetDescriptor()->FindFieldByNumber(field_number);
 	const Reflection *reflection = msg.GetReflection();
 	if (!reflection->HasField(msg, descriptor)) {
-		return false;
+		return default_value;
 	}
 	const MIDIControllerProto &controller_proto =
 		static_cast<const MIDIControllerProto &>(reflection->GetMessage(msg, descriptor));
-	return (controller_proto.controller_number() == controller);
+	return controller_proto.controller_number();
+}
+
+template <class Proto>
+inline bool match_controller_helper(const Proto &msg, int field_number, int controller)
+{
+	return (get_controller_mapping_helper(msg, field_number, -1) == controller);
+}
+
+template <class Proto>
+inline int get_button_mapping_helper(const Proto &msg, int field_number, int default_value)
+{
+	using namespace google::protobuf;
+	const FieldDescriptor *descriptor = msg.GetDescriptor()->FindFieldByNumber(field_number);
+	const Reflection *reflection = msg.GetReflection();
+	if (!reflection->HasField(msg, descriptor)) {
+		return default_value;
+	}
+	const MIDIButtonProto &button_proto =
+		static_cast<const MIDIButtonProto &>(reflection->GetMessage(msg, descriptor));
+	return button_proto.note_number();
 }
 
 template <class Proto>
 inline bool match_button_helper(const Proto &msg, int field_number, int note)
 {
-	using namespace google::protobuf;
-	const FieldDescriptor *descriptor = msg.GetDescriptor()->FindFieldByNumber(field_number);
-	const Reflection *reflection = msg.GetReflection();
-	if (!reflection->HasField(msg, descriptor)) {
-		return false;
-	}
-	const MIDIButtonProto &button_proto =
-		static_cast<const MIDIButtonProto &>(reflection->GetMessage(msg, descriptor));
-	return (button_proto.note_number() == note);
+	return (get_button_mapping_helper(msg, field_number, -1) == note);
 }
 
 template <class Proto>

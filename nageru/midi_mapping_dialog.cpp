@@ -21,6 +21,7 @@
 #include "controller_spin_box.h"
 #include "midi_mapper.h"
 #include "nageru_midi_mapping.pb.h"
+#include "shared/midi_mapper_util.h"
 #include "shared/post_to_main_thread.h"
 #include "ui_midi_mapping.h"
 
@@ -104,16 +105,8 @@ int get_controller_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx
 	if (bus_idx >= size_t(mapping_proto.bus_mapping_size())) {
 		return default_value;
 	}
-
 	const MIDIMappingBusProto &bus_mapping = mapping_proto.bus_mapping(bus_idx);
-	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
-	const Reflection *bus_reflection = bus_mapping.GetReflection();
-	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
-		return default_value;
-	}
-	const MIDIControllerProto &controller_proto =
-		static_cast<const MIDIControllerProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
-	return controller_proto.controller_number();
+	return get_controller_mapping_helper(bus_mapping, field_number, default_value);
 }
 
 int get_button_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx, int field_number, int default_value)
@@ -123,14 +116,7 @@ int get_button_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx, in
 	}
 
 	const MIDIMappingBusProto &bus_mapping = mapping_proto.bus_mapping(bus_idx);
-	const FieldDescriptor *descriptor = bus_mapping.GetDescriptor()->FindFieldByNumber(field_number);
-	const Reflection *bus_reflection = bus_mapping.GetReflection();
-	if (!bus_reflection->HasField(bus_mapping, descriptor)) {
-		return default_value;
-	}
-	const MIDIButtonProto &bus_proto =
-		static_cast<const MIDIButtonProto &>(bus_reflection->GetMessage(bus_mapping, descriptor));
-	return bus_proto.note_number();
+	return get_button_mapping_helper(bus_mapping, field_number, default_value);
 }
 
 int get_light_mapping(const MIDIMappingProto &mapping_proto, size_t bus_idx, int field_number, int default_value)
