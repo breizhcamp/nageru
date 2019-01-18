@@ -112,7 +112,6 @@ private:
 	void activate_lights_all_buses(int field_number, std::map<MIDIDevice::LightKey, uint8_t> *active_lights);
 
 	std::atomic<bool> should_quit{false};
-	int should_quit_fd;
 
 	std::atomic<bool> has_peaked[MAX_BUSES] {{ false }};
 

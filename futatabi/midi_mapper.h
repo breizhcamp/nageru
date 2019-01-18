@@ -102,7 +102,6 @@ private:
 	void update_lights_lock_held();
 
 	std::atomic<bool> should_quit{false};
-	int should_quit_fd;
 
 	mutable std::mutex mu;
 	ControllerReceiver *receiver;  // Under <mu>.

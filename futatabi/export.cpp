@@ -237,7 +237,7 @@ void export_interpolated_clip(const string &filename, const vector<Clip> &clips)
 	player.set_done_callback([&done_promise] {
 		done_promise.set_value();
 	});
-	player.set_progress_callback([&current_value, &clips, total_length](const std::map<uint64_t, double> &player_progress, double time_remaining) {
+	player.set_progress_callback([&current_value, total_length](const std::map<uint64_t, double> &player_progress, double time_remaining) {
 		current_value = 1.0 - time_remaining / total_length;
 	});
 	player.play(clips_with_id);
