@@ -312,7 +312,10 @@ void MainWindow::change_num_cameras()
 
 MainWindow::~MainWindow()
 {
-	// Empty so that we can forward-declare Player in the .h file.
+	// We don't have a context to release Player's OpenGL resources in here,
+	// so instead of crashing on exit, leak it.
+	live_player.release();
+	preview_player.release();
 }
 
 void MainWindow::cue_in_clicked()
