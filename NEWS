@@ -1,3 +1,14 @@
+Nageru and Futatabi 1.8.2, January 19th, 2019
+
+  - Futatabi now supports MIDI controllers like Nageru, including an editor
+    and a sample mapping for the Behringer CMD PL-1.
+
+  - Futatabi now supports changing master speed during play, both via a
+    MIDI controller and the GUI.
+
+  - Various bugfixes.
+
+
 Nageru and Futatabi 1.8.1, December 30th, 2018
 
   - Futatabi can now communicate its queue status through a subtitle track,
