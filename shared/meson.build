@@ -6,7 +6,7 @@ alsadep = dependency('alsa')
 
 # Preprocess Qt as needed.
 qt_files = qt5.preprocess(
-	moc_headers: ['aboutdialog.h'],
+	moc_headers: ['aboutdialog.h', 'controller_spin_box.h'],
 	ui_files: ['aboutdialog.ui'],
 	dependencies: shared_qt5deps)
 

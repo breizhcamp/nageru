@@ -18,7 +18,7 @@
 #include <limits>
 #include <string>
 
-#include "controller_spin_box.h"
+#include "shared/controller_spin_box.h"
 #include "midi_mapper.h"
 #include "nageru_midi_mapping.pb.h"
 #include "shared/midi_mapper_util.h"

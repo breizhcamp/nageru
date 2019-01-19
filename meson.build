@@ -169,7 +169,7 @@ nageru_link_with += protobuf_lib
 qt_files = qt5.preprocess(
 	moc_headers: ['nageru/analyzer.h', 'nageru/clickable_label.h', 'nageru/compression_reduction_meter.h', 'nageru/correlation_meter.h',
 		'nageru/ellipsis_label.h', 'nageru/glwidget.h', 'nageru/input_mapping_dialog.h', 'nageru/lrameter.h', 'nageru/mainwindow.h', 'nageru/midi_mapping_dialog.h',
-		'nageru/nonlinear_fader.h', 'nageru/vumeter.h', 'nageru/controller_spin_box.h'],
+		'nageru/nonlinear_fader.h', 'nageru/vumeter.h'],
 	ui_files: ['nageru/analyzer.ui', 'nageru/audio_expanded_view.ui', 'nageru/audio_miniview.ui', 'nageru/display.ui',
 		'nageru/input_mapping.ui', 'nageru/mainwindow.ui', 'nageru/midi_mapping.ui'],
 	dependencies: qt5deps)
