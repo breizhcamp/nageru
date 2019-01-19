@@ -251,7 +251,7 @@ void MIDIMapper::update_lights_lock_held()
 		unsigned controller = mapping_proto->master_speed_light().controller_number();
 		unsigned min = mapping_proto->master_speed_light_min();
 		unsigned max = mapping_proto->master_speed_light_max();
-		int speed_light_value = lrintf((max - min - 1) * current_speed / 2.0f) + min;
+		int speed_light_value = lrintf((max - min) * current_speed / 2.0f) + min;
 		active_lights[MIDIDevice::LightKey{MIDIDevice::LightKey::CONTROLLER, controller}] = speed_light_value;
 	}
 

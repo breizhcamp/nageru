@@ -43,7 +43,7 @@ preview_ready: { note_number: 27  velocity: 2 }
 master_speed: { controller_number: 128 }
 master_speed_light: { controller_number: 10 }
 master_speed_light_min: 1
-master_speed_light_max: 16
+master_speed_light_max: 15
 
 # Master speed lock is mapped to lock.
 toggle_lock: { note_number: 25 }
