@@ -391,6 +391,7 @@
     <addaction name="interpolation_menu"/>
     <addaction name="padding_menu"/>
     <addaction name="menu_Export"/>
+    <addaction name="midi_mapping_action"/>
     <addaction name="exit_action"/>
     <addaction name="separator"/>
    </widget>
@@ -523,6 +524,11 @@
    </property>
    <property name="text">
     <string>&amp;5 seconds</string>
+   </property>
+  </action>
+  <action name="midi_mapping_action">
+   <property name="text">
+    <string>Setup MIDI controller…</string>
    </property>
   </action>
  </widget>

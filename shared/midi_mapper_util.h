@@ -59,18 +59,26 @@ inline bool match_bank_helper(const Proto &msg, int bank_field_number, int bank)
 	return reflection->GetInt32(msg, bank_descriptor) == bank;
 }
 
-// Find what MIDI note the given light (as given by field_number) is mapped to, and enable it.
 template <class Proto>
-void activate_mapped_light(const Proto &msg, int field_number, std::map<MIDIDevice::LightKey, uint8_t> *active_lights)
+inline MIDILightProto get_light_mapping_helper(const Proto &msg, int field_number)
 {
 	using namespace google::protobuf;
 	const FieldDescriptor *descriptor = msg.GetDescriptor()->FindFieldByNumber(field_number);
 	const Reflection *reflection = msg.GetReflection();
 	if (!reflection->HasField(msg, descriptor)) {
+		return MIDILightProto();
+	}
+	return static_cast<const MIDILightProto &>(reflection->GetMessage(msg, descriptor));
+}
+
+// Find what MIDI note the given light (as given by field_number) is mapped to, and enable it.
+template <class Proto>
+void activate_mapped_light(const Proto &msg, int field_number, std::map<MIDIDevice::LightKey, uint8_t> *active_lights)
+{
+	MIDILightProto light_proto = get_light_mapping_helper(msg, field_number);
+	if (!light_proto.has_note_number()) {
 		return;
 	}
-	const MIDILightProto &light_proto =
-		static_cast<const MIDILightProto &>(reflection->GetMessage(msg, descriptor));
 	active_lights->emplace(MIDIDevice::LightKey{MIDIDevice::LightKey::NOTE, unsigned(light_proto.note_number())},
 		light_proto.velocity());
 }

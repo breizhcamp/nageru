@@ -273,8 +273,8 @@ proto_generated = gen.process('futatabi/state.proto', 'futatabi/frame.proto', 'f
 
 # Preprocess Qt as needed.
 moc_files = qt5.preprocess(
-	moc_headers: ['futatabi/mainwindow.h', 'futatabi/jpeg_frame_view.h', 'futatabi/clip_list.h'],
-	ui_files: ['futatabi/mainwindow.ui'],
+	moc_headers: ['futatabi/mainwindow.h', 'futatabi/jpeg_frame_view.h', 'futatabi/clip_list.h', 'futatabi/midi_mapping_dialog.h'],
+	ui_files: ['futatabi/mainwindow.ui', 'futatabi/midi_mapping.ui'],
 	qresources: ['futatabi/mainwindow.qrc'],
 	dependencies: qt5deps)
 
@@ -285,7 +285,7 @@ futatabi_srcs = ['futatabi/flow.cpp', 'futatabi/gpu_timers.cpp']
 futatabi_srcs += ['futatabi/main.cpp', 'futatabi/player.cpp', 'futatabi/video_stream.cpp', 'futatabi/chroma_subsampler.cpp']
 futatabi_srcs += ['futatabi/vaapi_jpeg_decoder.cpp', 'futatabi/db.cpp', 'futatabi/ycbcr_converter.cpp', 'futatabi/flags.cpp']
 futatabi_srcs += ['futatabi/mainwindow.cpp', 'futatabi/jpeg_frame_view.cpp', 'futatabi/clip_list.cpp', 'futatabi/frame_on_disk.cpp']
-futatabi_srcs += ['futatabi/export.cpp', 'futatabi/midi_mapper.cpp']
+futatabi_srcs += ['futatabi/export.cpp', 'futatabi/midi_mapper.cpp', 'futatabi/midi_mapping_dialog.cpp']
 futatabi_srcs += moc_files
 futatabi_srcs += proto_generated
 

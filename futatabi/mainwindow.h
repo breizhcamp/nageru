@@ -168,6 +168,7 @@ private:
 	bool eventFilter(QObject *watched, QEvent *event) override;
 
 	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
+	void midi_mapping_triggered();
 	void exit_triggered();
 	void export_cliplist_clip_multitrack_triggered();
 	void export_playlist_clip_interpolated_triggered();

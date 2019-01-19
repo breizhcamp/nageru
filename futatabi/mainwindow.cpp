@@ -6,6 +6,7 @@
 #include "frame_on_disk.h"
 #include "player.h"
 #include "futatabi_midi_mapping.pb.h"
+#include "midi_mapping_dialog.h"
 #include "shared/aboutdialog.h"
 #include "shared/disk_space_estimator.h"
 #include "shared/post_to_main_thread.h"
@@ -77,6 +78,7 @@ MainWindow::MainWindow()
 	save_settings();
 
 	// The menus.
+	connect(ui->midi_mapping_action, &QAction::triggered, this, &MainWindow::midi_mapping_triggered);
 	connect(ui->exit_action, &QAction::triggered, this, &MainWindow::exit_triggered);
 	connect(ui->export_cliplist_clip_multitrack_action, &QAction::triggered, this, &MainWindow::export_cliplist_clip_multitrack_triggered);
 	connect(ui->export_playlist_clip_interpolated_action, &QAction::triggered, this, &MainWindow::export_playlist_clip_interpolated_triggered);
@@ -980,6 +982,11 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
 		disk_free_label->setText(QString::fromStdString(label));
 		ui->menuBar->setCornerWidget(disk_free_label);  // Need to set this again for the sizing to get right.
 	});
+}
+
+void MainWindow::midi_mapping_triggered()
+{
+	MIDIMappingDialog(&midi_mapper).exec();
 }
 
 void MainWindow::exit_triggered()
