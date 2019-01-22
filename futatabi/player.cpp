@@ -350,7 +350,7 @@ void Player::play_playlist_once()
 			// Snap to input frame: If we can do so with less than 1% jitter
 			// (ie., move less than 1% of an _output_ frame), do so.
 			// TODO: Snap secondary (fade-to) clips in the same fashion.
-			double pts_snap_tolerance = 0.01 * double(TIMEBASE) / global_flags.output_framerate;
+			double pts_snap_tolerance = 0.01 * double(TIMEBASE) * clip->speed / global_flags.output_framerate;
 			bool snapped = false;
 			for (FrameOnDisk snap_frame : { frame_lower, frame_upper }) {
 				if (fabs(snap_frame.pts - in_pts) < pts_snap_tolerance) {
