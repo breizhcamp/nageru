@@ -177,7 +177,8 @@ private:
 	void undo_triggered();
 	void redo_triggered();
 	void quality_toggled(int quality, bool checked);
-	void padding_toggled(double seconds, bool checked);
+	void in_padding_toggled(double seconds, bool checked);
+	void out_padding_toggled(double seconds, bool checked);
 
 	void highlight_camera_input(int stream_idx);
 	void enable_or_disable_preview_button();

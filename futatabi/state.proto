@@ -21,5 +21,6 @@ message StateProto {
 
 message SettingsProto {
 	int32 interpolation_quality = 1;  // 0 = unset, 1 = quality 0, 2 = quality 1, etc.
-	double cue_point_padding_seconds = 2;
+	double cue_in_point_padding_seconds = 2;
+	double cue_out_point_padding_seconds = 3;
 }

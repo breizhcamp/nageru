@@ -17,8 +17,9 @@ enum LongOption {
 	OPTION_SLOW_DOWN_INPUT = 1001,
 	OPTION_HTTP_PORT = 1002,
 	OPTION_TALLY_URL = 1003,
-	OPTION_CUE_POINT_PADDING = 1004,
-	OPTION_MIDI_MAPPING = 1005
+	OPTION_CUE_IN_POINT_PADDING = 1004,
+	OPTION_CUE_OUT_POINT_PADDING = 1005,
+	OPTION_MIDI_MAPPING = 1006
 };
 
 void usage()
@@ -37,7 +38,8 @@ void usage()
 	fprintf(stderr, "                                  2 = default (realtime 720p on fast embedded GPUs)\n");
 	fprintf(stderr, "                                  3 = good (realtime 720p on GTX 970 or so)\n");
 	fprintf(stderr, "                                  4 = best (not realtime on any current GPU)\n");
-	fprintf(stderr, "      --cue-point-padding SECS    move cue-in/cue-out N seconds earlier/later on set\n");
+	fprintf(stderr, "      --cue-in-point-padding SECS   move cue-in N seconds earlier on set\n");
+	fprintf(stderr, "      --cue-out-point-padding SECS  move cue-out N seconds later on set\n");
 	fprintf(stderr, "  -d, --working-directory DIR     where to store frames and database\n");
 	fprintf(stderr, "      --http-port PORT            which port to listen on for output\n");
 	fprintf(stderr, "      --tally-url URL             URL to get tally color from (polled every 100 ms)\n");
@@ -56,7 +58,8 @@ void parse_flags(int argc, char *const argv[])
 		{ "working-directory", required_argument, 0, 'd' },
 		{ "http-port", required_argument, 0, OPTION_HTTP_PORT },
 		{ "tally-url", required_argument, 0, OPTION_TALLY_URL },
-		{ "cue-point-padding", required_argument, 0, OPTION_CUE_POINT_PADDING },
+		{ "cue-in-point-padding", required_argument, 0, OPTION_CUE_IN_POINT_PADDING },
+		{ "cue-out-point-padding", required_argument, 0, OPTION_CUE_OUT_POINT_PADDING },
 		{ "midi-mapping", required_argument, 0, OPTION_MIDI_MAPPING },
 		{ 0, 0, 0, 0 }
 	};
@@ -102,9 +105,13 @@ void parse_flags(int argc, char *const argv[])
 		case OPTION_TALLY_URL:
 			global_flags.tally_url = optarg;
 			break;
-		case OPTION_CUE_POINT_PADDING:
-			global_flags.cue_point_padding_seconds = atof(optarg);
-			global_flags.cue_point_padding_set = true;
+		case OPTION_CUE_IN_POINT_PADDING:
+			global_flags.cue_in_point_padding_seconds = atof(optarg);
+			global_flags.cue_in_point_padding_set = true;
+			break;
+		case OPTION_CUE_OUT_POINT_PADDING:
+			global_flags.cue_out_point_padding_seconds = atof(optarg);
+			global_flags.cue_out_point_padding_set = true;
 			break;
 		case OPTION_MIDI_MAPPING:
 			global_flags.midi_mapping_filename = optarg;
@@ -125,7 +132,8 @@ void parse_flags(int argc, char *const argv[])
 		usage();
 		exit(1);
 	}
-	if (global_flags.cue_point_padding_seconds < 0.0) {
+	if (global_flags.cue_in_point_padding_seconds < 0.0 ||
+	    global_flags.cue_out_point_padding_seconds < 0.0) {
 		fprintf(stderr, "Cue point padding cannot be negative.\n");
 		usage();
 		exit(1);

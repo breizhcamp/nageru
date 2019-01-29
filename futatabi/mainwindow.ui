@@ -379,17 +379,27 @@
      <addaction name="quality_3_action"/>
      <addaction name="quality_4_action"/>
     </widget>
-    <widget class="QMenu" name="padding_menu">
+    <widget class="QMenu" name="in_padding_menu">
      <property name="title">
-      <string>Cue point &amp;padding</string>
+      <string>Cue &amp;in point padding</string>
      </property>
-     <addaction name="padding_0_action"/>
-     <addaction name="padding_1_action"/>
-     <addaction name="padding_2_action"/>
-     <addaction name="padding_5_action"/>
+     <addaction name="in_padding_0_action"/>
+     <addaction name="in_padding_1_action"/>
+     <addaction name="in_padding_2_action"/>
+     <addaction name="in_padding_5_action"/>
+    </widget>
+    <widget class="QMenu" name="out_padding_menu">
+     <property name="title">
+      <string>Cue &amp;out point padding</string>
+     </property>
+     <addaction name="out_padding_0_action"/>
+     <addaction name="out_padding_1_action"/>
+     <addaction name="out_padding_2_action"/>
+     <addaction name="out_padding_5_action"/>
     </widget>
     <addaction name="interpolation_menu"/>
-    <addaction name="padding_menu"/>
+    <addaction name="in_padding_menu"/>
+    <addaction name="out_padding_menu"/>
     <addaction name="menu_Export"/>
     <addaction name="midi_mapping_action"/>
     <addaction name="exit_action"/>
@@ -494,7 +504,7 @@
     <string>Best (&amp;4) (not realtime on any current GPU)</string>
    </property>
   </action>
-  <action name="padding_0_action">
+  <action name="in_padding_0_action">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -502,7 +512,7 @@
     <string>&amp;0 seconds</string>
    </property>
   </action>
-  <action name="padding_1_action">
+  <action name="in_padding_1_action">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -510,7 +520,7 @@
     <string>&amp;1 second</string>
    </property>
   </action>
-  <action name="padding_2_action">
+  <action name="in_padding_2_action">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -518,7 +528,7 @@
     <string>&amp;2 seconds</string>
    </property>
   </action>
-  <action name="padding_5_action">
+  <action name="in_padding_5_action">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -529,6 +539,26 @@
   <action name="midi_mapping_action">
    <property name="text">
     <string>Setup MIDI controller…</string>
+   </property>
+  </action>
+  <action name="out_padding_0_action">
+   <property name="text">
+    <string>&amp;0 seconds</string>
+   </property>
+  </action>
+  <action name="out_padding_1_action">
+   <property name="text">
+    <string>&amp;1 seconds</string>
+   </property>
+  </action>
+  <action name="out_padding_2_action">
+   <property name="text">
+    <string>&amp;2 seconds</string>
+   </property>
+  </action>
+  <action name="out_padding_5_action">
+   <property name="text">
+    <string>&amp;5 seconds</string>
    </property>
   </action>
  </widget>
