@@ -1,8 +1,8 @@
 Nageru is a live video mixer, based around the standard M/E workflow.
-Futatabi is a multicamera slow motion video server (currently undocumented).
+Futatabi is a multicamera slow motion video server.
 
 
-Features:
+Nageru features:
 
  - High performance on modest hardware (720p60 with two input streams
    on my Thinkpad X240[1]); almost all pixel processing is done on the GPU.
@@ -72,8 +72,6 @@ Nageru currently needs:
 
  - LuaJIT, for driving the theme engine. You will need at least version 2.1.
 
- - SQLite, for storing Futatabi state.
-
  - libjpeg, for encoding MJPEG streams when VA-API JPEG support is not
    available.
 
@@ -93,6 +91,14 @@ Nageru currently needs:
    Simply download the right build for your platform (the “minimal” build
    is fine) and add -Dcef_dir=<path>/cef_binary_X.XXXX.XXXX.XXXXXXXX_linux64
    on the meson command line (substituting X with the real version as required).
+
+
+Futatabi also needs:
+
+ - A fast GPU with OpenGL 4.5 support (GTX 1080 or similar recommended for
+   best quality at HD resolutions, although 950 should work).
+
+ - SQLite, for storing state.
 
 
 If on Debian buster or something similar, you can install everything you need
@@ -118,11 +124,13 @@ It is meant for upstream, but was not in at the time Nageru was released.
 It is taken to be by Steinar H. Gunderson <sesse@google.com> (ie., my ex-work
 email), and under the same license as zita-resampler itself.
 
-Nageru uses Meson to build. For a default build, type
+Nageru and Futatabi use Meson to build. For a default build (building both),
+type
 
   meson obj && cd obj && ninja
 
-To start it, just hook up your equipment, and then type “./nageru”.
+To start Nageru, just hook up your equipment, and then type “./nageru”.
+For Futatabi documentation, please see https://nageru.sesse.net/doc/.
 
 It is strongly recommended to have the rights to run at real-time priority;
 it will make the USB3 threads do so, which will make them a lot more stable.
@@ -162,6 +170,9 @@ See --help for more information on options in general.
 The name “Nageru” is a play on the Japanese verb 投げる (nageru), which means
 to throw or cast. (I also later learned that it could mean to face defeat or
 give up, but that's not the intended meaning.)
+
+The name “Futatabi” comes from the Japanese adverb 再び (futatabi), which means
+“again” or “for the second time”.
 
 
 Nageru's home page is at https://nageru.sesse.net/, where you can also find
