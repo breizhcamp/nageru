@@ -1,0 +1,51 @@
+# Example mapping for the Behringer CMD PL-1. Like akai_midimix.midimapping
+# for nageru, this one is written by hand, and serves as a simple example
+# of the basic features. The PL-1 is a DJ controller, not a dedicated slow
+# motion controller, but it's also something like 1/20th the price of one.
+# Thus, while the mappings may be slightly confusing, it has basically
+# everything we need to do efficient slow motion control.
+
+# The jog wheel.
+jog: { controller_number: 31 }
+
+# 1-8 buttons logically switch camera.
+camera: { button: { note_number: 16 } is_current: { note_number: 16 } }
+camera: { button: { note_number: 17 } is_current: { note_number: 17 } }
+camera: { button: { note_number: 18 } is_current: { note_number: 18 } }
+camera: { button: { note_number: 19 } is_current: { note_number: 19 } }
+camera: { button: { note_number: 20 } is_current: { note_number: 20 } }
+camera: { button: { note_number: 21 } is_current: { note_number: 21 } }
+camera: { button: { note_number: 22 } is_current: { note_number: 22 } }
+camera: { button: { note_number: 23 } is_current: { note_number: 23 } }
+
+# Play is naturally mapped to the play button.
+play: { note_number: 35 }
+play_ready: { note_number: 35  velocity: 2 }
+playing: { note_number: 35 }
+
+# Queue is marked to Cue; close enough.
+queue: { note_number: 34 }
+queue_enabled: { note_number: 34 }
+
+# Cue in and out are mapped to Sync and Tap.
+cue_in: { note_number: 32 }
+cue_in_enabled: { note_number: 32 }
+cue_out: { note_number: 33 }
+cue_out_enabled: { note_number: 33 }
+
+# Preview is mapped to Scratch. It doesn't really feel right,
+# but it's also unclear where else it would be.
+preview: { note_number: 27 }
+preview_playing: { note_number: 27 }
+preview_ready: { note_number: 27  velocity: 2 }
+
+# The slider (pitch bend) is mapped to master speed.
+master_speed: { controller_number: 128 }
+master_speed_light: { controller_number: 10 }
+master_speed_light_min: 1
+master_speed_light_max: 15
+
+# Master speed lock is mapped to lock.
+toggle_lock: { note_number: 25 }
+locked: { note_number: 25 }
+locked_blinking: { note_number: 25  velocity: 2 }

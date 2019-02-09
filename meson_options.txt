@@ -1,0 +1,7 @@
+option('embedded_bmusb', type: 'boolean', value: false, description: 'Use bmusb from the bmusb/ git submodule instead of from the system')
+
+# Set this to build with CEF.
+# E.g.: meson configure -Dcef_dir=/home/sesse/cef_binary_3.3282.1734.g8f26fe0_linux64
+option('cef_dir', type: 'string', description: 'If not empty, build against CEF in this directory')
+option('cef_build_type', type: 'string', value: 'Release', description: 'CEF version to build against (Release or Debug, or “system” for a system-installed)')
+option('cef_no_icudtl', type: 'boolean', value: false, description: 'Set to true if the CEF installation has no icudtl.dat.')

@@ -1,0 +1,68 @@
+syntax = "proto2";
+
+import "midi_mapping.proto";
+
+message CameraMIDIMappingProto {
+	optional MIDIButtonProto button = 1;
+	optional int32 bank = 2;
+	optional MIDILightProto is_current = 3;
+}
+
+message MIDIMappingProto {
+	optional int32 num_controller_banks = 1 [default = 0];  // Max 5.
+
+	// Bank switching.
+	optional MIDIButtonProto prev_bank = 2;
+	optional MIDIButtonProto next_bank = 3;
+	optional MIDIButtonProto select_bank_1 = 4;
+	optional MIDIButtonProto select_bank_2 = 5;
+	optional MIDIButtonProto select_bank_3 = 6;
+	optional MIDIButtonProto select_bank_4 = 7;
+	optional MIDIButtonProto select_bank_5 = 8;
+	optional MIDILightProto bank_1_is_selected = 9;
+	optional MIDILightProto bank_2_is_selected = 10;
+	optional MIDILightProto bank_3_is_selected = 11;
+	optional MIDILightProto bank_4_is_selected = 12;
+	optional MIDILightProto bank_5_is_selected = 13;
+
+	// Controllers.
+	optional MIDIControllerProto jog = 16;
+	optional int32 jog_bank = 17;
+
+	optional MIDIControllerProto master_speed = 34;
+	optional int32 master_speed_bank = 35;
+	optional MIDIControllerProto master_speed_light = 42;  // NOTE: Controller, not light.
+	optional int32 master_speed_light_min = 43;
+	optional int32 master_speed_light_max = 44 [default=127];  // Inclusive.
+
+	// Buttons.
+	optional MIDIButtonProto preview = 18;
+	optional int32 preview_bank = 19;
+	optional MIDILightProto preview_playing = 41;
+	optional MIDILightProto preview_ready = 20;
+
+	optional MIDIButtonProto queue = 21;
+	optional int32 queue_bank = 22;
+	optional MIDILightProto queue_enabled = 23;
+
+	optional MIDIButtonProto play = 24;
+	optional int32 play_bank = 25;
+	optional MIDILightProto playing = 26;
+	optional MIDILightProto play_ready = 40;
+
+	optional MIDIButtonProto toggle_lock = 36;
+	optional int32 toggle_lock_bank = 37;
+	optional MIDILightProto locked = 38;
+	optional MIDILightProto locked_blinking = 39;
+
+	optional MIDIButtonProto cue_in = 27;
+	optional int32 cue_in_bank = 28;
+	optional MIDILightProto cue_in_enabled = 29;  // In practice always true currently.
+
+	optional MIDIButtonProto cue_out = 30;
+	optional int32 cue_out_bank = 31;
+	optional MIDILightProto cue_out_enabled = 32;  // In practice always true currently.
+
+	// Camera buttons.
+	repeated CameraMIDIMappingProto camera = 33;
+}

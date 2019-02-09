@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+// Corresponds to struct Clip.
+message ClipProto {
+	int64 pts_in = 1;
+	int64 pts_out = 2;
+	repeated string description = 3;
+	int64 stream_idx = 4;
+	double fade_time_seconds = 5;
+	double speed = 6;
+}
+
+message ClipListProto {
+	repeated ClipProto clip = 1;
+}
+
+message StateProto {
+	ClipListProto clip_list = 1;
+	ClipListProto play_list = 2;
+}
+
+message SettingsProto {
+	int32 interpolation_quality = 1;  // 0 = unset, 1 = quality 0, 2 = quality 1, etc.
+	double cue_point_padding_seconds = 2;
+}

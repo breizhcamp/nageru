@@ -1,0 +1,14 @@
+// Messages used to produce JSON (it's the simplest way we can create valid
+// JSON without pulling in an external JSON library).
+
+syntax = "proto2";
+
+message Channels {
+	repeated Channel channel = 1;
+}
+
+message Channel {
+	required int32 index = 1;
+	required string name = 2;
+	required string color = 3;
+}

@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+// Used as header before each frame in a .frames file:
+//
+//  1. "Ftbifrm0" (8 bytes, ASCII -- note that no byte repeats)
+//  2. Length of upcoming FrameHeaderProto (uint32, binary, big endian)
+//  3. The FrameHeaderProto itself
+//  4. The actual frame
+
+message FrameHeaderProto {
+	int32 stream_idx = 1;
+	int64 pts = 2;
+	int64 file_size = 3;  // In bytes of compressed frame. TODO: rename to size.
+}
+
+message StreamContentsProto {
+	int32 stream_idx = 1;
+	repeated int64 pts = 2 [packed=true];
+	repeated int64 file_size = 3 [packed=true];
+	repeated int64 offset = 4 [packed=true];
+}
+
+message FileContentsProto {
+	repeated StreamContentsProto stream = 1;  // Typically only one.
+}

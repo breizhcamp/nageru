@@ -1,3 +1,122 @@
+Nageru and Futatabi 1.8.2, January 19th, 2019
+
+  - Futatabi now supports MIDI controllers like Nageru, including an editor
+    and a sample mapping for the Behringer CMD PL-1.
+
+  - Futatabi now supports changing master speed during play, both via a
+    MIDI controller and the GUI.
+
+  - Various bugfixes.
+
+
+Nageru and Futatabi 1.8.1, December 30th, 2018
+
+  - Futatabi can now communicate its queue status through a subtitle track,
+    and Nageru can consume it. This allows Nageru themes to get precise
+    information programmatically, e.g. to show status or automatically
+    switch away when the queue is about to end.
+
+  - Futatabi can now reuse the computed flow across successive frames when
+    interpolating between the same frame pair. This significantly reduces
+    the GPU load when doing super-slow motion (slower than 0.5x).
+
+  - Various smaller fixes.
+
+
+Nageru and Futatabi 1.8.0, December 20th, 2018
+
+  - Initial release of Futatabi, a multicamera slow motion video server
+    designed to be used with Nageru. Futatabi is currently in alpha stage
+    and largely undocumented.
+
+  - Add support for multi-camera export from Nageru. A multi-camera stream
+    contains all frames from all camera inputs (unless overridden by
+    --mjpeg-export-cards), unprocessed except for MJPEG encoding.
+    MJPEG encoding is done in hardware (via VA-API) on Skylake or newer,
+    or using libjpeg otherwise. The intended user of this stream is Futatabi.
+
+
+Nageru 1.7.5, November 11th, 2018
+
+  - Fix a bug where --record-x264-video would not work when VA-API was
+    not present, making the option rather useless (broken in 1.7.2).
+    Bug reported by Peter De Schrijver.
+
+  - The build system has been switched to Meson; see the README for new
+    build instructions.
+
+  - Various smaller fixes.
+
+
+Nageru 1.7.4, August 31st, 2018
+
+  - Rework the x264 speedcontrol presets, again. (They earlier assumed
+    we could control B-frame settings on the fly, which we cannot with
+    threaded lookahead.) Also support x264 >= 153, which can support
+    multiple bit depths in the same library.
+
+  - Default to SDI inputs instead of HDMI.
+
+  - Add a mode to run in full screen (--fullscreen). Adapted from a patch
+    by Yoann Dubreuil.
+
+  - Add support for lift/gamma/gain in the theme. Patch by Alexandre Thomazo.
+
+
+Nageru 1.7.3, May 22nd, 2018
+
+  - When using multichannel audio, add a control for adjusting the
+    stereo width (from normal stereo to mono, all the way to
+    inverted stereo).
+
+  - Removed --http-coarse-timebase (it is now always on).
+
+  - Various bugfixes.
+
+
+Nageru 1.7.2, April 28th, 2018
+
+  - Several improvements to video (FFmpeg) inputs: You can now use
+    them as audio sources, you can right-click on video channels
+    to change URL/filename on-the-fly, themes can ask for forced
+    disconnection (useful for network sources that are hanging),
+    and various other improvements. Be aware that the audio support
+    may still be somewhat rough, as A/V sync of arbitrary video
+    playout is a hard problem.
+
+  - The included themes have been fixed to properly make the returned
+    chain preparation functions independent of global state (e.g. if
+    the white balance for a channel was changed before the frame was
+    actually rendered). If you are using a custom theme, you may want
+    to apply similar fixes to it.
+
+  - In Metacube stream output, mark each keyframe with a pts metadata
+    block. This allows Cubemap 1.4.0 or newer to serve fMP4 fragments
+    for HLS from Nageru's output, without any further remuxing or
+    transcoding.
+
+  - If needed, Nageru will now automatically try to autodetect a
+    usable --va-display parameter by probing all DRM nodes for H.264
+    encoders. This removes the need to set --va-display in almost all
+    cases, and also removes the dependency on libpci.
+
+  - For GPUs that support querying available memory (in practice only
+    NVIDIA GPUs at the current time), expose the amount of used/total
+    GPU memory both on standard output and in the Prometheus metrics
+    (as well as included Grafana dashboard).
+
+  - The Grafana dashboard now supports heatmaps for the chosen x264
+    speedcontrol preset (requires Grafana 5.1 or newer). (There used to
+    be a heatmap earlier, but it was all broken.)
+
+  - Various bugfixes.
+
+
+Nageru 1.7.1, March 26th, 2018
+
+  - Various bugfixes, mostly related to HTML and video inputs.
+
+
 Nageru 1.7.0, March 8th, 2018
 
   - Support for HTML5 graphics directly in Nageru, through CEF
