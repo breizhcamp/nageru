@@ -5,17 +5,17 @@ Subject: Option to specify input delay per card
 Consumer grade camcorders have an HDMI output lag that needs to be
 compensated to be in sync with ALSA input.
 ---
- decklink_capture.cpp |  6 +++++-
- decklink_capture.h   |  1 +
- flags.cpp            | 18 ++++++++++++++++++
- flags.h              |  1 +
+ nageru/decklink_capture.cpp |  6 +++++-
+ nageru/decklink_capture.h   |  1 +
+ nageru/flags.cpp            | 18 ++++++++++++++++++
+ nageru/flags.h              |  1 +
  4 files changed, 25 insertions(+), 1 deletion(-)
 
-diff --git a/decklink_capture.cpp b/decklink_capture.cpp
-index 0dd808e..b2d3891 100644
---- a/decklink_capture.cpp
-+++ b/decklink_capture.cpp
-@@ -261,6 +261,10 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
+diff --git a/nageru/decklink_capture.cpp b/nageru/decklink_capture.cpp
+index 9782040..1e4d073 100644
+--- a/nageru/decklink_capture.cpp
++++ b/nageru/decklink_capture.cpp
+@@ -154,6 +154,10 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
  	set_video_mode_no_restart(bmdModeHD720p50);
  
  	input->SetCallback(this);
@@ -26,7 +26,7 @@ index 0dd808e..b2d3891 100644
  }
  
  DeckLinkCapture::~DeckLinkCapture()
-@@ -333,7 +337,7 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
+@@ -226,7 +230,7 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
  		done_init = true;
  	}
  
@@ -35,10 +35,10 @@ index 0dd808e..b2d3891 100644
  
  	FrameAllocator::Frame current_video_frame, current_audio_frame;
  	VideoFormat video_format;
-diff --git a/decklink_capture.h b/decklink_capture.h
+diff --git a/nageru/decklink_capture.h b/nageru/decklink_capture.h
 index f940241..62c5dc0 100644
---- a/decklink_capture.h
-+++ b/decklink_capture.h
+--- a/nageru/decklink_capture.h
++++ b/nageru/decklink_capture.h
 @@ -118,6 +118,7 @@ private:
  	std::string description;
  	uint16_t timecode = 0;
@@ -47,11 +47,11 @@ index f940241..62c5dc0 100644
  
  	bool has_dequeue_callbacks = false;
  	std::function<void()> dequeue_init_callback = nullptr;
-diff --git a/flags.cpp b/flags.cpp
-index 2d8e37f..9086937 100644
---- a/flags.cpp
-+++ b/flags.cpp
-@@ -76,6 +76,7 @@ void usage(Program program)
+diff --git a/nageru/flags.cpp b/nageru/flags.cpp
+index bdb9821..c5acb9d 100644
+--- a/nageru/flags.cpp
++++ b/nageru/flags.cpp
+@@ -130,6 +130,7 @@ void usage(Program program)
  	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
  	if (program == PROGRAM_NAGERU) {
  		fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
@@ -59,7 +59,7 @@ index 2d8e37f..9086937 100644
  		fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
  		fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
  		fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
-@@ -166,6 +167,7 @@ void parse_flags(Program program, int argc, char * const argv[])
+@@ -224,6 +225,7 @@ void parse_flags(Program program, int argc, char * const argv[])
  		{ "width", required_argument, 0, 'w' },
  		{ "height", required_argument, 0, 'h' },
  		{ "num-cards", required_argument, 0, 'c' },
@@ -67,7 +67,7 @@ index 2d8e37f..9086937 100644
  		{ "output-card", required_argument, 0, 'o' },
  		{ "theme", required_argument, 0, 't' },
  		{ "theme-dir", required_argument, 0, 'I' },
-@@ -241,6 +243,22 @@ void parse_flags(Program program, int argc, char * const argv[])
+@@ -301,6 +303,22 @@ void parse_flags(Program program, int argc, char * const argv[])
  		case 'c':
  			global_flags.num_cards = atoi(optarg);
  			break;
@@ -90,10 +90,10 @@ index 2d8e37f..9086937 100644
  		case 'o':
  			global_flags.output_card = atoi(optarg);
  			break;
-diff --git a/flags.h b/flags.h
-index 147c62a..6dbdf5a 100644
---- a/flags.h
-+++ b/flags.h
+diff --git a/nageru/flags.h b/nageru/flags.h
+index 4d990f8..d8adaac 100644
+--- a/nageru/flags.h
++++ b/nageru/flags.h
 @@ -13,6 +13,7 @@
  struct Flags {
  	int width = 1280, height = 720;

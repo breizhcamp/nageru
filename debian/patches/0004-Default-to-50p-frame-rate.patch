@@ -3,15 +3,15 @@ Date: Wed, 14 Feb 2018 22:02:15 +0100
 Subject: Default to 50p frame rate
 
 ---
- decklink_capture.cpp | 2 +-
- decklink_output.cpp  | 4 ++--
+ nageru/decklink_capture.cpp | 2 +-
+ nageru/decklink_output.cpp  | 4 ++--
  2 files changed, 3 insertions(+), 3 deletions(-)
 
-diff --git a/decklink_capture.cpp b/decklink_capture.cpp
-index 6dba068..0dd808e 100644
---- a/decklink_capture.cpp
-+++ b/decklink_capture.cpp
-@@ -258,7 +258,7 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
+diff --git a/nageru/decklink_capture.cpp b/nageru/decklink_capture.cpp
+index ea55b46..9782040 100644
+--- a/nageru/decklink_capture.cpp
++++ b/nageru/decklink_capture.cpp
+@@ -151,7 +151,7 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
  	video_modes = summarize_video_modes(mode_it, card_index);
  	mode_it->Release();
  
@@ -20,11 +20,11 @@ index 6dba068..0dd808e 100644
  
  	input->SetCallback(this);
  }
-diff --git a/decklink_output.cpp b/decklink_output.cpp
-index a3d220b..5e5f5f4 100644
---- a/decklink_output.cpp
-+++ b/decklink_output.cpp
-@@ -415,8 +415,8 @@ uint32_t DeckLinkOutput::pick_video_mode(uint32_t mode) const
+diff --git a/nageru/decklink_output.cpp b/nageru/decklink_output.cpp
+index ed66212..faf02b2 100644
+--- a/nageru/decklink_output.cpp
++++ b/nageru/decklink_output.cpp
+@@ -417,8 +417,8 @@ uint32_t DeckLinkOutput::pick_video_mode(uint32_t mode) const
  		return mode;
  	}
  

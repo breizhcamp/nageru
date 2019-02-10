@@ -3,16 +3,16 @@ Date: Mon, 19 Mar 2018 09:53:42 +0100
 Subject: Tentative Decklink capture RGB 4:4:4 support
 
 ---
- decklink_capture.cpp | 27 ++++++++++++++++++++++-----
- decklink_capture.h   |  2 +-
- mixer.cpp            |  8 ++------
+ nageru/decklink_capture.cpp | 27 ++++++++++++++++++++++-----
+ nageru/decklink_capture.h   |  2 +-
+ nageru/mixer.cpp            |  8 ++------
  3 files changed, 25 insertions(+), 12 deletions(-)
 
-diff --git a/decklink_capture.cpp b/decklink_capture.cpp
-index b2d3891..b8ec975 100644
---- a/decklink_capture.cpp
-+++ b/decklink_capture.cpp
-@@ -147,6 +147,8 @@ BMDPixelFormat pixel_format_to_bmd(PixelFormat pixel_format)
+diff --git a/nageru/decklink_capture.cpp b/nageru/decklink_capture.cpp
+index 1e4d073..b78a00d 100644
+--- a/nageru/decklink_capture.cpp
++++ b/nageru/decklink_capture.cpp
+@@ -40,6 +40,8 @@ BMDPixelFormat pixel_format_to_bmd(PixelFormat pixel_format)
  		return bmdFormat8BitYUV;
  	case PixelFormat_10BitYCbCr:
  		return bmdFormat10BitYUV;
@@ -21,7 +21,7 @@ index b2d3891..b8ec975 100644
  	default:
  		assert(false);
  	}
-@@ -258,6 +260,11 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
+@@ -151,6 +153,11 @@ DeckLinkCapture::DeckLinkCapture(IDeckLink *card, int card_index)
  	video_modes = summarize_video_modes(mode_it, card_index);
  	mode_it->Release();
  
@@ -33,7 +33,7 @@ index b2d3891..b8ec975 100644
  	set_video_mode_no_restart(bmdModeHD720p50);
  
  	input->SetCallback(this);
-@@ -300,11 +307,18 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFormatChanged(
+@@ -193,11 +200,18 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFormatChanged(
  	IDeckLinkDisplayMode* display_mode,
  	BMDDetectedVideoInputFormatFlags format_flags)
  {
@@ -56,7 +56,7 @@ index b2d3891..b8ec975 100644
  		set_video_mode(display_mode->GetDisplayMode());
  	}
  	if (display_mode->GetFrameRate(&frame_duration, &time_scale) != S_OK) {
-@@ -357,7 +371,10 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
+@@ -250,7 +264,10 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
  		const int stride = video_frame->GetRowBytes();
  		const BMDPixelFormat format = video_frame->GetPixelFormat();
  		assert(format == pixel_format_to_bmd(current_pixel_format));
@@ -68,10 +68,10 @@ index b2d3891..b8ec975 100644
  			assert(stride == int(v210Converter::get_v210_stride(width)));
  		} else {
  			assert(stride == width * 2);
-diff --git a/decklink_capture.h b/decklink_capture.h
+diff --git a/nageru/decklink_capture.h b/nageru/decklink_capture.h
 index 62c5dc0..e046c7e 100644
---- a/decklink_capture.h
-+++ b/decklink_capture.h
+--- a/nageru/decklink_capture.h
++++ b/nageru/decklink_capture.h
 @@ -95,7 +95,7 @@ public:
  	uint32_t get_current_video_mode() const override { return current_video_mode; }
  
@@ -81,11 +81,11 @@ index 62c5dc0..e046c7e 100644
  	}
  	void set_pixel_format(bmusb::PixelFormat pixel_format) override;
  	bmusb::PixelFormat get_current_pixel_format() const override {
-diff --git a/mixer.cpp b/mixer.cpp
-index e1d9ca9..e85246a 100644
---- a/mixer.cpp
-+++ b/mixer.cpp
-@@ -529,14 +529,10 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
+diff --git a/nageru/mixer.cpp b/nageru/mixer.cpp
+index 9fd1e15..fe4ff79 100644
+--- a/nageru/mixer.cpp
++++ b/nageru/mixer.cpp
+@@ -539,14 +539,10 @@ void Mixer::configure_card(unsigned card_index, CaptureInterface *capture, CardT
  	}
  
  	PixelFormat pixel_format;

@@ -4,14 +4,14 @@ Subject: Reduce QuickSync encoding bitrate
 
 Would have been better to add flags, but it's too late for tonight
 ---
- quicksync_encoder_impl.h | 6 +++---
+ nageru/quicksync_encoder_impl.h | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)
 
-diff --git a/quicksync_encoder_impl.h b/quicksync_encoder_impl.h
-index bc84e0a..5c77ec7 100644
---- a/quicksync_encoder_impl.h
-+++ b/quicksync_encoder_impl.h
-@@ -199,10 +199,10 @@ private:
+diff --git a/nageru/quicksync_encoder_impl.h b/nageru/quicksync_encoder_impl.h
+index 5e215e5..0a0997f 100644
+--- a/nageru/quicksync_encoder_impl.h
++++ b/nageru/quicksync_encoder_impl.h
+@@ -202,10 +202,10 @@ private:
  	std::deque<ReferenceFrame> reference_frames;
  
  	// Static quality settings.

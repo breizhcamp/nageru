@@ -3,14 +3,14 @@ Date: Sun, 18 Mar 2018 15:24:27 +0100
 Subject: Reduce post compression makeup gain
 
 ---
- audio_mixer.cpp | 4 ++--
+ nageru/audio_mixer.cpp | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/audio_mixer.cpp b/audio_mixer.cpp
-index 468edd5..d1600d4 100644
---- a/audio_mixer.cpp
-+++ b/audio_mixer.cpp
-@@ -344,7 +344,7 @@ AudioMixer::BusSettings AudioMixer::get_default_bus_settings()
+diff --git a/nageru/audio_mixer.cpp b/nageru/audio_mixer.cpp
+index f63fe24..1d9bb05 100644
+--- a/nageru/audio_mixer.cpp
++++ b/nageru/audio_mixer.cpp
+@@ -345,7 +345,7 @@ AudioMixer::BusSettings AudioMixer::get_default_bus_settings()
  	}
  	settings.gain_staging_db = global_flags.initial_gain_staging_db;
  	settings.level_compressor_enabled = global_flags.gain_staging_auto;
@@ -19,12 +19,12 @@ index 468edd5..d1600d4 100644
  	settings.compressor_enabled = global_flags.compressor_enabled;
  	return settings;
  }
-@@ -552,7 +552,7 @@ vector<float> AudioMixer::get_output(steady_clock::time_point ts, unsigned num_s
+@@ -600,7 +600,7 @@ vector<float> AudioMixer::get_output(steady_clock::time_point ts, unsigned num_s
  				float ratio = 20.0f;
  				float attack_time = 0.005f;
  				float release_time = 0.040f;
 -				float makeup_gain = 2.0f;  // +6 dB.
-+				float makeup_gain = 1.0f;  // +0 dB.
++				float makeup_gain = 1.5f;  // +3 dB.
  				compressor[bus_index]->process(samples_bus.data(), samples_bus.size() / 2, threshold, ratio, attack_time, release_time, makeup_gain);
  		//		compressor_att = compressor.get_attenuation();
  			}

@@ -1,13 +1,6 @@
-0002-set-PREFIX-to-usr.patch
 0004-Default-to-50p-frame-rate.patch
 0005-Option-to-specify-input-delay-per-card.patch
 0006-Reduce-QuickSync-encoding-bitrate.patch
 0008-Flag-for-ALSA-delay.patch
-0007-Full-screen-option.patch
 0008-Reduce-post-compression-makeup-gain.patch
-0009-Option-to-choose-SDI-over-HDMI-by-default.patch
 0010-Tentative-Decklink-capture-RGB-4-4-4-support.patch
-0010-Fix-a-thread-race-in-QuickSyncEncoder.-Found-by-GCC-.patch
-0011-Fix-a-thread-race-in-X264Encoder.-Found-by-GCC-TSan.patch
-0012-Fix-a-buffer-overrun-when-compiled-without-CEF.patch
-0013-Add-LiftGammaGainEffect.patch
