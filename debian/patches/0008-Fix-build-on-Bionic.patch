@@ -1,0 +1,36 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Sun, 10 Feb 2019 13:54:14 +0100
+Subject: Fix build on Bionic
+
+---
+ meson.build                  | 2 +-
+ nageru/quicksync_encoder.cpp | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 49f38b1..363a64f 100644
+--- a/meson.build
++++ b/meson.build
+@@ -21,7 +21,7 @@ luajitdep = dependency('luajit')
+ movitdep = dependency('movit')
+ protobufdep = dependency('protobuf')
+ qcustomplotdep = cxx.find_library('qcustomplot')
+-qt5deps = dependency('qt5', modules: ['Core', 'Gui', 'Widgets', 'OpenGLExtensions', 'OpenGL', 'Network'])
++qt5deps = dependency('qt5', modules: ['Core', 'Gui', 'Widgets', 'OpenGLExtensions', 'OpenGL', 'Network', 'PrintSupport'])
+ sdl2_imagedep = dependency('SDL2_image', required: false)
+ sdl2dep = dependency('sdl2', required: false)
+ sqlite3dep = dependency('sqlite3')
+diff --git a/nageru/quicksync_encoder.cpp b/nageru/quicksync_encoder.cpp
+index 4883554..791caa7 100644
+--- a/nageru/quicksync_encoder.cpp
++++ b/nageru/quicksync_encoder.cpp
+@@ -1797,7 +1797,8 @@ void QuickSyncEncoderImpl::open_output_file(const std::string &filename)
+ {
+ 	AVFormatContext *avctx = avformat_alloc_context();
+ 	avctx->oformat = av_guess_format(NULL, filename.c_str(), NULL);
+-	avctx->url = strdup(filename.c_str());
++	// not available in Ubuntu Bionic version of libav
++	// avctx->url = strdup(filename.c_str());
+ 
+ 	string url = "file:" + filename;
+ 	int ret = avio_open2(&avctx->pb, url.c_str(), AVIO_FLAG_WRITE, &avctx->interrupt_callback, NULL);
