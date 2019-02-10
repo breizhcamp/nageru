@@ -2,7 +2,7 @@ Source: nageru
 Section: video
 Priority: optional
 Maintainer: Steinar H. Gunderson <sesse@debian.org>
-Build-Depends: debhelper (>= 9), qtbase5-dev, libqt5opengl5-dev, pkg-config, libusb-1.0-0-dev, libmovit-dev (>= 1.5.2), libmicrohttpd-dev, libx264-dev, libavcodec-dev, libavformat-dev (>= 7:3.1), libswscale-dev, libva-dev, libavresample-dev, libegl1-mesa-dev, libasound2-dev, libzita-resampler-dev, libluajit-5.1-dev, libbmusb-dev (>= 0.7.0), protobuf-compiler, libprotobuf-dev, libpci-dev, libqcustomplot-dev
+Build-Depends: debhelper (>= 9), qtbase5-dev, libqt5opengl5-dev, pkg-config, libusb-1.0-0-dev, libmovit-dev (>= 1.5.2), libmicrohttpd-dev, libx264-dev, libavcodec-dev, libavformat-dev (>= 7:3.1), libswscale-dev, libva-dev, libavresample-dev, libegl1-mesa-dev, libasound2-dev, libzita-resampler-dev, libluajit-5.1-dev, libbmusb-dev (>= 0.7.0), protobuf-compiler, libprotobuf-dev, libqcustomplot-dev, meson (>= 0.47), libjpeg-dev, libsqlite3-dev
 Standards-Version: 3.9.8
 Homepage: https://nageru.sesse.net/
 

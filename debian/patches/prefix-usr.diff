@@ -1,0 +1,16 @@
+Description: Change PREFIX to /usr
+Author: Steinar H. Gunderson <sesse@debian.org>
+
+Index: nageru-1.7.5/nageru/flags.h
+===================================================================
+--- nageru-1.7.5.orig/nageru/flags.h
++++ nageru-1.7.5/nageru/flags.h
+@@ -18,7 +18,7 @@ struct Flags {
+ 	bool uncompressed_video_to_http = false;
+ 	bool x264_video_to_http = false;
+ 	bool x264_video_to_disk = false;  // Disables Quick Sync entirely. Implies x264_video_to_http == true.
+-	std::vector<std::string> theme_dirs { ".", "/usr/local/share/nageru" };
++	std::vector<std::string> theme_dirs { ".", "/usr/share/nageru" };
+ 	std::string recording_dir = ".";
+ 	std::string theme_filename = "theme.lua";
+ 	bool locut_enabled = true;
