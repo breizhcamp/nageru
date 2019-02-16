@@ -6,3 +6,4 @@ prefix-usr.diff
 0008-Reduce-post-compression-makeup-gain.patch
 0010-Tentative-Decklink-capture-RGB-4-4-4-support.patch
 0008-Fix-build-on-Bionic.patch
+0012-Use-ALSA-hardware-timestamp-instead-of-system-clock.patch

@@ -1,0 +1,227 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Sat, 16 Feb 2019 18:04:24 +0100
+Subject: Use ALSA hardware timestamp instead of system clock
+
+* init the ALSA device like it's done by Jack2
+* increase resampler coef to converge more quickly
+* realtime scheduling for other critical threads
+---
+ nageru/alsa_input.cpp       | 67 ++++++++++++++++++++++++++++++++++++---------
+ nageru/alsa_input.h         |  1 +
+ nageru/audio_mixer.cpp      |  4 ++-
+ nageru/decklink_output.cpp  |  8 ++++++
+ nageru/resampling_queue.cpp |  4 +--
+ shared/timebase.h           |  2 +-
+ 6 files changed, 69 insertions(+), 17 deletions(-)
+
+diff --git a/nageru/alsa_input.cpp b/nageru/alsa_input.cpp
+index f4245c5..df413e4 100644
+--- a/nageru/alsa_input.cpp
++++ b/nageru/alsa_input.cpp
+@@ -71,14 +71,17 @@ bool ALSAInput::open_device()
+ 	// seemingly I can get 96 frames at a time with no problems even if
+ 	// the period size is 64 frames. And if I set num_periods to e.g. 1,
+ 	// I can't have a big buffer.
+-	num_periods = 16;
++
++	// high number of periods to avoid xrun on startup when output card is
++	// initialized. do_capture will usually fetch 1 or 2 periods but on startup
++	// there's a point in time where do_capture is frozen (no idea why).
++	num_periods = 50;
+ 	int dir = 0;
+ 	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_periods_near()", snd_pcm_hw_params_set_periods_near(pcm_handle, hw_params, &num_periods, &dir));
+-	period_size = 64;
+-	dir = 0;
+-	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_period_size_near()", snd_pcm_hw_params_set_period_size_near(pcm_handle, hw_params, &period_size, &dir));
+-	buffer_frames = 64 * 64;
+-	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_buffer_size_near()", snd_pcm_hw_params_set_buffer_size_near(pcm_handle, hw_params, &buffer_frames));
++	period_size = 256;
++	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_period_size()", snd_pcm_hw_params_set_period_size(pcm_handle, hw_params, period_size, 0));
++	buffer_frames = num_periods * period_size;
++	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params_set_buffer_size()", snd_pcm_hw_params_set_buffer_size(pcm_handle, hw_params, buffer_frames));
+ 	RETURN_FALSE_ON_ERROR("snd_pcm_hw_params()", snd_pcm_hw_params(pcm_handle, hw_params));
+ 	//snd_pcm_hw_params_free(hw_params);
+ 
+@@ -111,7 +114,13 @@ bool ALSAInput::open_device()
+ 	snd_pcm_sw_params_t *sw_params;
+ 	snd_pcm_sw_params_alloca(&sw_params);
+ 	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_current()", snd_pcm_sw_params_current(pcm_handle, sw_params));
+-	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_set_start_threshold", snd_pcm_sw_params_set_start_threshold(pcm_handle, sw_params, num_periods * period_size / 2));
++	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_set_start_threshold", snd_pcm_sw_params_set_start_threshold(pcm_handle, sw_params, 0U));
++	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_set_stop_threshold", snd_pcm_sw_params_set_stop_threshold(pcm_handle, sw_params, buffer_frames));
++	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_set_silence_threshold", snd_pcm_sw_params_set_silence_threshold(pcm_handle, sw_params, 0));
++	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_set_avail_min", snd_pcm_sw_params_set_avail_min(pcm_handle, sw_params, period_size));
++	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_set_tstamp_mode", snd_pcm_sw_params_set_tstamp_mode(pcm_handle, sw_params, SND_PCM_TSTAMP_ENABLE));
++	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params_set_tstamp_type", snd_pcm_sw_params_set_tstamp_type(pcm_handle, sw_params, SND_PCM_TSTAMP_TYPE_MONOTONIC));
++
+ 	RETURN_FALSE_ON_ERROR("snd_pcm_sw_params()", snd_pcm_sw_params(pcm_handle, sw_params));
+ 
+ 	RETURN_FALSE_ON_ERROR("snd_pcm_nonblock()", snd_pcm_nonblock(pcm_handle, 1));
+@@ -127,6 +136,11 @@ bool ALSAInput::set_base_params(const char *device_name, snd_pcm_t *pcm_handle,
+ 		fprintf(stderr, "[%s] snd_pcm_hw_params_any(): %s\n", device_name, snd_strerror(err));
+ 		return false;
+ 	}
++	err = snd_pcm_hw_params_set_periods_integer (pcm_handle, hw_params);
++	if (err < 0) {
++		fprintf(stderr, "[%s] snd_pcm_hw_params_set_periods_integer(): %s\n", device_name, snd_strerror(err));
++		return false;
++	}
+ 	err = snd_pcm_hw_params_set_access(pcm_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+ 	if (err < 0) {
+ 		fprintf(stderr, "[%s] snd_pcm_hw_params_set_access(): %s\n", device_name, snd_strerror(err));
+@@ -172,6 +186,21 @@ void ALSAInput::stop_capture_thread()
+ 
+ void ALSAInput::capture_thread_func()
+ {
++	if (!done_init) {
++		char thread_name[16];
++		snprintf(thread_name, sizeof(thread_name), "ALSA_C_%d", internal_dev_index);
++		pthread_setname_np(pthread_self(), thread_name);
++
++		sched_param param;
++		memset(&param, 0, sizeof(param));
++		param.sched_priority = 1;
++		if (sched_setscheduler(0, SCHED_RR, &param) == -1) {
++			printf("couldn't set realtime priority for ALSA thread: %s\n", strerror(errno));
++		}
++
++		done_init = true;
++	}
++
+ 	parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::STARTING);
+ 
+ 	// If the device hasn't been opened already, we need to do so
+@@ -224,10 +253,13 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
+ 
+ 	uint64_t num_frames_output = 0;
+ 	while (!should_quit.should_quit()) {
+-		int ret = snd_pcm_wait(pcm_handle, /*timeout=*/100);
+-		if (ret == 0) continue;  // Timeout.
++		int ret = snd_pcm_wait(pcm_handle, 40);
++		if (ret == 0) {
++			fprintf(stderr, "[%s] ALSA timed out waiting on poll\n", device.c_str());
++			continue;  // Timeout.
++		}
+ 		if (ret == -EPIPE) {
+-			fprintf(stderr, "[%s] ALSA overrun\n", device.c_str());
++			fprintf(stderr, "[%s] ALSA overrun (poll)\n", device.c_str());
+ 			snd_pcm_prepare(pcm_handle);
+ 			snd_pcm_start(pcm_handle);
+ 			continue;
+@@ -236,7 +268,7 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
+ 
+ 		snd_pcm_sframes_t frames = snd_pcm_readi(pcm_handle, buffer.get(), buffer_frames);
+ 		if (frames == -EPIPE) {
+-			fprintf(stderr, "[%s] ALSA overrun\n", device.c_str());
++			fprintf(stderr, "[%s] ALSA overrun (read)\n", device.c_str());
+ 			snd_pcm_prepare(pcm_handle);
+ 			snd_pcm_start(pcm_handle);
+ 			continue;
+@@ -246,16 +278,25 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
+ 			break;
+ 		}
+ 		RETURN_ON_ERROR("snd_pcm_readi()", frames);
++		snd_htimestamp_t tstamp;
++		snd_pcm_uframes_t avail;
++		steady_clock::time_point tsframe;
++		int err = snd_pcm_htimestamp(pcm_handle, &avail, &tstamp);
++		if (err != 0) {
++			tsframe = steady_clock::now();
++		} else {
++			tsframe = steady_clock::time_point(std::chrono::seconds(tstamp.tv_sec) + std::chrono::nanoseconds(tstamp.tv_nsec)) ;
++		}
+ 
+ 		const int64_t prev_pts = frames_to_pts(num_frames_output);
+ 		const int64_t pts = frames_to_pts(num_frames_output + frames);
+-		const steady_clock::time_point now = steady_clock::now() + milliseconds(global_flags.alsa_delay);
+ 		bool success;
+ 		do {
+ 			if (should_quit.should_quit()) return CaptureEndReason::REQUESTED_QUIT;
+-			success = audio_callback(buffer.get(), frames, audio_format, pts - prev_pts, now);
++			success = audio_callback(buffer.get(), frames, audio_format, pts - prev_pts, tsframe);
+ 		} while (!success);
+ 		num_frames_output += frames;
++		//fprintf(stderr, "ALSA captured frames %d, TS:%lld.%.9ld, avail=%d\n", frames, (long long)tstamp.tv_sec, tstamp.tv_nsec, avail);
+ 	}
+ 	return CaptureEndReason::REQUESTED_QUIT;
+ }
+diff --git a/nageru/alsa_input.h b/nageru/alsa_input.h
+index 060b921..f44ff2e 100644
+--- a/nageru/alsa_input.h
++++ b/nageru/alsa_input.h
+@@ -50,6 +50,7 @@ public:
+ 	static bool set_base_params(const char *device_name, snd_pcm_t *pcm_handle, snd_pcm_hw_params_t *hw_params, unsigned *sample_rate);
+ 
+ private:
++	bool done_init = false;
+ 	void capture_thread_func();
+ 	int64_t frames_to_pts(uint64_t n) const;
+ 
+diff --git a/nageru/audio_mixer.cpp b/nageru/audio_mixer.cpp
+index 1d9bb05..db514a6 100644
+--- a/nageru/audio_mixer.cpp
++++ b/nageru/audio_mixer.cpp
+@@ -249,13 +249,15 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
+ 	AudioDevice *device = find_audio_device(device_spec);
+ 
+ 	unique_lock<timed_mutex> lock(audio_mutex, defer_lock);
+-	if (!lock.try_lock_for(chrono::milliseconds(10))) {
++	if (!lock.try_lock_for(chrono::milliseconds(5))) {
++		fprintf(stderr, "Unable to grab AudioMixer lock in less than 5ms\n");
+ 		return false;
+ 	}
+ 	if (device->resampling_queue == nullptr) {
+ 		// No buses use this device; throw it away.
+ 		return true;
+ 	}
++	//fprintf(stderr, "%s: add audio at %lu\n", spec_to_string(device_spec).c_str(), frame_time);
+ 
+ 	unsigned num_channels = device->interesting_channels.size();
+ 	assert(num_channels > 0);
+diff --git a/nageru/decklink_output.cpp b/nageru/decklink_output.cpp
+index faf02b2..65eaba2 100644
+--- a/nageru/decklink_output.cpp
++++ b/nageru/decklink_output.cpp
+@@ -540,6 +540,14 @@ unique_ptr<DeckLinkOutput::Frame> DeckLinkOutput::get_frame()
+ void DeckLinkOutput::present_thread_func()
+ {
+ 	pthread_setname_np(pthread_self(), "DeckLinkOutput");
++
++	sched_param param;
++	memset(&param, 0, sizeof(param));
++	param.sched_priority = 1;
++	if (sched_setscheduler(0, SCHED_RR, &param) == -1) {
++		printf("couldn't set realtime priority for DeckLink Output thread: %s\n", strerror(errno));
++	}
++
+ 	for ( ;; ) {
+ 		unique_ptr<Frame> frame;
+ 		{
+diff --git a/nageru/resampling_queue.cpp b/nageru/resampling_queue.cpp
+index ef7b735..2e52cbb 100644
+--- a/nageru/resampling_queue.cpp
++++ b/nageru/resampling_queue.cpp
+@@ -156,8 +156,8 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
+ 		z2 += w0 * (z1 - z2);
+ 		z3 += w2 * z2;
+ 		rcorr = 1.0 - z2 - z3;
+-		if (rcorr > 1.05) rcorr = 1.05;
+-		if (rcorr < 0.95) rcorr = 0.95;
++		if (rcorr > 1.25) rcorr = 1.25;
++		if (rcorr < 0.75) rcorr = 0.75;
+ 		assert(!isnan(rcorr));
+ 		vresampler.set_rratio(rcorr);
+ 	}
+diff --git a/shared/timebase.h b/shared/timebase.h
+index 532ec86..9afeea3 100644
+--- a/shared/timebase.h
++++ b/shared/timebase.h
+@@ -15,7 +15,7 @@
+ // If we also wanted to represent one sample at 48000 Hz, we'd need
+ // to go to 300000. Also supporting one sample at 44100 Hz would mean
+ // going to 44100000; probably a bit excessive.
+-#define TIMEBASE 120000
++#define TIMEBASE 300000
+ 
+ // Some muxes, like MP4 (or at least avformat's implementation of it),
+ // are not too fond of values above 2^31. At timebase 120000, that's only
