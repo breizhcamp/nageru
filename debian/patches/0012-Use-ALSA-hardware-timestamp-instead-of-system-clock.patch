@@ -1,21 +1,23 @@
 From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
-Date: Sat, 16 Feb 2019 18:04:24 +0100
+Date: Tue, 19 Feb 2019 22:53:43 +0100
 Subject: Use ALSA hardware timestamp instead of system clock
 
 * init the ALSA device like it's done by Jack2
 * increase resampler coef to converge more quickly
 * realtime scheduling for other critical threads
 ---
- nageru/alsa_input.cpp       | 67 ++++++++++++++++++++++++++++++++++++---------
+ nageru/alsa_input.cpp       | 70 ++++++++++++++++++++++++++++++++++++---------
  nageru/alsa_input.h         |  1 +
- nageru/audio_mixer.cpp      |  4 ++-
+ nageru/audio_mixer.cpp      | 10 +++++--
+ nageru/decklink_capture.cpp |  4 +--
  nageru/decklink_output.cpp  |  8 ++++++
- nageru/resampling_queue.cpp |  4 +--
+ nageru/flags.cpp            |  7 +++++
+ nageru/flags.h              |  1 +
  shared/timebase.h           |  2 +-
- 6 files changed, 69 insertions(+), 17 deletions(-)
+ 8 files changed, 84 insertions(+), 19 deletions(-)
 
 diff --git a/nageru/alsa_input.cpp b/nageru/alsa_input.cpp
-index f4245c5..df413e4 100644
+index f4245c5..567549b 100644
 --- a/nageru/alsa_input.cpp
 +++ b/nageru/alsa_input.cpp
 @@ -71,14 +71,17 @@ bool ALSAInput::open_device()
@@ -91,7 +93,7 @@ index f4245c5..df413e4 100644
  	parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::STARTING);
  
  	// If the device hasn't been opened already, we need to do so
-@@ -224,10 +253,13 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
+@@ -224,19 +253,32 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
  
  	uint64_t num_frames_output = 0;
  	while (!should_quit.should_quit()) {
@@ -108,28 +110,28 @@ index f4245c5..df413e4 100644
  			snd_pcm_prepare(pcm_handle);
  			snd_pcm_start(pcm_handle);
  			continue;
-@@ -236,7 +268,7 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
+ 		}
+ 		RETURN_ON_ERROR("snd_pcm_wait()", ret);
  
- 		snd_pcm_sframes_t frames = snd_pcm_readi(pcm_handle, buffer.get(), buffer_frames);
+-		snd_pcm_sframes_t frames = snd_pcm_readi(pcm_handle, buffer.get(), buffer_frames);
++		snd_pcm_status_t *status;
++		snd_pcm_status_alloca(&status);
++		ret = snd_pcm_status(pcm_handle, status);
++		RETURN_ON_ERROR("snd_pcm_status()", ret);
++
++		snd_pcm_sframes_t avail = snd_pcm_status_get_avail(status);
++		snd_htimestamp_t tstamp;
++		snd_pcm_status_get_htstamp(status, &tstamp);
++		steady_clock::time_point tsframe = steady_clock::time_point(std::chrono::seconds(tstamp.tv_sec) + std::chrono::nanoseconds(tstamp.tv_nsec)) + milliseconds(global_flags.alsa_delay);
++
++		snd_pcm_sframes_t frames = snd_pcm_readi(pcm_handle, buffer.get(), avail);
  		if (frames == -EPIPE) {
 -			fprintf(stderr, "[%s] ALSA overrun\n", device.c_str());
 +			fprintf(stderr, "[%s] ALSA overrun (read)\n", device.c_str());
  			snd_pcm_prepare(pcm_handle);
  			snd_pcm_start(pcm_handle);
  			continue;
-@@ -246,16 +278,25 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
- 			break;
- 		}
- 		RETURN_ON_ERROR("snd_pcm_readi()", frames);
-+		snd_htimestamp_t tstamp;
-+		snd_pcm_uframes_t avail;
-+		steady_clock::time_point tsframe;
-+		int err = snd_pcm_htimestamp(pcm_handle, &avail, &tstamp);
-+		if (err != 0) {
-+			tsframe = steady_clock::now();
-+		} else {
-+			tsframe = steady_clock::time_point(std::chrono::seconds(tstamp.tv_sec) + std::chrono::nanoseconds(tstamp.tv_nsec)) ;
-+		}
+@@ -249,13 +291,13 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
  
  		const int64_t prev_pts = frames_to_pts(num_frames_output);
  		const int64_t pts = frames_to_pts(num_frames_output + frames);
@@ -158,10 +160,10 @@ index 060b921..f44ff2e 100644
  	int64_t frames_to_pts(uint64_t n) const;
  
 diff --git a/nageru/audio_mixer.cpp b/nageru/audio_mixer.cpp
-index 1d9bb05..db514a6 100644
+index 1d9bb05..4277034 100644
 --- a/nageru/audio_mixer.cpp
 +++ b/nageru/audio_mixer.cpp
-@@ -249,13 +249,15 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
+@@ -249,7 +249,8 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
  	AudioDevice *device = find_audio_device(device_spec);
  
  	unique_lock<timed_mutex> lock(audio_mutex, defer_lock);
@@ -171,13 +173,43 @@ index 1d9bb05..db514a6 100644
  		return false;
  	}
  	if (device->resampling_queue == nullptr) {
- 		// No buses use this device; throw it away.
- 		return true;
+@@ -289,8 +290,13 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
+ 		reset_resampler_mutex_held(device_spec);
  	}
-+	//fprintf(stderr, "%s: add audio at %lu\n", spec_to_string(device_spec).c_str(), frame_time);
  
- 	unsigned num_channels = device->interesting_channels.size();
- 	assert(num_channels > 0);
++	ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy = ResamplingQueue::ADJUST_RATE;
++	if (!global_flags.enable_decklink_resampling && device_spec.type == InputSourceType::CAPTURE_CARD) {
++		rate_adjustment_policy = ResamplingQueue::DO_NOT_ADJUST_RATE;
++	}
++
+ 	// Now add it.
+-	device->resampling_queue->add_input_samples(frame_time, audio.get(), num_samples, ResamplingQueue::ADJUST_RATE);
++	device->resampling_queue->add_input_samples(frame_time, audio.get(), num_samples, rate_adjustment_policy);
+ 	return true;
+ }
+ 
+diff --git a/nageru/decklink_capture.cpp b/nageru/decklink_capture.cpp
+index b78a00d..1cc6374 100644
+--- a/nageru/decklink_capture.cpp
++++ b/nageru/decklink_capture.cpp
+@@ -226,6 +226,8 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
+ 	IDeckLinkVideoInputFrame *video_frame,
+ 	IDeckLinkAudioInputPacket *audio_frame)
+ {
++	steady_clock::time_point now = steady_clock::now();
++
+ 	if (!done_init) {
+ 		char thread_name[16];
+ 		snprintf(thread_name, sizeof(thread_name), "DeckLink_C_%d", card_index);
+@@ -244,8 +246,6 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
+ 		done_init = true;
+ 	}
+ 
+-	steady_clock::time_point now = steady_clock::now() - milliseconds(input_delay);
+-
+ 	FrameAllocator::Frame current_video_frame, current_audio_frame;
+ 	VideoFormat video_format;
+ 	AudioFormat audio_format;
 diff --git a/nageru/decklink_output.cpp b/nageru/decklink_output.cpp
 index faf02b2..65eaba2 100644
 --- a/nageru/decklink_output.cpp
@@ -197,21 +229,57 @@ index faf02b2..65eaba2 100644
  	for ( ;; ) {
  		unique_ptr<Frame> frame;
  		{
-diff --git a/nageru/resampling_queue.cpp b/nageru/resampling_queue.cpp
-index ef7b735..2e52cbb 100644
---- a/nageru/resampling_queue.cpp
-+++ b/nageru/resampling_queue.cpp
-@@ -156,8 +156,8 @@ bool ResamplingQueue::get_output_samples(steady_clock::time_point ts, float *sam
- 		z2 += w0 * (z1 - z2);
- 		z3 += w2 * z2;
- 		rcorr = 1.0 - z2 - z3;
--		if (rcorr > 1.05) rcorr = 1.05;
--		if (rcorr < 0.95) rcorr = 0.95;
-+		if (rcorr > 1.25) rcorr = 1.25;
-+		if (rcorr < 0.75) rcorr = 0.75;
- 		assert(!isnan(rcorr));
- 		vresampler.set_rratio(rcorr);
- 	}
+diff --git a/nageru/flags.cpp b/nageru/flags.cpp
+index a6e0216..7710fe4 100644
+--- a/nageru/flags.cpp
++++ b/nageru/flags.cpp
+@@ -50,6 +50,7 @@ enum LongOption {
+ 	OPTION_DISABLE_MAKEUP_GAIN_AUTO,
+ 	OPTION_ENABLE_MAKEUP_GAIN_AUTO,
+ 	OPTION_DISABLE_ALSA_OUTPUT,
++	OPTION_DISABLE_DECKLINK_RESAMPLING,
+ 	OPTION_NO_FLUSH_PBOS,
+ 	OPTION_PRINT_VIDEO_LATENCY,
+ 	OPTION_MAX_INPUT_QUEUE_FRAMES,
+@@ -185,6 +186,8 @@ void usage(Program program)
+ 		fprintf(stderr, "      --disable-limiter           turn off limiter (also --enable)\n");
+ 		fprintf(stderr, "      --disable-makeup-gain-auto  turn off auto-adjustment of final makeup gain (also --enable)\n");
+ 		fprintf(stderr, "      --disable-alsa-output       disable audio monitoring via ALSA\n");
++		fprintf(stderr, "      --disable-decklink-resampling disable resampling for Decklink capture cards\n");
++		fprintf(stderr, "                                    (only make sense if all inputs are on the same card)\n");
+ 		fprintf(stderr, "      --no-flush-pbos             do not explicitly signal texture data uploads\n");
+ 		fprintf(stderr, "                                    (will give display corruption, but makes it\n");
+ 		fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
+@@ -270,6 +273,7 @@ void parse_flags(Program program, int argc, char * const argv[])
+ 		{ "disable-makeup-gain-auto", no_argument, 0, OPTION_DISABLE_MAKEUP_GAIN_AUTO },
+ 		{ "enable-makeup-gain-auto", no_argument, 0, OPTION_ENABLE_MAKEUP_GAIN_AUTO },
+ 		{ "disable-alsa-output", no_argument, 0, OPTION_DISABLE_ALSA_OUTPUT },
++		{ "disable-decklink-resampling", no_argument, 0, OPTION_DISABLE_DECKLINK_RESAMPLING },		
+ 		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
+ 		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
+ 		{ "max-input-queue-frames", required_argument, 0, OPTION_MAX_INPUT_QUEUE_FRAMES },
+@@ -467,6 +471,9 @@ void parse_flags(Program program, int argc, char * const argv[])
+ 		case OPTION_DISABLE_ALSA_OUTPUT:
+ 			global_flags.enable_alsa_output = false;
+ 			break;
++		case OPTION_DISABLE_DECKLINK_RESAMPLING:
++			global_flags.enable_decklink_resampling = false;
++			break;
+ 		case OPTION_NO_FLUSH_PBOS:
+ 			global_flags.flush_pbos = false;
+ 			break;
+diff --git a/nageru/flags.h b/nageru/flags.h
+index 7763548..8f58a8a 100644
+--- a/nageru/flags.h
++++ b/nageru/flags.h
+@@ -44,6 +44,7 @@ struct Flags {
+ 	int x264_vbv_buffer_size = -1;  // In kilobits. 0 = one-frame VBV, -1 = same as <x264_bitrate> (one-second VBV).
+ 	std::vector<std::string> x264_extra_param;  // In “key[,value]” format.
+ 	bool enable_alsa_output = true;
++	bool enable_decklink_resampling = true;
+ 	std::map<int, int> default_stream_mapping;
+ 	bool multichannel_mapping_mode = false;  // Implicitly true if input_mapping_filename is nonempty.
+ 	std::string input_mapping_filename;  // Empty for none.
 diff --git a/shared/timebase.h b/shared/timebase.h
 index 532ec86..9afeea3 100644
 --- a/shared/timebase.h
