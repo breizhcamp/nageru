@@ -17,7 +17,7 @@ Subject: Use ALSA hardware timestamp instead of system clock
  8 files changed, 84 insertions(+), 19 deletions(-)
 
 diff --git a/nageru/alsa_input.cpp b/nageru/alsa_input.cpp
-index f4245c5..567549b 100644
+index f4245c5..1beb8e2 100644
 --- a/nageru/alsa_input.cpp
 +++ b/nageru/alsa_input.cpp
 @@ -71,14 +71,17 @@ bool ALSAInput::open_device()
@@ -93,9 +93,12 @@ index f4245c5..567549b 100644
  	parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::STARTING);
  
  	// If the device hasn't been opened already, we need to do so
-@@ -224,19 +253,32 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
+@@ -223,20 +252,33 @@ ALSAInput::CaptureEndReason ALSAInput::do_capture()
+ 	parent_pool->set_card_state(internal_dev_index, ALSAPool::Device::State::RUNNING);
  
  	uint64_t num_frames_output = 0;
++	snd_pcm_status_t *status;
++	snd_pcm_status_alloca(&status);
  	while (!should_quit.should_quit()) {
 -		int ret = snd_pcm_wait(pcm_handle, /*timeout=*/100);
 -		if (ret == 0) continue;  // Timeout.
@@ -114,8 +117,6 @@ index f4245c5..567549b 100644
  		RETURN_ON_ERROR("snd_pcm_wait()", ret);
  
 -		snd_pcm_sframes_t frames = snd_pcm_readi(pcm_handle, buffer.get(), buffer_frames);
-+		snd_pcm_status_t *status;
-+		snd_pcm_status_alloca(&status);
 +		ret = snd_pcm_status(pcm_handle, status);
 +		RETURN_ON_ERROR("snd_pcm_status()", ret);
 +
