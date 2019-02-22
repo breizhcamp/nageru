@@ -1,0 +1,110 @@
+From: Alex Thomazo <alex@thomazo.info>
+Date: Fri, 22 Feb 2019 17:31:32 +0100
+Subject: Add local time and uptime in main window status
+
+---
+ nageru/mainwindow.cpp           | 31 +++++++++++++++++++++++++++----
+ nageru/mainwindow.h             |  2 +-
+ shared/disk_space_estimator.cpp |  3 ++-
+ shared/disk_space_estimator.h   |  2 +-
+ 4 files changed, 31 insertions(+), 7 deletions(-)
+
+diff --git a/nageru/mainwindow.cpp b/nageru/mainwindow.cpp
+index d436040..3e4a56f 100644
+--- a/nageru/mainwindow.cpp
++++ b/nageru/mainwindow.cpp
+@@ -198,7 +198,7 @@ MainWindow::MainWindow()
+ 	global_mainwindow = this;
+ 	ui->setupUi(this);
+ 
+-	global_disk_space_estimator = new DiskSpaceEstimator(bind(&MainWindow::report_disk_space, this, _1, _2));
++	global_disk_space_estimator = new DiskSpaceEstimator(bind(&MainWindow::report_disk_space, this, _1, _2, _3));
+ 	disk_free_label = new QLabel(this);
+ 	disk_free_label->setStyleSheet("QLabel {padding-right: 5px;}");
+ 	ui->menuBar->setCornerWidget(disk_free_label);
+@@ -779,7 +779,7 @@ void MainWindow::update_cutoff_labels(float cutoff_hz)
+ 	}
+ }
+ 
+-void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_left)
++void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_left, uint64_t uptime_seconds)
+ {
+ 	char time_str[256];
+ 	if (estimated_seconds_left < 60.0) {
+@@ -801,8 +801,31 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
+ 		int h = lrintf(estimated_seconds_left / 3600.0);
+ 		snprintf(time_str, sizeof(time_str), "%dh", h);
+ 	}
+-	char buf[256];
+-	snprintf(buf, sizeof(buf), "Disk free: %'.0f MB (approx. %s)", free_bytes / 1048576.0, time_str);
++	
++	std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
++	char nowtime[16];
++	strftime(nowtime, sizeof(nowtime), "%H:%M:%S", std::localtime(&now));
++	
++	char uptime_str[256];
++	
++	if (uptime_seconds < 60) {
++		snprintf(uptime_str, sizeof(uptime_str), "%" PRIu64 "s", uptime_seconds);
++	} else if (uptime_seconds < 3600) { // 1 minute
++		int s = lrintf(uptime_seconds);
++		int m = s / 60;
++		s %= 60;
++		snprintf(uptime_str, sizeof(uptime_str), "%dm %ds", m, s);
++	} else if (uptime_seconds < 216000)  { // 1 hour
++		int s = lrintf(uptime_seconds);
++		int m = lrintf(s / 60);
++		int h = lrintf(s / 60 / 60);
++		s %= 60;
++		m %= 60;
++		snprintf(uptime_str, sizeof(uptime_str), "%dh %dm %ds", h, m, s);
++	}
++	
++	char buf[512];
++	snprintf(buf, sizeof(buf), "Local Time: %s - Uptime: %s - Disk free: %'.0f MB (approx. %s)", nowtime, uptime_str, free_bytes / 1048576.0, time_str);
+ 
+ 	std::string label = buf;
+ 
+diff --git a/nageru/mainwindow.h b/nageru/mainwindow.h
+index 36be4b8..0aa42dd 100644
+--- a/nageru/mainwindow.h
++++ b/nageru/mainwindow.h
+@@ -135,7 +135,7 @@ private:
+ 	void setup_theme_menu();
+ 
+ 	// Called from DiskSpaceEstimator.
+-	void report_disk_space(off_t free_bytes, double estimated_seconds_left);
++	void report_disk_space(off_t free_bytes, double estimated_seconds_left, uint64_t uptime_seconds);
+ 
+ 	// Called from the mixer.
+ 	void audio_level_callback(float level_lufs, float peak_db, std::vector<AudioMixer::BusLevel> bus_levels, float global_level_lufs, float range_low_lufs, float range_high_lufs, float final_makeup_gain_db, float correlation);
+diff --git a/shared/disk_space_estimator.cpp b/shared/disk_space_estimator.cpp
+index da55ee1..e60531a 100644
+--- a/shared/disk_space_estimator.cpp
++++ b/shared/disk_space_estimator.cpp
+@@ -63,10 +63,11 @@ void DiskSpaceEstimator::report_write_internal(const string &filename, off_t fil
+ 		double bytes_per_second = double(file_size - measure_points.front().size) /
+ 			(pts - measure_points.front().pts) * TIMEBASE;
+ 		double seconds_left = free_bytes / bytes_per_second;
++		uint64_t uptime_seconds = pts / TIMEBASE;
+ 
+ 		// Only report every second, since updating the UI can be expensive.
+ 		if (last_pts_reported == 0 || pts - last_pts_reported >= TIMEBASE) {
+-			callback(free_bytes, seconds_left);
++			callback(free_bytes, seconds_left, uptime_seconds);
+ 			last_pts_reported = pts;
+ 		}
+ 	}
+diff --git a/shared/disk_space_estimator.h b/shared/disk_space_estimator.h
+index 163b7ef..e17922f 100644
+--- a/shared/disk_space_estimator.h
++++ b/shared/disk_space_estimator.h
+@@ -20,7 +20,7 @@
+ 
+ class DiskSpaceEstimator {
+ public:
+-	typedef std::function<void(off_t free_bytes, double estimated_seconds_left)> callback_t;
++	typedef std::function<void(off_t free_bytes, double estimated_seconds_left, uint64_t uptime_seconds)> callback_t;
+ 	DiskSpaceEstimator(callback_t callback);
+ 
+ 	// Report that a video frame with the given pts and size has just been
