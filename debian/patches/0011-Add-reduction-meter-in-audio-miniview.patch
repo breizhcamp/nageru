@@ -1,0 +1,124 @@
+From: Alex Thomazo <alex@thomazo.info>
+Date: Fri, 22 Feb 2019 18:59:07 +0100
+Subject: Add reduction meter in audio miniview
+
+---
+ nageru/audio_miniview.ui | 58 +++++++++++++++++++++++++++++++++++++++++++-----
+ nageru/mainwindow.cpp    |  1 +
+ 2 files changed, 54 insertions(+), 5 deletions(-)
+
+diff --git a/nageru/audio_miniview.ui b/nageru/audio_miniview.ui
+index 7aa1aa0..eeda5a8 100644
+--- a/nageru/audio_miniview.ui
++++ b/nageru/audio_miniview.ui
+@@ -6,7 +6,7 @@
+    <rect>
+     <x>0</x>
+     <y>0</y>
+-    <width>139</width>
++    <width>126</width>
+     <height>300</height>
+    </rect>
+   </property>
+@@ -18,13 +18,13 @@
+   </property>
+   <property name="minimumSize">
+    <size>
+-    <width>139</width>
++    <width>120</width>
+     <height>0</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+-    <width>139</width>
++    <width>126</width>
+     <height>16777215</height>
+    </size>
+   </property>
+@@ -126,9 +126,15 @@
+                <number>4</number>
+               </property>
+               <item>
+-               <layout class="QHBoxLayout" name="vu_meter_centerer">
++               <layout class="QHBoxLayout" name="vu_meter_compression_centerer" stretch="0,0">
+                 <property name="spacing">
+-                 <number>0</number>
++                 <number>5</number>
++                </property>
++                <property name="leftMargin">
++                 <number>10</number>
++                </property>
++                <property name="rightMargin">
++                 <number>10</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+@@ -228,6 +234,42 @@
+                   </property>
+                  </widget>
+                 </item>
++                <item>
++                 <layout class="QVBoxLayout" name="reduction_meter_layout" stretch="1,1">
++                  <property name="spacing">
++                   <number>0</number>
++                  </property>
++                  <item>
++                   <spacer name="verticalSpacer">
++                    <property name="orientation">
++                     <enum>Qt::Vertical</enum>
++                    </property>
++                    <property name="sizeHint" stdset="0">
++                     <size>
++                      <width>16</width>
++                      <height>40</height>
++                     </size>
++                    </property>
++                   </spacer>
++                  </item>
++                  <item alignment="Qt::AlignHCenter">
++                   <widget class="CompressionReductionMeter" name="reduction_meter" native="true">
++                    <property name="minimumSize">
++                     <size>
++                      <width>16</width>
++                      <height>0</height>
++                     </size>
++                    </property>
++                    <property name="maximumSize">
++                     <size>
++                      <width>16</width>
++                      <height>16777215</height>
++                     </size>
++                    </property>
++                   </widget>
++                  </item>
++                 </layout>
++                </item>
+                </layout>
+               </item>
+               <item>
+@@ -352,6 +394,12 @@
+    <extends>QLabel</extends>
+    <header>clickable_label.h</header>
+   </customwidget>
++  <customwidget>
++   <class>CompressionReductionMeter</class>
++   <extends>QWidget</extends>
++   <header>compression_reduction_meter.h</header>
++   <container>1</container>
++  </customwidget>
+  </customwidgets>
+  <resources/>
+  <connections/>
+diff --git a/nageru/mainwindow.cpp b/nageru/mainwindow.cpp
+index 3e4a56f..a2d4e71 100644
+--- a/nageru/mainwindow.cpp
++++ b/nageru/mainwindow.cpp
+@@ -992,6 +992,7 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
+ 			if (bus_index < audio_miniviews.size()) {
+ 				const AudioMixer::BusLevel &level = bus_levels[bus_index];
+ 				Ui::AudioMiniView *miniview = audio_miniviews[bus_index];
++				miniview->reduction_meter->set_reduction_db(level.compressor_attenuation_db);
+ 				miniview->peak_meter->set_level(
+ 					level.current_level_dbfs[0], level.current_level_dbfs[1]);
+ 				miniview->peak_meter->set_peak(
