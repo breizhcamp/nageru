@@ -30,7 +30,7 @@ index 90a440f..f4245c5 100644
  		do {
  			if (should_quit.should_quit()) return CaptureEndReason::REQUESTED_QUIT;
 diff --git a/nageru/flags.cpp b/nageru/flags.cpp
-index c5acb9d..a6e0216 100644
+index bdb9821..df6c992 100644
 --- a/nageru/flags.cpp
 +++ b/nageru/flags.cpp
 @@ -64,6 +64,7 @@ enum LongOption {
@@ -41,23 +41,23 @@ index c5acb9d..a6e0216 100644
  };
  
  map<unsigned, unsigned> parse_mjpeg_export_cards(char *optarg)
-@@ -131,6 +132,7 @@ void usage(Program program)
+@@ -130,6 +131,7 @@ void usage(Program program)
+ 	fprintf(stderr, "  -h, --height                    output height in pixels (default 720)\n");
  	if (program == PROGRAM_NAGERU) {
  		fprintf(stderr, "  -c, --num-cards                 set number of input cards (default 2)\n");
- 		fprintf(stderr, "  -d, --card-delay=CARD,DEPLAY    set input delay in milliseconds for the given card (can be given multiple times)\n");
 +		fprintf(stderr, "      --alsa-delay=DELAY          set input delay in milliseconds for all ALSA input\n");
  		fprintf(stderr, "  -o, --output-card=CARD          also output signal to the given card (default none)\n");
  		fprintf(stderr, "  -t, --theme=FILE                choose theme (default theme.lua)\n");
  		fprintf(stderr, "  -I, --theme-dir=DIR             search for theme in this directory (can be given multiple times)\n");
-@@ -226,6 +228,7 @@ void parse_flags(Program program, int argc, char * const argv[])
+@@ -224,6 +226,7 @@ void parse_flags(Program program, int argc, char * const argv[])
+ 		{ "width", required_argument, 0, 'w' },
  		{ "height", required_argument, 0, 'h' },
  		{ "num-cards", required_argument, 0, 'c' },
- 		{ "card-delay", required_argument, 0, 'd' },
 +		{ "alsa-delay", required_argument, 0, OPTION_ALSA_DELAY },
  		{ "output-card", required_argument, 0, 'o' },
  		{ "theme", required_argument, 0, 't' },
  		{ "theme-dir", required_argument, 0, 'I' },
-@@ -551,6 +554,9 @@ void parse_flags(Program program, int argc, char * const argv[])
+@@ -533,6 +536,9 @@ void parse_flags(Program program, int argc, char * const argv[])
  			global_flags.ycbcr_interpretation[card_num] = interpretation;
  			break;
  		}
@@ -68,13 +68,13 @@ index c5acb9d..a6e0216 100644
  			global_flags.fullscreen = true;
  			break;
 diff --git a/nageru/flags.h b/nageru/flags.h
-index d8adaac..ee8c0c0 100644
+index 3594697..ede775c 100644
 --- a/nageru/flags.h
 +++ b/nageru/flags.h
-@@ -14,6 +14,7 @@ struct Flags {
+@@ -13,6 +13,7 @@
+ struct Flags {
  	int width = 1280, height = 720;
  	int num_cards = 2;
- 	std::map<int, int> card_delay;
 +	int alsa_delay;
  	std::string va_display;
  	bool fake_cards_audio = false;

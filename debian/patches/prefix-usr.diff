@@ -1,10 +1,15 @@
-Description: Change PREFIX to /usr
-Author: Steinar H. Gunderson <sesse@debian.org>
+From: "Steinar H. Gunderson" <sesse@debian.org>
+Date: Sat, 23 Feb 2019 14:01:23 +0100
+Subject: Change PREFIX to /usr
 
-Index: nageru-1.7.5/nageru/flags.h
-===================================================================
---- nageru-1.7.5.orig/nageru/flags.h
-+++ nageru-1.7.5/nageru/flags.h
+---
+ nageru/flags.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/nageru/flags.h b/nageru/flags.h
+index 4d990f8..3594697 100644
+--- a/nageru/flags.h
++++ b/nageru/flags.h
 @@ -18,7 +18,7 @@ struct Flags {
  	bool uncompressed_video_to_http = false;
  	bool x264_video_to_http = false;

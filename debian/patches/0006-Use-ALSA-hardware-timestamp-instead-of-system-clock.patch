@@ -190,10 +190,10 @@ index 1d9bb05..4277034 100644
  }
  
 diff --git a/nageru/decklink_capture.cpp b/nageru/decklink_capture.cpp
-index b78a00d..1cc6374 100644
+index 9782040..5030ef4 100644
 --- a/nageru/decklink_capture.cpp
 +++ b/nageru/decklink_capture.cpp
-@@ -226,6 +226,8 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
+@@ -208,6 +208,8 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
  	IDeckLinkVideoInputFrame *video_frame,
  	IDeckLinkAudioInputPacket *audio_frame)
  {
@@ -202,11 +202,11 @@ index b78a00d..1cc6374 100644
  	if (!done_init) {
  		char thread_name[16];
  		snprintf(thread_name, sizeof(thread_name), "DeckLink_C_%d", card_index);
-@@ -244,8 +246,6 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
+@@ -226,8 +228,6 @@ HRESULT STDMETHODCALLTYPE DeckLinkCapture::VideoInputFrameArrived(
  		done_init = true;
  	}
  
--	steady_clock::time_point now = steady_clock::now() - milliseconds(input_delay);
+-	steady_clock::time_point now = steady_clock::now();
 -
  	FrameAllocator::Frame current_video_frame, current_audio_frame;
  	VideoFormat video_format;
@@ -231,7 +231,7 @@ index faf02b2..65eaba2 100644
  		unique_ptr<Frame> frame;
  		{
 diff --git a/nageru/flags.cpp b/nageru/flags.cpp
-index a6e0216..7710fe4 100644
+index df6c992..bc8447b 100644
 --- a/nageru/flags.cpp
 +++ b/nageru/flags.cpp
 @@ -50,6 +50,7 @@ enum LongOption {
@@ -242,7 +242,7 @@ index a6e0216..7710fe4 100644
  	OPTION_NO_FLUSH_PBOS,
  	OPTION_PRINT_VIDEO_LATENCY,
  	OPTION_MAX_INPUT_QUEUE_FRAMES,
-@@ -185,6 +186,8 @@ void usage(Program program)
+@@ -184,6 +185,8 @@ void usage(Program program)
  		fprintf(stderr, "      --disable-limiter           turn off limiter (also --enable)\n");
  		fprintf(stderr, "      --disable-makeup-gain-auto  turn off auto-adjustment of final makeup gain (also --enable)\n");
  		fprintf(stderr, "      --disable-alsa-output       disable audio monitoring via ALSA\n");
@@ -251,7 +251,7 @@ index a6e0216..7710fe4 100644
  		fprintf(stderr, "      --no-flush-pbos             do not explicitly signal texture data uploads\n");
  		fprintf(stderr, "                                    (will give display corruption, but makes it\n");
  		fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
-@@ -270,6 +273,7 @@ void parse_flags(Program program, int argc, char * const argv[])
+@@ -268,6 +271,7 @@ void parse_flags(Program program, int argc, char * const argv[])
  		{ "disable-makeup-gain-auto", no_argument, 0, OPTION_DISABLE_MAKEUP_GAIN_AUTO },
  		{ "enable-makeup-gain-auto", no_argument, 0, OPTION_ENABLE_MAKEUP_GAIN_AUTO },
  		{ "disable-alsa-output", no_argument, 0, OPTION_DISABLE_ALSA_OUTPUT },
@@ -259,7 +259,7 @@ index a6e0216..7710fe4 100644
  		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
  		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
  		{ "max-input-queue-frames", required_argument, 0, OPTION_MAX_INPUT_QUEUE_FRAMES },
-@@ -467,6 +471,9 @@ void parse_flags(Program program, int argc, char * const argv[])
+@@ -449,6 +453,9 @@ void parse_flags(Program program, int argc, char * const argv[])
  		case OPTION_DISABLE_ALSA_OUTPUT:
  			global_flags.enable_alsa_output = false;
  			break;
@@ -270,10 +270,10 @@ index a6e0216..7710fe4 100644
  			global_flags.flush_pbos = false;
  			break;
 diff --git a/nageru/flags.h b/nageru/flags.h
-index 7763548..8f58a8a 100644
+index ede775c..c5b32d9 100644
 --- a/nageru/flags.h
 +++ b/nageru/flags.h
-@@ -44,6 +44,7 @@ struct Flags {
+@@ -43,6 +43,7 @@ struct Flags {
  	int x264_vbv_buffer_size = -1;  // In kilobits. 0 = one-frame VBV, -1 = same as <x264_bitrate> (one-second VBV).
  	std::vector<std::string> x264_extra_param;  // In “key[,value]” format.
  	bool enable_alsa_output = true;
