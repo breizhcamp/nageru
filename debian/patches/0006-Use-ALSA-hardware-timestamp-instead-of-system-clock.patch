@@ -8,13 +8,11 @@ Subject: Use ALSA hardware timestamp instead of system clock
 ---
  nageru/alsa_input.cpp       | 70 ++++++++++++++++++++++++++++++++++++---------
  nageru/alsa_input.h         |  1 +
- nageru/audio_mixer.cpp      | 10 +++++--
+ nageru/audio_mixer.cpp      |  3 +-
  nageru/decklink_capture.cpp |  4 +--
  nageru/decklink_output.cpp  |  8 ++++++
- nageru/flags.cpp            |  7 +++++
- nageru/flags.h              |  1 +
  shared/timebase.h           |  2 +-
- 8 files changed, 84 insertions(+), 19 deletions(-)
+ 6 files changed, 70 insertions(+), 18 deletions(-)
 
 diff --git a/nageru/alsa_input.cpp b/nageru/alsa_input.cpp
 index f4245c5..1beb8e2 100644
@@ -161,7 +159,7 @@ index 060b921..f44ff2e 100644
  	int64_t frames_to_pts(uint64_t n) const;
  
 diff --git a/nageru/audio_mixer.cpp b/nageru/audio_mixer.cpp
-index 1d9bb05..4277034 100644
+index 1d9bb05..8ed65af 100644
 --- a/nageru/audio_mixer.cpp
 +++ b/nageru/audio_mixer.cpp
 @@ -249,7 +249,8 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
@@ -174,21 +172,6 @@ index 1d9bb05..4277034 100644
  		return false;
  	}
  	if (device->resampling_queue == nullptr) {
-@@ -289,8 +290,13 @@ bool AudioMixer::add_audio(DeviceSpec device_spec, const uint8_t *data, unsigned
- 		reset_resampler_mutex_held(device_spec);
- 	}
- 
-+	ResamplingQueue::RateAdjustmentPolicy rate_adjustment_policy = ResamplingQueue::ADJUST_RATE;
-+	if (!global_flags.enable_decklink_resampling && device_spec.type == InputSourceType::CAPTURE_CARD) {
-+		rate_adjustment_policy = ResamplingQueue::DO_NOT_ADJUST_RATE;
-+	}
-+
- 	// Now add it.
--	device->resampling_queue->add_input_samples(frame_time, audio.get(), num_samples, ResamplingQueue::ADJUST_RATE);
-+	device->resampling_queue->add_input_samples(frame_time, audio.get(), num_samples, rate_adjustment_policy);
- 	return true;
- }
- 
 diff --git a/nageru/decklink_capture.cpp b/nageru/decklink_capture.cpp
 index 9782040..5030ef4 100644
 --- a/nageru/decklink_capture.cpp
@@ -230,57 +213,6 @@ index faf02b2..65eaba2 100644
  	for ( ;; ) {
  		unique_ptr<Frame> frame;
  		{
-diff --git a/nageru/flags.cpp b/nageru/flags.cpp
-index df6c992..bc8447b 100644
---- a/nageru/flags.cpp
-+++ b/nageru/flags.cpp
-@@ -50,6 +50,7 @@ enum LongOption {
- 	OPTION_DISABLE_MAKEUP_GAIN_AUTO,
- 	OPTION_ENABLE_MAKEUP_GAIN_AUTO,
- 	OPTION_DISABLE_ALSA_OUTPUT,
-+	OPTION_DISABLE_DECKLINK_RESAMPLING,
- 	OPTION_NO_FLUSH_PBOS,
- 	OPTION_PRINT_VIDEO_LATENCY,
- 	OPTION_MAX_INPUT_QUEUE_FRAMES,
-@@ -184,6 +185,8 @@ void usage(Program program)
- 		fprintf(stderr, "      --disable-limiter           turn off limiter (also --enable)\n");
- 		fprintf(stderr, "      --disable-makeup-gain-auto  turn off auto-adjustment of final makeup gain (also --enable)\n");
- 		fprintf(stderr, "      --disable-alsa-output       disable audio monitoring via ALSA\n");
-+		fprintf(stderr, "      --disable-decklink-resampling disable resampling for Decklink capture cards\n");
-+		fprintf(stderr, "                                    (only make sense if all inputs are on the same card)\n");
- 		fprintf(stderr, "      --no-flush-pbos             do not explicitly signal texture data uploads\n");
- 		fprintf(stderr, "                                    (will give display corruption, but makes it\n");
- 		fprintf(stderr, "                                    possible to run with apitrace in real time)\n");
-@@ -268,6 +271,7 @@ void parse_flags(Program program, int argc, char * const argv[])
- 		{ "disable-makeup-gain-auto", no_argument, 0, OPTION_DISABLE_MAKEUP_GAIN_AUTO },
- 		{ "enable-makeup-gain-auto", no_argument, 0, OPTION_ENABLE_MAKEUP_GAIN_AUTO },
- 		{ "disable-alsa-output", no_argument, 0, OPTION_DISABLE_ALSA_OUTPUT },
-+		{ "disable-decklink-resampling", no_argument, 0, OPTION_DISABLE_DECKLINK_RESAMPLING },		
- 		{ "no-flush-pbos", no_argument, 0, OPTION_NO_FLUSH_PBOS },
- 		{ "print-video-latency", no_argument, 0, OPTION_PRINT_VIDEO_LATENCY },
- 		{ "max-input-queue-frames", required_argument, 0, OPTION_MAX_INPUT_QUEUE_FRAMES },
-@@ -449,6 +453,9 @@ void parse_flags(Program program, int argc, char * const argv[])
- 		case OPTION_DISABLE_ALSA_OUTPUT:
- 			global_flags.enable_alsa_output = false;
- 			break;
-+		case OPTION_DISABLE_DECKLINK_RESAMPLING:
-+			global_flags.enable_decklink_resampling = false;
-+			break;
- 		case OPTION_NO_FLUSH_PBOS:
- 			global_flags.flush_pbos = false;
- 			break;
-diff --git a/nageru/flags.h b/nageru/flags.h
-index ede775c..c5b32d9 100644
---- a/nageru/flags.h
-+++ b/nageru/flags.h
-@@ -43,6 +43,7 @@ struct Flags {
- 	int x264_vbv_buffer_size = -1;  // In kilobits. 0 = one-frame VBV, -1 = same as <x264_bitrate> (one-second VBV).
- 	std::vector<std::string> x264_extra_param;  // In “key[,value]” format.
- 	bool enable_alsa_output = true;
-+	bool enable_decklink_resampling = true;
- 	std::map<int, int> default_stream_mapping;
- 	bool multichannel_mapping_mode = false;  // Implicitly true if input_mapping_filename is nonempty.
- 	std::string input_mapping_filename;  // Empty for none.
 diff --git a/shared/timebase.h b/shared/timebase.h
 index 532ec86..9afeea3 100644
 --- a/shared/timebase.h
