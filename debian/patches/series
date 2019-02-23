@@ -7,3 +7,4 @@ prefix-usr.diff
 0006-Use-ALSA-hardware-timestamp-instead-of-system-clock.patch
 0007-Add-local-time-and-uptime-in-main-window-status.patch
 0008-Add-reduction-meter-in-audio-miniview.patch
+0010-MIDI-mapping-to-control-video-mixer.patch
