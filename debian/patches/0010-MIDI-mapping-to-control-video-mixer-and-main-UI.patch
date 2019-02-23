@@ -1,0 +1,154 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Sat, 23 Feb 2019 15:40:58 +0100
+Subject: MIDI mapping to control video mixer and main UI
+
+---
+ nageru/mainwindow.cpp            |  8 ++++++++
+ nageru/mainwindow.h              |  1 +
+ nageru/midi_mapper.cpp           | 16 ++++++++++++++++
+ nageru/midi_mapper.h             |  4 ++++
+ nageru/midi_mapping_dialog.cpp   | 12 ++++++++++++
+ nageru/midi_mapping_dialog.h     |  5 +++++
+ nageru/nageru_midi_mapping.proto |  8 ++++++++
+ 7 files changed, 54 insertions(+)
+
+diff --git a/nageru/mainwindow.cpp b/nageru/mainwindow.cpp
+index a2d4e71..834d23f 100644
+--- a/nageru/mainwindow.cpp
++++ b/nageru/mainwindow.cpp
+@@ -1511,8 +1511,16 @@ void MainWindow::wb_button_clicked(int channel_number)
+ 	QApplication::setOverrideCursor(Qt::CrossCursor);
+ }
+ 
++void MainWindow::next_audio_view()
++{
++	post_to_main_thread([this]{
++		ui->audio_views->setCurrentIndex((current_audio_view + 1) % 3);
++	});
++}
++
+ void MainWindow::audio_view_changed(int audio_view)
+ {
++	printf("audio view: %d\n", audio_view);
+ 	if (audio_view == current_audio_view) {
+ 		return;
+ 	}
+diff --git a/nageru/mainwindow.h b/nageru/mainwindow.h
+index 0aa42dd..a131cb8 100644
+--- a/nageru/mainwindow.h
++++ b/nageru/mainwindow.h
+@@ -60,6 +60,7 @@ public slots:
+ 	void quick_cut_activated(int channel_number);
+ 	void wb_button_clicked(int channel_number);
+ 	void audio_view_changed(int audio_view);
++	void next_audio_view();
+ 	void set_transition_names(std::vector<std::string> transition_names);
+ 	void update_channel_name(Mixer::Output output, const std::string &name);
+ 	void update_channel_color(Mixer::Output output, const std::string &color);
+diff --git a/nageru/midi_mapper.cpp b/nageru/midi_mapper.cpp
+index d0a42ec..bcdaa5c 100644
+--- a/nageru/midi_mapper.cpp
++++ b/nageru/midi_mapper.cpp
+@@ -163,6 +163,22 @@ void MIDIMapper::note_on_received(int note)
+ 			update_highlights();
+ 			update_lights_lock_held();
+ 		}
++		if (bus_mapping.has_video_channel() &&
++		    bus_mapping.video_channel().note_number() == note ) {
++			receiver->channel_clicked(bus_idx);
++		}
++		if (bus_mapping.has_video_transition() &&
++		    bus_mapping.video_transition().note_number() == note ) {
++			receiver->transition_clicked(bus_idx);
++		}
++		if (bus_mapping.has_next_audio_view() &&
++		    bus_mapping.next_audio_view().note_number() == note ) {
++			receiver->next_audio_view();
++		}
++		if (bus_mapping.has_begin_new_video_segment() &&
++		    bus_mapping.begin_new_video_segment().note_number() == note ) {
++			receiver->cut_triggered();
++		}
+ 	}
+ 
+ 	match_button(note, MIDIMappingBusProto::kToggleLocutFieldNumber, MIDIMappingProto::kToggleLocutBankFieldNumber,
+diff --git a/nageru/midi_mapper.h b/nageru/midi_mapper.h
+index dd5c7ab..25e6cef 100644
+--- a/nageru/midi_mapper.h
++++ b/nageru/midi_mapper.h
+@@ -46,6 +46,10 @@ public:
+ 	virtual void clear_peak(unsigned bus_idx) = 0;
+ 	virtual void toggle_limiter() = 0;
+ 	virtual void toggle_auto_makeup_gain() = 0;
++	virtual void transition_clicked(int transition_number) = 0;
++	virtual void channel_clicked(int channel_number) = 0;
++	virtual void next_audio_view() = 0;
++	virtual void cut_triggered() = 0;
+ 
+ 	// Signals to highlight controls to mark them to the user
+ 	// as MIDI-controllable (or not).
+diff --git a/nageru/midi_mapping_dialog.cpp b/nageru/midi_mapping_dialog.cpp
+index d27a0c2..8b9ba13 100644
+--- a/nageru/midi_mapping_dialog.cpp
++++ b/nageru/midi_mapping_dialog.cpp
+@@ -88,6 +88,16 @@ vector<MIDIMappingDialog::Control> global_lights = {
+ 	{ "Auto makeup gain is on",   MIDIMappingBusProto::kAutoMakeupGainIsOnFieldNumber, 0 },
+ };
+ 
++vector<MIDIMappingDialog::Control> global_video = {
++	{ "Select video channel",     MIDIMappingBusProto::kVideoChannelFieldNumber, 0 },
++	{ "Apply Transition",         MIDIMappingBusProto::kVideoTransitionFieldNumber, 0 },
++};
++
++vector<MIDIMappingDialog::Control> main_ui = {
++	{ "Switch to next Audio View", MIDIMappingBusProto::kNextAudioViewFieldNumber, 0 },
++	{ "Begin new video segment",   MIDIMappingBusProto::kBeginNewVideoSegmentFieldNumber, 0 },
++};
++
+ namespace {
+ 
+ int get_bank(const MIDIMappingProto &mapping_proto, int bank_field_number, int default_value)
+@@ -165,6 +175,8 @@ MIDIMappingDialog::MIDIMappingDialog(MIDIMapper *mapper)
+ 	add_controls("Global controllers", ControlType::CONTROLLER, SpinnerGroup::GLOBAL_CONTROLLERS, mapping_proto, global_controllers);
+ 	add_controls("Global buttons", ControlType::BUTTON, SpinnerGroup::GLOBAL_BUTTONS, mapping_proto, global_buttons);
+ 	add_controls("Global lights", ControlType::LIGHT, SpinnerGroup::GLOBAL_LIGHTS, mapping_proto, global_lights);
++	add_controls("Video mixing", ControlType::BUTTON, SpinnerGroup::GLOBAL_BUTTONS, mapping_proto, global_video);
++	add_controls("Main UI", ControlType::BUTTON, SpinnerGroup::GLOBAL_BUTTONS, mapping_proto, main_ui);
+ 	fill_controls_from_mapping(mapping_proto);
+ 
+ 	// Auto-resize every column but the last.
+diff --git a/nageru/midi_mapping_dialog.h b/nageru/midi_mapping_dialog.h
+index c36781d..9a4193f 100644
+--- a/nageru/midi_mapping_dialog.h
++++ b/nageru/midi_mapping_dialog.h
+@@ -85,6 +85,11 @@ public:
+ 	void highlight_toggle_limiter(bool highlight) override {}
+ 	void highlight_toggle_auto_makeup_gain(bool highlight) override {}
+ 
++	void transition_clicked(int transition_number) override {}
++	void channel_clicked(int channel_number) override {}
++	void next_audio_view() override {}
++	void cut_triggered() override {}
++
+ 	// Raw events; used for the editor dialog only.
+ 	void controller_changed(unsigned controller) override;
+ 	void note_on(unsigned note) override;
+diff --git a/nageru/nageru_midi_mapping.proto b/nageru/nageru_midi_mapping.proto
+index 6eb8001..c24f05d 100644
+--- a/nageru/nageru_midi_mapping.proto
++++ b/nageru/nageru_midi_mapping.proto
+@@ -64,6 +64,14 @@ message MIDIMappingBusProto {
+ 	optional MIDILightProto bank_5_is_selected = 34;
+ 	optional MIDILightProto limiter_is_on = 35;
+ 	optional MIDILightProto auto_makeup_gain_is_on = 36;
++
++	// Video mixing
++	optional MIDIButtonProto video_channel = 100;
++	optional MIDIButtonProto video_transition = 101;
++
++	// Main UI
++	optional MIDIButtonProto next_audio_view = 102;
++	optional MIDIButtonProto begin_new_video_segment = 103;
+ }
+ 
+ // The top-level protobuf, containing all the bus mappings, as well as
