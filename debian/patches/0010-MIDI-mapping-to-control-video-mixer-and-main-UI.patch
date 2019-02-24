@@ -13,10 +13,10 @@ Subject: MIDI mapping to control video mixer and main UI
  7 files changed, 54 insertions(+)
 
 diff --git a/nageru/mainwindow.cpp b/nageru/mainwindow.cpp
-index a2d4e71..834d23f 100644
+index 619c1c1..af439ac 100644
 --- a/nageru/mainwindow.cpp
 +++ b/nageru/mainwindow.cpp
-@@ -1511,8 +1511,16 @@ void MainWindow::wb_button_clicked(int channel_number)
+@@ -1512,8 +1512,16 @@ void MainWindow::wb_button_clicked(int channel_number)
  	QApplication::setOverrideCursor(Qt::CrossCursor);
  }
  

@@ -111,10 +111,10 @@ index 7aa1aa0..eeda5a8 100644
   <resources/>
   <connections/>
 diff --git a/nageru/mainwindow.cpp b/nageru/mainwindow.cpp
-index 3e4a56f..a2d4e71 100644
+index 42a6f84..619c1c1 100644
 --- a/nageru/mainwindow.cpp
 +++ b/nageru/mainwindow.cpp
-@@ -992,6 +992,7 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
+@@ -993,6 +993,7 @@ void MainWindow::audio_level_callback(float level_lufs, float peak_db, vector<Au
  			if (bus_index < audio_miniviews.size()) {
  				const AudioMixer::BusLevel &level = bus_levels[bus_index];
  				Ui::AudioMiniView *miniview = audio_miniviews[bus_index];

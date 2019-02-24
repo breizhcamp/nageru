@@ -1,16 +1,18 @@
 From: Alex Thomazo <alex@thomazo.info>
 Date: Fri, 22 Feb 2019 17:31:32 +0100
-Subject: Add local time and uptime in main window status
+Subject: Add local time and recording time in main window status
 
 ---
- nageru/mainwindow.cpp           | 31 +++++++++++++++++++++++++++----
+ nageru/mainwindow.cpp           | 32 ++++++++++++++++++++++++++++----
  nageru/mainwindow.h             |  2 +-
+ nageru/mixer.cpp                |  1 +
+ nageru/mixer.h                  |  3 +++
  shared/disk_space_estimator.cpp |  3 ++-
  shared/disk_space_estimator.h   |  2 +-
- 4 files changed, 31 insertions(+), 7 deletions(-)
+ 6 files changed, 36 insertions(+), 7 deletions(-)
 
 diff --git a/nageru/mainwindow.cpp b/nageru/mainwindow.cpp
-index d436040..3e4a56f 100644
+index d436040..42a6f84 100644
 --- a/nageru/mainwindow.cpp
 +++ b/nageru/mainwindow.cpp
 @@ -198,7 +198,7 @@ MainWindow::MainWindow()
@@ -31,7 +33,7 @@ index d436040..3e4a56f 100644
  {
  	char time_str[256];
  	if (estimated_seconds_left < 60.0) {
-@@ -801,8 +801,31 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
+@@ -801,8 +801,32 @@ void MainWindow::report_disk_space(off_t free_bytes, double estimated_seconds_le
  		int h = lrintf(estimated_seconds_left / 3600.0);
  		snprintf(time_str, sizeof(time_str), "%dh", h);
  	}
@@ -44,6 +46,7 @@ index d436040..3e4a56f 100644
 +	
 +	char uptime_str[256];
 +	
++	uptime_seconds = global_mixer->get_pts_from_last_cut();
 +	if (uptime_seconds < 60) {
 +		snprintf(uptime_str, sizeof(uptime_str), "%" PRIu64 "s", uptime_seconds);
 +	} else if (uptime_seconds < 3600) { // 1 minute
@@ -59,9 +62,9 @@ index d436040..3e4a56f 100644
 +		m %= 60;
 +		snprintf(uptime_str, sizeof(uptime_str), "%dh %dm %ds", h, m, s);
 +	}
-+	
++
 +	char buf[512];
-+	snprintf(buf, sizeof(buf), "Local Time: %s - Uptime: %s - Disk free: %'.0f MB (approx. %s)", nowtime, uptime_str, free_bytes / 1048576.0, time_str);
++	snprintf(buf, sizeof(buf), "Local Time: %s - Recording time: %s - Disk free: %'.0f MB (approx. %s)", nowtime, uptime_str, free_bytes / 1048576.0, time_str);
  
  	std::string label = buf;
  
@@ -78,6 +81,39 @@ index 36be4b8..0aa42dd 100644
  
  	// Called from the mixer.
  	void audio_level_callback(float level_lufs, float peak_db, std::vector<AudioMixer::BusLevel> bus_levels, float global_level_lufs, float range_low_lufs, float range_high_lufs, float final_makeup_gain_db, float correlation);
+diff --git a/nageru/mixer.cpp b/nageru/mixer.cpp
+index 9fd1e15..8082d87 100644
+--- a/nageru/mixer.cpp
++++ b/nageru/mixer.cpp
+@@ -1105,6 +1105,7 @@ void Mixer::thread_func()
+ 
+ 		if (should_cut.exchange(false)) {  // Test and clear.
+ 			video_encoder->do_cut(frame_num);
++			pts_int_last_cut = pts_int;
+ 		}
+ 
+ #if 0
+diff --git a/nageru/mixer.h b/nageru/mixer.h
+index b4ed76f..eff059a 100644
+--- a/nageru/mixer.h
++++ b/nageru/mixer.h
+@@ -297,6 +297,8 @@ public:
+ 		should_cut = true;
+ 	}
+ 
++	unsigned get_pts_from_last_cut() const { return double(pts_int - pts_int_last_cut) / TIMEBASE ; }
++
+ 	unsigned get_num_cards() const { return num_cards; }
+ 
+ 	std::string get_card_description(unsigned card_index) const {
+@@ -486,6 +488,7 @@ private:
+ 	movit::YCbCrInput *display_input;
+ 
+ 	int64_t pts_int = 0;  // In TIMEBASE units.
++	int64_t pts_int_last_cut = 0;  // In TIMEBASE units.
+ 
+ 	mutable std::mutex frame_num_mutex;
+ 	std::condition_variable frame_num_updated;
 diff --git a/shared/disk_space_estimator.cpp b/shared/disk_space_estimator.cpp
 index da55ee1..e60531a 100644
 --- a/shared/disk_space_estimator.cpp
