@@ -8,3 +8,4 @@ prefix-usr.diff
 0007-Add-local-time-and-recording-time-in-main-window-status.patch
 0008-Add-reduction-meter-in-audio-miniview.patch
 0010-MIDI-mapping-to-control-video-mixer-and-main-UI.patch
+0011-Fix-a-MIDI-related-deadlock-in-the-GUI-code.patch

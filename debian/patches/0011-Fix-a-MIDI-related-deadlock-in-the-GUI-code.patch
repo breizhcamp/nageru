@@ -1,0 +1,62 @@
+From: "Steinar H. Gunderson" <sgunderson@bigfoot.com>
+Date: Sat, 9 Mar 2019 21:33:16 +0100
+Subject: Fix a MIDI-related deadlock in the GUI code.
+
+---
+ shared/midi_device.cpp | 6 +++---
+ shared/midi_device.h   | 4 ++--
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/shared/midi_device.cpp b/shared/midi_device.cpp
+index e4b1a11..9d77e21 100644
+--- a/shared/midi_device.cpp
++++ b/shared/midi_device.cpp
+@@ -73,7 +73,7 @@ void MIDIDevice::thread_func()
+ 
+ 	// The sequencer object is now ready to be used from other threads.
+ 	{
+-		lock_guard<mutex> lock(mu);
++		lock_guard<recursive_mutex> lock(mu);
+ 		alsa_seq = seq;
+ 		alsa_queue_id = queue_id;
+ 	}
+@@ -97,7 +97,7 @@ void MIDIDevice::thread_func()
+ 		while (snd_seq_query_next_port(seq, pinfo) >= 0) {
+ 			constexpr int mask = SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ;
+ 			if ((snd_seq_port_info_get_capability(pinfo) & mask) == mask) {
+-				lock_guard<mutex> lock(mu);
++				lock_guard<recursive_mutex> lock(mu);
+ 				subscribe_to_port_lock_held(seq, *snd_seq_port_info_get_addr(pinfo));
+ 			}
+ 		}
+@@ -154,7 +154,7 @@ void MIDIDevice::handle_event(snd_seq_t *seq, snd_seq_event_t *event)
+ 		return;
+ 	}
+ 
+-	lock_guard<mutex> lock(mu);
++	lock_guard<recursive_mutex> lock(mu);
+ 	switch (event->type) {
+ 	case SND_SEQ_EVENT_CONTROLLER: {
+ 		receiver->controller_received(event->data.control.param, event->data.control.value);
+diff --git a/shared/midi_device.h b/shared/midi_device.h
+index a9f33d6..ec6bf9b 100644
+--- a/shared/midi_device.h
++++ b/shared/midi_device.h
+@@ -47,7 +47,7 @@ public:
+ 
+ 	void update_lights(const std::map<LightKey, uint8_t> &active_lights)
+ 	{
+-		std::lock_guard<std::mutex> lock(mu);
++		std::lock_guard<std::recursive_mutex> lock(mu);
+ 		update_lights_lock_held(active_lights);
+ 	}
+ 
+@@ -60,7 +60,7 @@ private:
+ 	std::atomic<bool> should_quit{false};
+ 	int should_quit_fd;
+ 
+-	mutable std::mutex mu;
++	mutable std::recursive_mutex mu;  // Recursive because the MIDI receiver may update_lights() back while we are sending it stuff.
+ 	MIDIReceiver *receiver;  // Under <mu>.
+ 
+ 	std::thread midi_thread;
