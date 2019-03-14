@@ -1,0 +1,22 @@
+From: Yoann Dubreuil <yoann.dubreuil@gmail.com>
+Date: Thu, 14 Mar 2019 17:10:13 +0100
+Subject: No semi-colon in recording filenames
+
+It breaks rsync
+---
+ nageru/video_encoder.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/nageru/video_encoder.cpp b/nageru/video_encoder.cpp
+index 8dee6da..3f6b33a 100644
+--- a/nageru/video_encoder.cpp
++++ b/nageru/video_encoder.cpp
+@@ -35,7 +35,7 @@ string generate_local_dump_filename(int frame)
+ 	localtime_r(&now, &now_tm);
+ 
+ 	char timestamp[64];
+-	strftime(timestamp, sizeof(timestamp), "%F-%T%z", &now_tm);
++	strftime(timestamp, sizeof(timestamp), "%F-%H_%M_%S%z", &now_tm);
+ 
+ 	// Use the frame number to disambiguate between two cuts starting
+ 	// on the same second.
